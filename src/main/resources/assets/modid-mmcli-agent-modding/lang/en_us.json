@@ -13,6 +13,7 @@
   "mode.modid-mmcli-agent-modding.build": "Build",
   "mode.modid-mmcli-agent-modding.design": "Design",
   "mode.modid-mmcli-agent-modding.recruit": "Recruit",
+  "mode.modid-mmcli-agent-modding.pathway": "Pathway",
 
   "mining_mode.modid-mmcli-agent-modding.direct": "Direct / Structure",
   "mining_mode.modid-mmcli-agent-modding.area": "Custom Area",
@@ -21,6 +22,7 @@
   "role.modid-mmcli-agent-modding.sentinel": "Sentinel",
   "role.modid-mmcli-agent-modding.builder": "Builder",
   "role.modid-mmcli-agent-modding.miner": "Miner",
+  "role.modid-mmcli-agent-modding.auto": "Auto",
 
   "squad.modid-mmcli-agent-modding.all": "All Squads",
   "squad.modid-mmcli-agent-modding.alpha": "Squad Alpha",
@@ -35,6 +37,7 @@
   "category.modid-mmcli-agent-modding.general": "Sovereign: Arcane Strategy & Engineering",
   "key.modid-mmcli-agent-modding.command_hub": "Open Sovereign Command Hub",
   "key.modid-mmcli-agent-modding.retreat": "Tactical Retreat / Regroup",
+  "key.modid-mmcli-agent-modding.tactical_camera": "Tactical RTS Camera / Zoom",
   "gui.modid-mmcli-agent-modding.command_hub.title": "Sovereign Command Hub",
   "gui.modid-mmcli-agent-modding.command_hub.execute": "Execute",
   "gui.modid-mmcli-agent-modding.command_hub.close": "Close",
