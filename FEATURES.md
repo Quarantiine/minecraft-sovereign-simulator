@@ -31,6 +31,8 @@ This document provides a comprehensive technical breakdown of all gameplay featu
 20. [Custom Blueprint Catalog Lifecycle & Decommissioning Safeguards](#20-custom-blueprint-catalog-lifecycle--decommissioning-safeguards)
 21. [In-World Spatial Blueprint Capture ('DESIGN' Mode)](#21-in-world-spatial-blueprint-capture-design-mode)
 22. [Unified Surface Anchoring Contract & Hollow Grid Mechanics](#22-unified-surface-anchoring-contract--hollow-grid-mechanics)
+23. [Survival Crafting Recipes & Progression](#23-survival-crafting-recipes--progression)
+24. [Cross-Version Compatibility Architecture (Minecraft 1.21.1, 1.21.2+, and 26.2)](#24-cross-version-compatibility-architecture-minecraft-1211-1212-and-262)
 
 ---
 
@@ -1558,3 +1560,58 @@ BlockPos anchorPos = state.isReplaceable() ? hitPos : hitPos.offset(hitSide);
 - **Zero Parallax Drift**: Raycasting initiates from the player's true eye coordinates along the camera look vector through the center-screen crosshair, matching server-side hit results up to 96 blocks away.
 - **Fluid & Vegetation Transparency**: Non-solid replaceable blocks (water, lava, tall grass, large ferns, peonies, snow layers) never cause hollow grid bounding boxes or tactical waypoints to lift into the air.
 - **Zero Embedding**: Solid surfaces never cause blueprints, waypoints, or spatial corners to embed inside solid stone, ensuring all multiblock structures and tactical routes maintain crisp surface-level fidelity.
+
+---
+
+## 23. Survival Crafting Recipes & Progression
+
+Sovereign Simulator provides full native progression in vanilla Survival mode without requiring cheats or `/give` commands:
+
+### 23.1 Data-Driven Crafting Recipes
+
+All recipe definitions are registered under both `data/modid-mmcli-agent-modding/recipe/` (Minecraft 1.21+ standard) and `data/modid-mmcli-agent-modding/recipes/` (legacy format):
+
+1. **Sovereign Command Scepter (`command_scepter`)**:
+   - **Type**: `minecraft:crafting_shaped`
+   - **Pattern**:
+     ```
+     [ Gold Ingot ] [ Amethyst Shard ] [ Gold Ingot ]
+     [   (empty)  ] [ Blaze / Stick  ] [   (empty)  ]
+     [   (empty)  ] [ Blaze / Stick  ] [   (empty)  ]
+     ```
+   - **Ingredients**: Gold Ingots, Amethyst Shard, and Blaze Rod (or Stick).
+2. **Minion Spawn Egg (`minion_spawn_egg`)**:
+   - **Type**: `minecraft:crafting_shapeless`
+   - **Ingredients**: `1x Egg`, `1x Amethyst Shard`, `1x Emerald`, `1x Gold Ingot`.
+   - **Behavior**: Auto-tames and binds the spawned minion directly to the summoner upon use.
+3. **TNT Stick (`tnt_stick`)**:
+   - **Type**: `minecraft:crafting_shaped`
+   - **Pattern**: `1x TNT` directly above `1x Stick`.
+4. **Frost Grenade Stick (`frost_grenade_stick`)**:
+   - **Type**: `minecraft:crafting_shaped`
+   - **Pattern**: `1x Packed Ice / Blue Ice / Ice / Snowball` directly above `1x Stick`.
+
+### 23.2 Mob Enthrallment (Alternative Survival Acquisition)
+
+Players can also obtain minions without crafting spawn eggs by using the scepter's **`RECRUIT`** mode:
+- Right-clicking any living non-minion vanilla mob (villagers, zombies, skeletons, animals) transfigures the mob into an obedient `MinionEntity` thrall.
+- Retains coordinates, head yaw, custom name, and equipment.
+
+---
+
+## 24. Cross-Version Compatibility Architecture (Minecraft 1.21.1, 1.21.2+, and 26.2)
+
+To ensure seamless operation across modern release cycles, the mod incorporates dedicated runtime version shims:
+
+1. **`Item.Settings` RegistryKey Compatibility**:
+   - Uses `ModItems.createSettings(name)` with reflection fallback.
+   - Detects Yarn (`registryKey`), Mojmap (`setId`), and Intermediary (`method_63686`, `field_54117`, `registryKey`, `id`).
+   - Strictly ignores unrelated single-argument methods such as `jukeboxPlayable` on 1.21.0/1.21.1, preventing `ClassCastException` in tooltip rendering.
+2. **Final Method JVM VerifyError Prevention**:
+   - Replaced `@Override public boolean isTeammate` with `public boolean isAlliedTeammate(Entity other)` in `MinionEntity.java`, preventing JVM class verification failures on Minecraft versions where `Entity.isTeammate` became `final`.
+3. **Multi-Format Resource Packs & Item Models**:
+   - Bundles `pack.mcmeta` with supported format range (`34` to `48`).
+   - Supplies both legacy item models (`models/item/`) and modern 1.21.2+ item definitions (`items/`).
+4. **Multi-Version Fabric Loader Declaration**:
+   - Declares `depends.minecraft: ["~1.21", "26.2", ">=26"]` in `fabric.mod.json`, resolving Loader dependency constraints on both 1.21.x and future releases.
+

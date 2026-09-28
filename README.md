@@ -1,10 +1,10 @@
 # ⚔️ Sovereign Simulator: Arcane Strategy & Engineering
 
-[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-brightgreen.svg)](https://www.minecraft.net/)
+[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.x%20%7C%2026.2-brightgreen.svg)](https://www.minecraft.net/)
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-530%2B%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-537%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -40,6 +40,7 @@ This project is distributed under a **Visible Source & All Rights Reserved (ARR)
 - [🎮 Player & Commander Guide](#-player--commander-guide)
   - [The 4 Minion Archetypes](#the-4-minion-archetypes)
   - [Core Strategic Systems](#core-strategic-systems)
+  - [Survival Progression & Crafting Recipes](#survival-progression--crafting-recipes)
   - [Tactical Controls Cheat Sheet](#tactical-controls-cheat-sheet)
   - [Installation Guide](#installation-guide-for-players)
 - [🛠 Developer & Contributor Hub](#-developer--contributor-hub)
@@ -210,7 +211,7 @@ All builds and runtime tasks are managed via the included Gradle wrapper (`./gra
 # Launch a standalone dedicated server for network/multiplayer debugging
 ./gradlew runServer
 
-# Run the complete automated test suite (530+ tests)
+# Run the complete automated test suite (537 tests)
 ./gradlew test
 
 # Compile and package the production mod JAR (outputs to build/libs/)
@@ -259,6 +260,7 @@ We maintain an extensive automated unit and invariant test suite located in `src
 - **Logistics & Harvesting**: `MinionLogisticsAndHarvestingTest`, `MinionAntiJitterAndLevitationSafetyTest`
 - **Construction & Dismantling**: `StructureDismantlingTest`, `BedrockAndCeilingSafeguardTest`
 - **Ordnance & Physics**: `FrostGrenadeTest`
+- **Recipes & Multi-Version Compatibility**: `ModRecipeJsonValidationTest`, `CommandScepterTooltipAndComponentsTest`, `FabricVersionPredicateTest`
 
 Always verify that the entire suite passes cleanly before submitting contributions:
 
