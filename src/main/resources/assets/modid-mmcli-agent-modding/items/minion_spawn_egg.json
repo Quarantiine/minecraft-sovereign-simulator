@@ -1,0 +1,16 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "modid-mmcli-agent-modding:item/minion_spawn_egg",
+    "tints": [
+      {
+        "type": "minecraft:constant",
+        "value": -13877680
+      },
+      {
+        "type": "minecraft:constant",
+        "value": -932849
+      }
+    ]
+  }
+}
