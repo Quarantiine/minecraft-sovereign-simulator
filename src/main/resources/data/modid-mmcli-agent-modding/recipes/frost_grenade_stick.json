@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "I": [
+      "minecraft:packed_ice",
+      "minecraft:blue_ice",
+      "minecraft:ice",
+      "minecraft:snowball"
+    ],
+    "#": "minecraft:stick"
+  },
+  "pattern": [
+    "I",
+    "#"
+  ],
+  "result": {
+    "count": 1,
+    "id": "modid-mmcli-agent-modding:frost_grenade_stick"
+  }
+}

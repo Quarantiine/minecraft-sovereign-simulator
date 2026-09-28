@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "A": "minecraft:amethyst_shard",
+    "G": "minecraft:gold_ingot",
+    "B": [
+      "minecraft:blaze_rod",
+      "minecraft:stick"
+    ]
+  },
+  "pattern": [
+    "GAG",
+    " B ",
+    " B "
+  ],
+  "result": {
+    "count": 1,
+    "id": "modid-mmcli-agent-modding:command_scepter"
+  }
+}

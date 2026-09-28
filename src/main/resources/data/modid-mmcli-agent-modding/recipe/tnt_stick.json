@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "T": "minecraft:tnt",
+    "#": "minecraft:stick"
+  },
+  "pattern": [
+    "T",
+    "#"
+  ],
+  "result": {
+    "count": 1,
+    "id": "modid-mmcli-agent-modding:tnt_stick"
+  }
+}

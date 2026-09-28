@@ -473,4 +473,33 @@ The commander's active game mode directly affects how minions handle resources, 
 | **Minion Spawn Egg**                   | Consumes **1 spawn egg** per mob spawned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Spawns minions infinitely **without depleting** the held egg stack.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Scepter Recruitment (`RECRUIT`)**    | Transfigures wild mobs into minion thralls (defaulting to `MinionRole.AUTO`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Transfigures wild mobs into minion thralls (defaulting to `MinionRole.AUTO`).                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-... (output truncated to prevent memory overflow)
+---
+
+## 🔨 11. Survival Crafting Recipes
+
+All core mod items can be crafted directly on a crafting table in Survival mode:
+
+### 1. Sovereign Command Scepter (`command_scepter`)
+- **Shaped Crafting**:
+  - `[ Gold Ingot ] [ Amethyst Shard ] [ Gold Ingot ]`
+  - `[   (empty)  ] [ Blaze / Stick  ] [   (empty)  ]`
+  - `[   (empty)  ] [ Blaze / Stick  ] [   (empty)  ]`
+- **Yield**: 1 Sovereign Command Scepter
+
+### 2. Minion Spawn Egg (`minion_spawn_egg`)
+- **Shapeless Crafting**:
+  - `1x Egg` + `1x Amethyst Shard` + `1x Emerald` + `1x Gold Ingot`
+- **Yield**: 1 Minion Spawn Egg (auto-tames on spawn)
+
+### 3. TNT Stick (`tnt_stick`)
+- **Shaped Crafting**:
+  - Top: `1x TNT`
+  - Bottom: `1x Stick`
+- **Yield**: 1 TNT Stick
+
+### 4. Frost Grenade Stick (`frost_grenade_stick`)
+- **Shaped Crafting**:
+  - Top: `1x Packed Ice / Blue Ice / Ice / Snowball`
+  - Bottom: `1x Stick`
+- **Yield**: 1 Frost Grenade Stick
+

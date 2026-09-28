@@ -109,6 +109,11 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 - **Dual-Tier Panic Retreat**:
   - Press **`R`** to immediately recall active squad members within 64m.
   - Press **`Shift + R`** for an army-wide **Emergency Citadel Call** (128m), sounding war horns and tolling fortress bells to sprint all stationed units to the commander's defense.
+- **Survival Progression & Crafting Recipes**:
+  - **Sovereign Command Scepter**: Crafted with 2 Gold Ingots, 1 Amethyst Shard, and 2 Blaze Rods (or Sticks) in a crafting table.
+  - **Minion Spawn Egg**: Crafted shapelessly with 1 Egg, 1 Amethyst Shard, 1 Emerald, and 1 Gold Ingot.
+  - **Tactical Ordnance**: Craft TNT Sticks (TNT + Stick) and cryogenic Frost Grenades (Ice / Snowball + Stick).
+  - **Enthrallment in Survival**: Alternatively, switch the scepter to `RECRUIT` mode and right-click living vanilla mobs (zombies, skeletons, villagers, etc.) to transfigure them into minion thralls!
 
 ---
 

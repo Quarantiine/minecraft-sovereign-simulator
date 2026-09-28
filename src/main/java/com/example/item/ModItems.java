@@ -43,24 +43,24 @@ public class ModItems {
 		try {
 			Identifier id = Identifier.of(ExampleMod.MOD_ID, name);
 			RegistryKey<Item> key = RegistryKey.of(RegistryKeys.ITEM, id);
-			// 1. Try public method registryKey(RegistryKey) in 1.21.2+
+			// 1. Try public method registryKey(RegistryKey) in 1.21.2+ (Yarn: registryKey, Mojmap: setId)
 			for (java.lang.reflect.Method m : settings.getClass().getMethods()) {
-				if (m.getName().equals("registryKey") && m.getParameterCount() == 1 && m.getParameterTypes()[0].equals(RegistryKey.class)) {
+				if ((m.getName().equals("registryKey") || m.getName().equals("setId")) && m.getParameterCount() == 1 && m.getParameterTypes()[0].equals(RegistryKey.class)) {
 					m.invoke(settings, key);
 					return;
 				}
 			}
 			// 2. Try intermediary method method_63686(RegistryKey) in 1.21.2+
 			for (java.lang.reflect.Method m : settings.getClass().getDeclaredMethods()) {
-				if (m.getName().equals("method_63686") && m.getParameterCount() == 1 && m.getParameterTypes()[0].equals(RegistryKey.class)) {
+				if ((m.getName().equals("method_63686") || m.getName().equals("registryKey") || m.getName().equals("setId")) && m.getParameterCount() == 1 && m.getParameterTypes()[0].equals(RegistryKey.class)) {
 					m.setAccessible(true);
 					m.invoke(settings, key);
 					return;
 				}
 			}
-			// 3. Fallback: Try setting field_54117 directly in 1.21.2+
+			// 3. Fallback: Try setting field directly in 1.21.2+ (intermediary: field_54117, named: registryKey, id)
 			for (java.lang.reflect.Field f : settings.getClass().getDeclaredFields()) {
-				if (f.getName().equals("field_54117") && f.getType().equals(RegistryKey.class)) {
+				if ((f.getName().equals("field_54117") || f.getName().equals("registryKey") || f.getName().equals("id")) && f.getType().equals(RegistryKey.class)) {
 					f.setAccessible(true);
 					f.set(settings, key);
 					return;
