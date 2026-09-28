@@ -241,7 +241,7 @@ Sovereign explicitly permits independent third-party mods to compile against its
 
 - **Querying Minion Archetypes**: Access `minion.getRole()`, `minion.getEffectiveRole()`, and `minion.matchesRole(MinionRole.X)`.
 - **Interrogating Healing Status**: Query `minion.hasNearbyAlliesNeedingHealing(radius)` to evaluate squad medical status.
-- **Teammate Integration**: `MinionEntity.isTeammate(Entity other)` seamlessly respects allied minions, owners, and non-hostile Iron Golems.
+- **Teammate Integration**: `MinionEntity.isAlliedTeammate(Entity other)` seamlessly respects allied minions, owners, and non-hostile Iron Golems without overriding final methods.
 - **Listening to Construction Events**: Hook into `ConstructionManager.getInstance()` to track blueprint start, progress, and completion callbacks.
 
 ---

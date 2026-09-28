@@ -2070,8 +2070,14 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		return attacked;
 	}
 
-	@Override
-	public boolean isTeammate(Entity other) {
+	/**
+	 * Checks whether the given entity is considered a friendly ally or squad teammate.
+	 * Evaluates vanilla team/owner relationships and non-hostile Iron Golems.
+	 */
+	public boolean isAlliedTeammate(Entity other) {
+		if (other == null) {
+			return false;
+		}
 		if (super.isTeammate(other)) {
 			return true;
 		}
@@ -2142,7 +2148,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		List<MinionEntity> nearbyMinions = this.getWorld().getEntitiesByClass(
 			MinionEntity.class,
 			searchBox,
-			other -> other != null && other != this && other.isAlive() && this.isTeammate(other)
+			other -> other != null && other != this && other.isAlive() && this.isAlliedTeammate(other)
 		);
 		for (MinionEntity ally : nearbyMinions) {
 			if (this.squaredDistanceTo(ally) <= radiusSq && ally.getHealth() < ally.getMaxHealth() - 0.05F) {
@@ -2154,7 +2160,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		List<IronGolemEntity> nearbyGolems = this.getWorld().getEntitiesByClass(
 			IronGolemEntity.class,
 			searchBox,
-			golem -> golem != null && golem.isAlive() && this.isTeammate(golem)
+			golem -> golem != null && golem.isAlive() && this.isAlliedTeammate(golem)
 		);
 		for (IronGolemEntity golem : nearbyGolems) {
 			if (this.squaredDistanceTo(golem) <= radiusSq && golem.getHealth() < golem.getMaxHealth() - 0.05F) {

@@ -15,6 +15,8 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Rarity;
 
@@ -25,11 +27,56 @@ import net.minecraft.util.Rarity;
 public class ModItems {
 
 	/**
+	 * Creates an Item.Settings instance configured with a RegistryKey if running on Minecraft 1.21.2+,
+	 * while maintaining seamless backwards compatibility with Minecraft 1.21.0 / 1.21.1.
+	 *
+	 * @param name The registry path name for the item.
+	 * @return An Item.Settings instance compatible with both versions.
+	 */
+	public static Item.Settings createSettings(String name) {
+		Item.Settings settings = new Item.Settings();
+		applyRegistryKeyCompat(settings, name);
+		return settings;
+	}
+
+	private static void applyRegistryKeyCompat(Item.Settings settings, String name) {
+		try {
+			Identifier id = Identifier.of(ExampleMod.MOD_ID, name);
+			RegistryKey<Item> key = RegistryKey.of(RegistryKeys.ITEM, id);
+			// 1. Try public method registryKey(RegistryKey)
+			for (java.lang.reflect.Method m : settings.getClass().getMethods()) {
+				if (m.getParameterCount() == 1 && m.getParameterTypes()[0].equals(RegistryKey.class)) {
+					m.invoke(settings, key);
+					return;
+				}
+			}
+			// 2. Try intermediary method method_63686(RegistryKey)
+			for (java.lang.reflect.Method m : settings.getClass().getDeclaredMethods()) {
+				if (m.getName().equals("method_63686") || (m.getParameterCount() == 1 && m.getParameterTypes()[0].equals(RegistryKey.class))) {
+					m.setAccessible(true);
+					m.invoke(settings, key);
+					return;
+				}
+			}
+			// 3. Fallback: Try setting field_54117 directly if methods were not found
+			for (java.lang.reflect.Field f : settings.getClass().getDeclaredFields()) {
+				if (f.getType().equals(RegistryKey.class)) {
+					f.setAccessible(true);
+					f.set(settings, key);
+					return;
+				}
+			}
+		} catch (Throwable ignored) {
+			// On 1.21.0 where RegistryKey on Item.Settings does not exist, safely ignore
+		}
+	}
+
+	/**
 	 * TNT Stick item that launches explosive TNT projectiles.
 	 */
 	public static final Item TNT_STICK = registerItem(
 		"tnt_stick",
-		new TntStickItem(new Item.Settings().maxCount(1).rarity(Rarity.EPIC))
+		new TntStickItem(createSettings("tnt_stick").maxCount(1).rarity(Rarity.EPIC))
 	);
 
 	/**
@@ -37,7 +84,7 @@ public class ModItems {
 	 */
 	public static final Item FROST_GRENADE_STICK = registerItem(
 		"frost_grenade_stick",
-		new FrostGrenadeStickItem(new Item.Settings().maxCount(1).rarity(Rarity.RARE))
+		new FrostGrenadeStickItem(createSettings("frost_grenade_stick").maxCount(1).rarity(Rarity.RARE))
 	);
 
 	/**
@@ -45,7 +92,7 @@ public class ModItems {
 	 */
 	public static final Item MINION_SPAWN_EGG = registerItem(
 		"minion_spawn_egg",
-		new MinionSpawnEggItem(ModEntities.MINION, 0x2C3E50, 0xF1C40F, new Item.Settings())
+		new MinionSpawnEggItem(ModEntities.MINION, 0x2C3E50, 0xF1C40F, createSettings("minion_spawn_egg"))
 	);
 
 	/**
@@ -54,7 +101,7 @@ public class ModItems {
 	public static final Item COMMAND_SCEPTER = registerItem(
 		"command_scepter",
 		new CommandScepterItem(
-			new Item.Settings()
+			createSettings("command_scepter")
 				.maxCount(1)
 				.rarity(Rarity.EPIC)
 				.component(ModDataComponents.COMMAND_MODE, CommandMode.FOLLOW)

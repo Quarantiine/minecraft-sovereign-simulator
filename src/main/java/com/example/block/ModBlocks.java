@@ -37,7 +37,7 @@ public class ModBlocks {
 		return Registry.register(
 			Registries.ITEM,
 			Identifier.of(ExampleMod.MOD_ID, name),
-			new BlockItem(block, new Item.Settings())
+			new BlockItem(block, com.example.item.ModItems.createSettings(name))
 		);
 	}
 
