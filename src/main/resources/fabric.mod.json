@@ -6,9 +6,9 @@
 	"description": "Tactical real-time strategy (RTS) and multiblock arcane engineering mod for Fabric 1.21.",
 	"authors": ["Mino"],
 	"contact": {
-		"homepage": "https://github.com/Quarantiine/minecraft-sovereign-sim",
-		"sources": "https://github.com/Quarantiine/minecraft-sovereign-sim",
-		"issues": "https://github.com/Quarantiine/minecraft-sovereign-sim/issues"
+		"homepage": "https://github.com/Quarantiine/minecraft-sovereign-simulator",
+		"sources": "https://github.com/Quarantiine/minecraft-sovereign-simulator",
+		"issues": "https://github.com/Quarantiine/minecraft-sovereign-simulator/issues"
 	},
 	"license": "All Rights Reserved",
 	"icon": "assets/modid-mmcli-agent-modding/icon.png",
