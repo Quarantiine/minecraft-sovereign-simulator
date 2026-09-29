@@ -146,6 +146,8 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
    - **Linux**: `~/.minecraft/mods/`
 5. Select the **fabric-loader-1.21** profile in the Minecraft launcher and launch the game!
 
+> **Tip for Multi-Version Setups**: If you run multiple Minecraft versions (e.g., 1.21 alongside 26.x or snapshots), configure each launcher installation with a dedicated "Game Directory" (such as `.minecraft/instances/1.21/`). This guarantees that 1.21 Fabric mods remain isolated and cannot cause class loader conflicts or crashes when launching other versions.
+
 ---
 
 ## 🛠 Developer & Contributor Hub
