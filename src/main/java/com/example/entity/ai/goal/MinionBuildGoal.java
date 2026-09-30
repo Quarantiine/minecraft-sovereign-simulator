@@ -1692,7 +1692,11 @@ public class MinionBuildGoal extends Goal {
 			serverWorld.breakBlock(targetPos, false, this.minion);
 
 			for (ItemStack drop : drops) {
+				int beforeCount = drop.getCount();
 				ItemStack remainder = this.minion.getInventory().addStack(drop);
+				if (remainder.getCount() < beforeCount) {
+					this.minion.getInventory().markDirty();
+				}
 				if (!remainder.isEmpty()) {
 					// Offload excess into nearby or newly crafted autonomous chest
 					com.example.entity.ai.logistics.MinionHarvestingHelper.checkAndDepositExcessMaterials(this.minion, serverWorld, this.currentSession, true);
@@ -1700,7 +1704,23 @@ public class MinionBuildGoal extends Goal {
 					if (!remainder.isEmpty()) {
 						remainder = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(remainder, serverWorld, targetPos, this.currentSession, this.minion.getOwnerUuid());
 						if (!remainder.isEmpty()) {
-							this.minion.dropStack(remainder);
+							// Share with nearby teammate minions working in the same session before dropping
+							List<com.example.entity.custom.MinionEntity> teammates = serverWorld.getEntitiesByClass(
+								com.example.entity.custom.MinionEntity.class,
+								this.minion.getBoundingBox().expand(16.0D),
+								m -> m != this.minion && m.isAlive() && m.matchesRole(com.example.entity.custom.MinionRole.BUILDER) &&
+									(this.currentSession.getOwnerUuid() == null || this.currentSession.getOwnerUuid().equals(m.getOwnerUuid()))
+							);
+							for (com.example.entity.custom.MinionEntity mate : teammates) {
+								remainder = mate.getInventory().addStack(remainder);
+								if (remainder.isEmpty()) {
+									mate.getInventory().markDirty();
+									break;
+								}
+							}
+							if (!remainder.isEmpty()) {
+								this.minion.dropStack(remainder);
+							}
 						}
 					}
 				}

@@ -10,6 +10,7 @@ import net.minecraft.block.ChestBlock;
 import net.minecraft.block.Fertilizable;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.enums.ChestType;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.decoration.ArmorStandEntity;
@@ -222,9 +223,25 @@ public final class MinionHarvestingHelper {
 			}
 		}
 
-		// In survival mode, deposit if forceAllExcess is true OR inventory is near capacity (>= 7 of 9 slots full)
-		if (!forceAllExcess && occupiedSlots < 7) {
-			return;
+		// In survival mode:
+		// For mining/dismantle sessions, minions hold onto all harvested materials in their 9-slot backpack.
+		// They only offload into a chest when their inventory is completely full and cannot accept incoming items.
+		// For building/construction sessions, builders deposit excess materials when near capacity (>= 7 of 9 slots full)
+		// so they retain empty slots to fetch required blueprint blocks.
+		boolean isMiningSession = session != null && session.isDismantle();
+		if (isMiningSession) {
+			if (!forceAllExcess) {
+				// While actively mining, do not proactively offload at task boundaries if space remains
+				return;
+			}
+			// Even when forced, if the inventory still has empty slots, keep holding onto everything!
+			if (occupiedSlots < inv.size()) {
+				return;
+			}
+		} else {
+			if (!forceAllExcess && occupiedSlots < 7) {
+				return;
+			}
 		}
 
 		// Identify excess stacks
@@ -286,27 +303,24 @@ public final class MinionHarvestingHelper {
 		}
 	}
 
-	private static BlockPos deployAutonomousChest(MinionEntity minion, ServerWorld world, ConstructionSession session) {
+	public static BlockPos deployAutonomousChest(MinionEntity minion, ServerWorld world, ConstructionSession session) {
 		// Ensure minion has or can craft a chest
-		if (!hasItemInInventory(minion, Items.CHEST)) {
-			// Try crafting chest: 8 planks needed
+		boolean hasChest = hasItemInInventory(minion, Items.CHEST);
+		if (!hasChest) {
 			int totalPlanks = countItemInInventory(minion.getInventory(), ItemTags.PLANKS);
-			if (totalPlanks < 8) {
-				// Convert logs to planks if available
+			if (totalPlanks >= 8) {
+				consumeItemFromInventory(minion.getInventory(), ItemTags.PLANKS, 8);
+				hasChest = true;
+			} else {
 				int logs = countItemInInventory(minion.getInventory(), ItemTags.LOGS);
 				if (logs >= 2) {
 					consumeItemFromInventory(minion.getInventory(), ItemTags.LOGS, 2);
-					minion.getInventory().addStack(new ItemStack(Items.OAK_PLANKS, 8));
-					totalPlanks += 8;
+					hasChest = true;
 				}
-			}
-			if (totalPlanks >= 8) {
-				consumeItemFromInventory(minion.getInventory(), ItemTags.PLANKS, 8);
-				minion.getInventory().addStack(new ItemStack(Items.CHEST, 1));
 			}
 		}
 
-		if (!hasItemInInventory(minion, Items.CHEST)) {
+		if (!hasChest) {
 			return null;
 		}
 
@@ -359,7 +373,9 @@ public final class MinionHarvestingHelper {
 		}
 
 		world.setBlockState(candidate, chestState, Block.NOTIFY_ALL);
-		consumeItemFromInventory(minion.getInventory(), Items.CHEST, 1);
+		if (hasItemInInventory(minion, Items.CHEST)) {
+			consumeItemFromInventory(minion.getInventory(), Items.CHEST, 1);
+		}
 
 		world.playSound(null, candidate, SoundEvents.BLOCK_WOOD_PLACE, SoundCategory.BLOCKS, 1.0F, 1.0F);
 		return candidate;
@@ -389,6 +405,7 @@ public final class MinionHarvestingHelper {
 
 	private static boolean isExcessItem(Item item, ConstructionSession session, boolean forceAllExcess) {
 		if (item == Items.CHEST) return false;
+		if (item == Items.TORCH || item.getComponents().contains(DataComponentTypes.FOOD)) return false;
 		if (item instanceof ArmorItem) return false;
 		if (item instanceof SwordItem || item instanceof BowItem || item instanceof CrossbowItem || item instanceof TridentItem) return false;
 		if (item instanceof PickaxeItem || item instanceof AxeItem || item instanceof ShovelItem || item instanceof MaceItem) return false;
@@ -396,6 +413,12 @@ public final class MinionHarvestingHelper {
 
 		if (forceAllExcess) {
 			return true;
+		}
+
+		// In mining/dismantle sessions, mined materials are not excess during regular task progress;
+		// minions keep them in their backpack inventory.
+		if (session != null && session.isDismantle()) {
+			return false;
 		}
 
 		// If session requires this item or it is a raw ingredient for synthesis, it is not excess

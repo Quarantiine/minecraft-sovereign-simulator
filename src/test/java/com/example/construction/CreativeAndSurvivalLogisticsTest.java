@@ -154,5 +154,58 @@ public class CreativeAndSurvivalLogisticsTest {
 		Assertions.assertTrue(source.contains("drops.isEmpty()"),
 			"fellLog and quarryNaturalStone must handle empty drop lists with a fallback");
 	}
+
+	@Test
+	@DisplayName("Mining and dismantle logistics retain mined materials in minion backpacks until full")
+	void testMiningInventoryRetentionContracts() throws IOException {
+		String helperSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+		String managerSource = Files.readString(Path.of("src/main/java/com/example/construction/ConstructionManager.java"));
+
+		// MinionHarvestingHelper must identify mining sessions and prevent early offload if slots remain
+		Assertions.assertTrue(helperSource.contains("boolean isMiningSession = session != null && session.isDismantle();"),
+			"MinionHarvestingHelper must distinguish mining/dismantle sessions");
+		Assertions.assertTrue(helperSource.contains("occupiedSlots < inv.size()"),
+			"MinionHarvestingHelper must retain mined items as long as empty slots remain");
+
+		// ConstructionManager must not offload excess materials upon completing a mining/dismantle session
+		Assertions.assertTrue(managerSource.contains("!session.isDismantle()"),
+			"ConstructionManager must preserve minion backpack inventory upon completing mining sessions");
+
+		// ConstructionManager cleanup must collect stray items into minions' backpacks before external containers
+		Assertions.assertTrue(managerSource.contains("minion.getInventory().addStack(stack)"),
+			"ConstructionManager cleanup must vacuum loose items into nearby minions' open backpack slots first");
+	}
+
+	@Test
+	@DisplayName("Autonomous chest deployment, food/torch protection, and teammate sharing contracts")
+	void testMiningOverflowAutonomousChestAndTeamSharingContracts() throws IOException {
+		String helperSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+		String managerSource = Files.readString(Path.of("src/main/java/com/example/construction/ConstructionManager.java"));
+		String goalSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java"));
+
+		// MinionHarvestingHelper.deployAutonomousChest must be public and handle planks/logs directly
+		Assertions.assertTrue(helperSource.contains("public static BlockPos deployAutonomousChest"),
+			"deployAutonomousChest must be publicly accessible");
+		Assertions.assertTrue(helperSource.contains("consumeItemFromInventory(minion.getInventory(), ItemTags.PLANKS, 8)"),
+			"deployAutonomousChest must craft from planks");
+		Assertions.assertTrue(helperSource.contains("consumeItemFromInventory(minion.getInventory(), ItemTags.LOGS, 2)"),
+			"deployAutonomousChest must craft from logs");
+
+		// isExcessItem must protect food and torches
+		Assertions.assertTrue(helperSource.contains("DataComponentTypes.FOOD"),
+			"isExcessItem must protect food rations from being discarded/deposited");
+		Assertions.assertTrue(helperSource.contains("item == Items.TORCH"),
+			"isExcessItem must protect torches from being discarded/deposited");
+
+		// ConstructionManager cleanup must call markDirty and play pickup sound
+		Assertions.assertTrue(managerSource.contains("SoundEvents.ENTITY_ITEM_PICKUP"),
+			"ConstructionManager cleanup must play item pickup sound when vacuuming loose items");
+		Assertions.assertTrue(managerSource.contains("deployAutonomousChest(minion, world, session)"),
+			"ConstructionManager cleanup must fall back to autonomous chest deployment if all minions are full");
+
+		// MinionBuildGoal must share drops with teammate minions before dropping on ground
+		Assertions.assertTrue(goalSource.contains("for (com.example.entity.custom.MinionEntity mate : teammates)"),
+			"MinionBuildGoal must share drops with teammates when local backpack is full");
+	}
 }
 

@@ -610,19 +610,50 @@ public class ConstructionManager {
 				stray.discard();
 			}
 		} else {
-			// In Survival mode, deposit all leftover materials into chests and gather loose ground items into containers
-			for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
-				com.example.entity.ai.logistics.MinionHarvestingHelper.checkAndDepositExcessMaterials(minion, world, session, true);
+			// In Survival mode:
+			// For construction sessions (raising a building), offload surplus building materials so minion slots are clean.
+			// For mining/dismantle sessions, minions hold onto all harvested ores/blocks in their backpacks until full!
+			if (!session.isDismantle()) {
+				for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
+					com.example.entity.ai.logistics.MinionHarvestingHelper.checkAndDepositExcessMaterials(minion, world, session, true);
+				}
 			}
+
+			// Gather loose ground items in the cleanup area
 			List<ItemEntity> strayItems = world.getEntitiesByClass(ItemEntity.class, cleanupBox, e -> e.isAlive() && !e.cannotPickup());
 			for (ItemEntity item : strayItems) {
 				ItemStack stack = item.getStack();
 				if (!stack.isEmpty()) {
-					ItemStack rem = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(stack, world, anchor, session, session.getOwnerUuid());
-					if (rem.isEmpty()) {
-						item.discard();
+					// 1. Collect loose items into nearby minions' open backpack inventory slots first!
+					for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
+						if (stack.isEmpty()) break;
+						int beforeCount = stack.getCount();
+						stack = minion.getInventory().addStack(stack);
+						if (stack.getCount() < beforeCount) {
+							minion.getInventory().markDirty();
+							world.playSound(null, minion.getX(), minion.getY(), minion.getZ(), SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.NEUTRAL, 0.5F, 1.2F);
+						}
+					}
+					// 2. Only if all minions' inventories are completely full, deposit remaining items into nearby containers
+					if (!stack.isEmpty()) {
+						ItemStack rem = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(stack, world, anchor, session, session.getOwnerUuid());
+						if (!rem.isEmpty()) {
+							// If existing containers are full or none found within 24 blocks, attempt autonomous chest deployment by a nearby minion
+							for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
+								BlockPos newChestPos = com.example.entity.ai.logistics.MinionHarvestingHelper.deployAutonomousChest(minion, world, session);
+								if (newChestPos != null) {
+									rem = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(rem, world, newChestPos, session, session.getOwnerUuid());
+									if (rem.isEmpty()) break;
+								}
+							}
+						}
+						if (rem.isEmpty()) {
+							item.discard();
+						} else {
+							item.setStack(rem);
+						}
 					} else {
-						item.setStack(rem);
+						item.discard();
 					}
 				}
 			}
