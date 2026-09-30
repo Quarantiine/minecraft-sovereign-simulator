@@ -1,6 +1,6 @@
 # ⚔️ Sovereign Simulator: Arcane Strategy & Engineering
 
-[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.x%20%7C%2026.2-brightgreen.svg)](https://www.minecraft.net/)
+[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.x-brightgreen.svg)](https://www.minecraft.net/)
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
@@ -146,7 +146,7 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
    - **Linux**: `~/.minecraft/mods/`
 5. Select the **fabric-loader-1.21** profile in the Minecraft launcher and launch the game!
 
-> **Tip for Multi-Version Setups**: If you run multiple Minecraft versions (e.g., 1.21 alongside 26.x or snapshots), configure each launcher installation with a dedicated "Game Directory" (such as `.minecraft/instances/1.21/`). This guarantees that 1.21 Fabric mods remain isolated and cannot cause class loader conflicts or crashes when launching other versions.
+> **Tip for Multi-Version Setups**: If you run multiple Minecraft versions (e.g., 1.21 alongside other versions or snapshots), configure each launcher installation with a dedicated "Game Directory" (such as `.minecraft/instances/1.21/`). This guarantees that 1.21 Fabric mods remain isolated and cannot cause class loader conflicts or crashes when launching other versions.
 
 ---
 

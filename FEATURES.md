@@ -32,7 +32,7 @@ This document provides a comprehensive technical breakdown of all gameplay featu
 21. [In-World Spatial Blueprint Capture ('DESIGN' Mode)](#21-in-world-spatial-blueprint-capture-design-mode)
 22. [Unified Surface Anchoring Contract & Hollow Grid Mechanics](#22-unified-surface-anchoring-contract--hollow-grid-mechanics)
 23. [Survival Crafting Recipes & Progression](#23-survival-crafting-recipes--progression)
-24. [Cross-Version Compatibility Architecture (Minecraft 1.21.1, 1.21.2+, and 26.2)](#24-cross-version-compatibility-architecture-minecraft-1211-1212-and-262)
+24. [Cross-Version Compatibility Architecture (Minecraft 1.21.x Family)](#24-cross-version-compatibility-architecture-minecraft-121x-family)
 
 ---
 
@@ -1599,9 +1599,9 @@ Players can also obtain minions without crafting spawn eggs by using the scepter
 
 ---
 
-## 24. Cross-Version Compatibility Architecture (Minecraft 1.21.1, 1.21.2+, and 26.2)
+## 24. Cross-Version Compatibility Architecture (Minecraft 1.21.x Family)
 
-To ensure seamless operation across modern release cycles, the mod incorporates dedicated runtime version shims:
+To ensure seamless operation across 1.21.x release cycles (1.21.0, 1.21.1, 1.21.2, 1.21.4, etc.), the mod incorporates dedicated runtime version shims:
 
 1. **`Item.Settings` RegistryKey Compatibility**:
    - Uses `ModItems.createSettings(name)` with reflection fallback.
@@ -1612,6 +1612,6 @@ To ensure seamless operation across modern release cycles, the mod incorporates 
 3. **Multi-Format Resource Packs & Item Models**:
    - Bundles `pack.mcmeta` with supported format range (`34` to `48`).
    - Supplies both legacy item models (`models/item/`) and modern 1.21.2+ item definitions (`items/`).
-4. **Multi-Version Fabric Loader Declaration**:
-   - Declares `depends.minecraft: ["~1.21", "26.2", ">=26"]` in `fabric.mod.json`, resolving Loader dependency constraints on both 1.21.x and future releases.
+4. **Fabric Loader 1.21.x Version Pinning**:
+   - Declares `depends.minecraft: "~1.21"` in `fabric.mod.json`, ensuring the mod cleanly and exclusively targets the Minecraft 1.21.x family.
 

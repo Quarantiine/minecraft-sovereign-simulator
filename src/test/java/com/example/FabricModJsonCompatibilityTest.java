@@ -15,13 +15,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FabricModJsonCompatibilityTest {
 
     @Test
-    @DisplayName("Verify fabric.mod.json declares compatibility with both 1.21.x and 26.2")
+    @DisplayName("Verify fabric.mod.json declares compatibility with 1.21.x")
     void testFabricModJsonMinecraftVersions() throws Exception {
         Path modJsonPath = Paths.get("src/main/resources/fabric.mod.json");
         assertTrue(Files.exists(modJsonPath), "fabric.mod.json must exist in src/main/resources");
@@ -51,8 +52,10 @@ public class FabricModJsonCompatibilityTest {
             assertTrue(mcDep.matches(Version.parse("1.21.2")), "Must match Minecraft 1.21.2");
             assertTrue(mcDep.matches(Version.parse("1.21.4")), "Must match Minecraft 1.21.4");
 
-            // Test 26.2 version
-            assertTrue(mcDep.matches(Version.parse("26.2")), "Must match Minecraft 26.2");
+            // Reject older and non-1.21 versions
+            assertFalse(mcDep.matches(Version.parse("1.20.4")), "Must not match Minecraft 1.20.4");
+            assertFalse(mcDep.matches(Version.parse("26.1")), "Must not match Minecraft 26.1");
+            assertFalse(mcDep.matches(Version.parse("26.2")), "Must not match Minecraft 26.2");
         }
     }
 }
