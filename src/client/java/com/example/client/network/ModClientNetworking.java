@@ -56,10 +56,22 @@ public class ModClientNetworking {
 				}
 			})
 		);
+		ClientPlayNetworking.registerGlobalReceiver(
+			com.example.network.SyncResourceEstimationPayload.ID,
+			(payload, context) -> context.client().execute(() -> {
+				com.example.client.resource.ClientResourceEstimatorTracker.setEstimation(payload);
+				if (context.client().currentScreen instanceof com.example.client.gui.BlueprintResourceEstimatorModalScreen modal) {
+					modal.onEstimationUpdated(payload);
+				} else if (context.client().currentScreen instanceof com.example.client.gui.CommandScepterScreen scepterScreen) {
+					scepterScreen.refreshButtonLabels();
+				}
+			})
+		);
 
 		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			com.example.client.renderer.ClientPatrolRouteTracker.clear();
 			com.example.blueprint.BlueprintRegistry.clearCustomBlueprints();
+			com.example.client.resource.ClientResourceEstimatorTracker.clear();
 		});
 	}
 
@@ -370,6 +382,17 @@ public class ModClientNetworking {
 	 */
 	public static void sendStartMiningArea(net.minecraft.util.math.BlockPos pos1, net.minecraft.util.math.BlockPos pos2) {
 		com.example.network.StartMiningAreaPayload payload = new com.example.network.StartMiningAreaPayload(pos1, pos2);
+		ClientPlayNetworking.send(payload);
+	}
+
+	/**
+	 * Dispatches a {@link com.example.network.RequestResourceEstimationPayload} to calculate live material delta
+	 * across player inventory and nearby minion backpacks.
+	 *
+	 * @param blueprintId Unique blueprint identifier to calculate resource requirements for.
+	 */
+	public static void sendRequestResourceEstimation(String blueprintId) {
+		com.example.network.RequestResourceEstimationPayload payload = new com.example.network.RequestResourceEstimationPayload(blueprintId);
 		ClientPlayNetworking.send(payload);
 	}
 }

@@ -115,19 +115,28 @@ public final class MinionHarvestingHelper {
 				// Convert to planks if required item is planks
 				if (isPlanksItem(requiredItem)) {
 					convertLogsToPlanks(minion, requiredItem);
+				} else if (isWoodenDerivative(requiredItem)) {
+					craftWoodenDerivative(minion, world, requiredItem, session);
 				}
 				return hasItemInInventory(minion, requiredItem);
 			}
 		}
 
-		// 3. Natural Stone / Cobblestone / Deepslate / Earth Quarrying
-		if (isQuarryResource(requiredItem)) {
-			if (quarryNaturalStone(minion, world, requiredItem, session)) {
+		// 3. Smart Block Transformation & Tool Block Utilization (Smelting, Crafting, Stonecutting)
+		if (isTransformableResource(requiredItem)) {
+			if (trySmartTransformation(minion, world, requiredItem, session)) {
 				return hasItemInInventory(minion, requiredItem);
 			}
 		}
 
-		// 4. Mob Material Procurement & In-Inventory Synthesis
+		// 4. Natural Stone / Cobblestone / Deepslate / Earth Quarrying
+		if (isQuarryResource(requiredItem)) {
+			if (quarryNaturalStone(minion, world, requiredItem, 1, session)) {
+				return hasItemInInventory(minion, requiredItem);
+			}
+		}
+
+		// 5. Mob Material Procurement & In-Inventory Synthesis
 		if (isMobProcurementResource(requiredItem)) {
 			// First attempt in-inventory synthesis (e.g. bones -> bone meal, string -> wool)
 			if (synthesizeMaterial(minion.getInventory(), requiredItem)) {
@@ -139,7 +148,7 @@ public final class MinionHarvestingHelper {
 			}
 		}
 
-		// 5. Workstations, Utilities & Furniture Autonomous Synthesis
+		// 6. Workstations, Utilities & Furniture Autonomous Synthesis
 		if (isWorkstationResource(requiredItem)) {
 			if (synthesizeWorkstation(minion, world, requiredItem, session)) {
 				return hasItemInInventory(minion, requiredItem);
@@ -566,11 +575,22 @@ public final class MinionHarvestingHelper {
 		Item requiredItem,
 		ConstructionSession session
 	) {
+		return quarryNaturalStone(minion, world, requiredItem, 1, session);
+	}
+
+	private static boolean quarryNaturalStone(
+		MinionEntity minion,
+		ServerWorld world,
+		Item requiredItem,
+		int maxCount,
+		ConstructionSession session
+	) {
 		BlockPos minionPos = minion.getBlockPos();
+		int harvested = 0;
 
 		for (BlockPos pos : BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, 10, HARVEST_SEARCH_RADIUS)) {
 			BlockState state = world.getBlockState(pos);
-			if (isNaturalStoneOrEarth(state) && !isProtectedBlock(world, pos, session, minion.getOwnerUuid())) {
+			if (isNaturalStoneOrEarth(state) && matchesQuarryTarget(state, requiredItem) && !isProtectedBlock(world, pos, session, minion.getOwnerUuid())) {
 				if (!hasAdjacentLava(world, pos)) {
 					// Use loot-table-faithful drop computation (respects silk-touch pickaxes, fortune, etc.)
 					BlockEntity be = world.getBlockEntity(pos);
@@ -597,12 +617,74 @@ public final class MinionHarvestingHelper {
 
 					world.spawnParticles(new BlockStateParticleEffect(ParticleTypes.BLOCK, state), pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.1D);
 					world.playSound(null, pos, state.getSoundGroup().getBreakSound(), SoundCategory.BLOCKS, 1.0F, 1.0F);
-					return true;
+					harvested++;
+					if (harvested >= maxCount) {
+						return true;
+					}
 				}
 			}
 		}
 
-		return false;
+		return harvested > 0;
+	}
+
+	private static boolean matchesQuarryTarget(BlockState state, Item requiredItem) {
+		if (requiredItem == null) return isNaturalStoneOrEarth(state);
+
+		if (requiredItem == Items.SAND || requiredItem == Items.SANDSTONE || requiredItem == Items.CUT_SANDSTONE
+			|| requiredItem == Items.CHISELED_SANDSTONE || requiredItem == Items.GLASS || requiredItem == Items.GLASS_PANE) {
+			return state.isOf(Blocks.SAND) || state.isOf(Blocks.RED_SAND) || state.isOf(Blocks.SANDSTONE) || state.isOf(Blocks.RED_SANDSTONE);
+		}
+		if (requiredItem == Items.RED_SAND || requiredItem == Items.RED_SANDSTONE) {
+			return state.isOf(Blocks.RED_SAND) || state.isOf(Blocks.RED_SANDSTONE);
+		}
+		if (requiredItem == Items.GRAVEL || requiredItem == Items.FLINT) {
+			return state.isOf(Blocks.GRAVEL);
+		}
+		if (requiredItem == Items.CLAY || requiredItem == Items.CLAY_BALL || requiredItem == Items.BRICK || requiredItem == Items.BRICKS
+			|| requiredItem == Items.TERRACOTTA) {
+			return state.isOf(Blocks.CLAY);
+		}
+		if (requiredItem == Items.DIRT) {
+			return state.isOf(Blocks.DIRT);
+		}
+		if (requiredItem == Items.NETHERRACK || requiredItem == Items.NETHER_BRICK || requiredItem == Items.NETHER_BRICKS) {
+			return state.isOf(Blocks.NETHERRACK);
+		}
+		if (requiredItem == Items.BASALT || requiredItem == Items.SMOOTH_BASALT || requiredItem == Items.POLISHED_BASALT) {
+			return state.isOf(Blocks.BASALT);
+		}
+		if (requiredItem == Items.COAL) {
+			return state.isOf(Blocks.COAL_ORE) || state.isOf(Blocks.DEEPSLATE_COAL_ORE);
+		}
+		if (requiredItem == Items.RAW_IRON || requiredItem == Items.IRON_INGOT || requiredItem == Items.IRON_BARS || requiredItem == Items.CHAIN || requiredItem == Items.IRON_BLOCK) {
+			return state.isOf(Blocks.IRON_ORE) || state.isOf(Blocks.DEEPSLATE_IRON_ORE);
+		}
+		if (requiredItem == Items.RAW_COPPER || requiredItem == Items.COPPER_INGOT || requiredItem == Items.COPPER_BLOCK || requiredItem == Items.CUT_COPPER
+			|| requiredItem == Items.CUT_COPPER_STAIRS || requiredItem == Items.CUT_COPPER_SLAB) {
+			return state.isOf(Blocks.COPPER_ORE) || state.isOf(Blocks.DEEPSLATE_COPPER_ORE);
+		}
+		if (requiredItem == Items.RAW_GOLD || requiredItem == Items.GOLD_INGOT || requiredItem == Items.GOLD_BLOCK) {
+			return state.isOf(Blocks.GOLD_ORE) || state.isOf(Blocks.DEEPSLATE_GOLD_ORE);
+		}
+		if (requiredItem == Items.QUARTZ || requiredItem == Items.QUARTZ_BLOCK) {
+			return state.isOf(Blocks.NETHER_QUARTZ_ORE);
+		}
+		if (requiredItem == Items.DEEPSLATE || requiredItem == Items.COBBLED_DEEPSLATE || requiredItem == Items.POLISHED_DEEPSLATE
+			|| requiredItem == Items.DEEPSLATE_BRICKS || requiredItem == Items.DEEPSLATE_TILES) {
+			return state.isOf(Blocks.DEEPSLATE) || state.isOf(Blocks.COBBLED_DEEPSLATE);
+		}
+		if (requiredItem == Items.ANDESITE || requiredItem == Items.POLISHED_ANDESITE) {
+			return state.isOf(Blocks.ANDESITE);
+		}
+		if (requiredItem == Items.DIORITE || requiredItem == Items.POLISHED_DIORITE) {
+			return state.isOf(Blocks.DIORITE);
+		}
+		if (requiredItem == Items.GRANITE || requiredItem == Items.POLISHED_GRANITE) {
+			return state.isOf(Blocks.GRANITE);
+		}
+
+		return state.isOf(Blocks.STONE) || state.isOf(Blocks.COBBLESTONE);
 	}
 
 	private static boolean isNaturalStoneOrEarth(BlockState state) {
@@ -615,8 +697,22 @@ public final class MinionHarvestingHelper {
 			|| state.isOf(Blocks.GRANITE)
 			|| state.isOf(Blocks.DIRT)
 			|| state.isOf(Blocks.SAND)
+			|| state.isOf(Blocks.RED_SAND)
 			|| state.isOf(Blocks.GRAVEL)
-			|| state.isOf(Blocks.SANDSTONE);
+			|| state.isOf(Blocks.SANDSTONE)
+			|| state.isOf(Blocks.RED_SANDSTONE)
+			|| state.isOf(Blocks.CLAY)
+			|| state.isOf(Blocks.NETHERRACK)
+			|| state.isOf(Blocks.BASALT)
+			|| state.isOf(Blocks.COAL_ORE)
+			|| state.isOf(Blocks.DEEPSLATE_COAL_ORE)
+			|| state.isOf(Blocks.IRON_ORE)
+			|| state.isOf(Blocks.DEEPSLATE_IRON_ORE)
+			|| state.isOf(Blocks.COPPER_ORE)
+			|| state.isOf(Blocks.DEEPSLATE_COPPER_ORE)
+			|| state.isOf(Blocks.GOLD_ORE)
+			|| state.isOf(Blocks.DEEPSLATE_GOLD_ORE)
+			|| state.isOf(Blocks.NETHER_QUARTZ_ORE);
 	}
 
 	private static Item resolveQuarryDrop(BlockState state, Item requiredItem) {
@@ -625,6 +721,24 @@ public final class MinionHarvestingHelper {
 		}
 		if (state.isOf(Blocks.DEEPSLATE)) {
 			return requiredItem == Items.DEEPSLATE ? Items.DEEPSLATE : Items.COBBLED_DEEPSLATE;
+		}
+		if (state.isOf(Blocks.CLAY)) {
+			return Items.CLAY_BALL;
+		}
+		if (state.isOf(Blocks.COAL_ORE) || state.isOf(Blocks.DEEPSLATE_COAL_ORE)) {
+			return Items.COAL;
+		}
+		if (state.isOf(Blocks.IRON_ORE) || state.isOf(Blocks.DEEPSLATE_IRON_ORE)) {
+			return Items.RAW_IRON;
+		}
+		if (state.isOf(Blocks.COPPER_ORE) || state.isOf(Blocks.DEEPSLATE_COPPER_ORE)) {
+			return Items.RAW_COPPER;
+		}
+		if (state.isOf(Blocks.GOLD_ORE) || state.isOf(Blocks.DEEPSLATE_GOLD_ORE)) {
+			return Items.RAW_GOLD;
+		}
+		if (state.isOf(Blocks.NETHER_QUARTZ_ORE)) {
+			return Items.QUARTZ;
 		}
 		return state.getBlock().asItem();
 	}
@@ -696,7 +810,8 @@ public final class MinionHarvestingHelper {
 			|| path.contains("barrel")
 			|| path.contains("shulker")
 			|| path.contains("furnace")
-			|| path.contains("crafting_table");
+			|| path.contains("crafting_table")
+			|| path.contains("stonecutter");
 	}
 
 	/**
@@ -716,7 +831,8 @@ public final class MinionHarvestingHelper {
 	private static void ensureAppropriateTool(MinionEntity minion, ServerWorld world, Item requiredItem) {
 		ItemStack mainhand = minion.getMainHandStack();
 
-		boolean needsPickaxe = isQuarryResource(requiredItem);
+		boolean needsPickaxe = isPickaxeResource(requiredItem);
+		boolean needsShovel = isShovelResource(requiredItem);
 		boolean needsAxe = isWoodResource(requiredItem);
 
 		if (needsPickaxe && !(mainhand.getItem() instanceof PickaxeItem)) {
@@ -729,6 +845,14 @@ public final class MinionHarvestingHelper {
 				// Craft wooden or stone pickaxe
 				craftPickaxe(minion, world);
 			}
+		} else if (needsShovel && !(mainhand.getItem() instanceof ShovelItem)) {
+			int shovelSlot = findToolSlot(minion.getInventory(), ShovelItem.class);
+			if (shovelSlot != -1) {
+				ItemStack shovel = minion.getInventory().getStack(shovelSlot);
+				minion.equipStack(EquipmentSlot.MAINHAND, shovel);
+			} else {
+				craftShovel(minion, world);
+			}
 		} else if (needsAxe && !(mainhand.getItem() instanceof AxeItem)) {
 			int axeSlot = findToolSlot(minion.getInventory(), AxeItem.class);
 			if (axeSlot != -1) {
@@ -738,6 +862,49 @@ public final class MinionHarvestingHelper {
 				// Craft wooden axe
 				craftAxe(minion, world);
 			}
+		}
+	}
+
+	public static boolean isShovelResource(Item item) {
+		if (item == null) return false;
+		return item == Items.DIRT
+			|| item == Items.SAND
+			|| item == Items.RED_SAND
+			|| item == Items.GRAVEL
+			|| item == Items.FLINT
+			|| item == Items.CLAY
+			|| item == Items.CLAY_BALL
+			|| item == Items.SOUL_SAND
+			|| item == Items.SOUL_SOIL
+			|| item == Items.MUD;
+	}
+
+	public static boolean isPickaxeResource(Item item) {
+		if (item == null) return false;
+		if (isShovelResource(item) || isWoodResource(item)) return false;
+		return isQuarryResource(item) || isTransformableResource(item) || isWorkstationResource(item);
+	}
+
+	private static void craftShovel(MinionEntity minion, ServerWorld world) {
+		ensureSticksAndPlanks(minion);
+		SimpleInventory inv = minion.getInventory();
+
+		int cobble = countItemInInventory(inv, Items.COBBLESTONE);
+		int sticks = countItemInInventory(inv, Items.STICK);
+		if (cobble >= 1 && sticks >= 2) {
+			consumeItemFromInventory(inv, Items.COBBLESTONE, 1);
+			consumeItemFromInventory(inv, Items.STICK, 2);
+			minion.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_SHOVEL));
+			playCraftingFeedback(minion, world, null);
+			return;
+		}
+
+		int planks = countItemInInventory(inv, ItemTags.PLANKS);
+		if (planks >= 1 && sticks >= 2) {
+			consumeItemFromInventory(inv, ItemTags.PLANKS, 1);
+			consumeItemFromInventory(inv, Items.STICK, 2);
+			minion.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.WOODEN_SHOVEL));
+			playCraftingFeedback(minion, world, null);
 		}
 	}
 
@@ -802,8 +969,31 @@ public final class MinionHarvestingHelper {
 	}
 
 	private static void playCraftingFeedback(MinionEntity minion, ServerWorld world) {
-		world.playSound(null, minion.getX(), minion.getY(), minion.getZ(), SoundEvents.BLOCK_WOOD_PLACE, SoundCategory.PLAYERS, 0.8F, 1.2F);
-		world.spawnParticles(ParticleTypes.CRIT, minion.getX(), minion.getY() + 1.0D, minion.getZ(), 5, 0.2D, 0.2D, 0.2D, 0.05D);
+		playCraftingFeedback(minion, world, null);
+	}
+
+	private static void playCraftingFeedback(MinionEntity minion, ServerWorld world, BlockPos toolBlockPos) {
+		BlockPos soundPos = toolBlockPos != null ? toolBlockPos : minion.getBlockPos();
+		world.playSound(null, soundPos, SoundEvents.BLOCK_WOOD_PLACE, SoundCategory.BLOCKS, 0.8F, 1.2F);
+		world.spawnParticles(ParticleTypes.CRIT, soundPos.getX() + 0.5D, soundPos.getY() + 0.8D, soundPos.getZ() + 0.5D, 5, 0.2D, 0.2D, 0.2D, 0.05D);
+	}
+
+	private static void playSmeltingFeedback(MinionEntity minion, ServerWorld world, BlockPos toolBlockPos) {
+		BlockPos soundPos = toolBlockPos != null ? toolBlockPos : minion.getBlockPos();
+		world.playSound(null, soundPos, SoundEvents.BLOCK_FURNACE_FIRE_CRACKLE, SoundCategory.BLOCKS, 0.9F, 1.0F);
+		world.spawnParticles(ParticleTypes.FLAME, soundPos.getX() + 0.5D, soundPos.getY() + 0.6D, soundPos.getZ() + 0.5D, 6, 0.2D, 0.2D, 0.2D, 0.02D);
+		world.spawnParticles(ParticleTypes.SMOKE, soundPos.getX() + 0.5D, soundPos.getY() + 0.9D, soundPos.getZ() + 0.5D, 4, 0.15D, 0.2D, 0.15D, 0.01D);
+	}
+
+	private static void playStonecutterFeedback(MinionEntity minion, ServerWorld world, BlockPos toolBlockPos) {
+		BlockPos soundPos = toolBlockPos != null ? toolBlockPos : minion.getBlockPos();
+		world.playSound(null, soundPos, SoundEvents.UI_STONECUTTER_TAKE_RESULT, SoundCategory.BLOCKS, 0.9F, 1.0F);
+		world.spawnParticles(ParticleTypes.CRIT, soundPos.getX() + 0.5D, soundPos.getY() + 0.6D, soundPos.getZ() + 0.5D, 6, 0.2D, 0.2D, 0.2D, 0.05D);
+	}
+
+	private static void playSiftingFeedback(MinionEntity minion, ServerWorld world) {
+		world.playSound(null, minion.getX(), minion.getY(), minion.getZ(), SoundEvents.BLOCK_GRAVEL_BREAK, SoundCategory.PLAYERS, 0.8F, 1.2F);
+		world.spawnParticles(ParticleTypes.CRIT, minion.getX(), minion.getY() + 0.5D, minion.getZ(), 4, 0.2D, 0.2D, 0.2D, 0.05D);
 	}
 
 	private static void convertLogsToPlanks(MinionEntity minion, Item requiredPlanks) {
@@ -916,7 +1106,7 @@ public final class MinionHarvestingHelper {
 		inv.markDirty();
 	}
 
-	private static boolean isWoodResource(Item item) {
+	public static boolean isWoodResource(Item item) {
 		return item.getDefaultStack().isIn(ItemTags.LOGS)
 			|| item.getDefaultStack().isIn(ItemTags.PLANKS)
 			|| item.getDefaultStack().isIn(ItemTags.WOODEN_STAIRS)
@@ -924,11 +1114,30 @@ public final class MinionHarvestingHelper {
 			|| item.getDefaultStack().isIn(ItemTags.WOODEN_DOORS);
 	}
 
+	/**
+	 * Determines whether builder minions can autonomously quarry, harvest, smelt, synthesize,
+	 * or craft the specified item in survival mode.
+	 *
+	 * @param item The item required for construction.
+	 * @return True if builder minions have autonomous procurement routines for this resource.
+	 */
+	public static boolean isHarvestable(Item item) {
+		if (item == null) return false;
+		return isWoodResource(item)
+			|| isQuarryResource(item)
+			|| isTransformableResource(item)
+			|| isMobProcurementResource(item)
+			|| isWorkstationResource(item)
+			|| isShovelResource(item)
+			|| isPickaxeResource(item);
+	}
+
 	private static boolean isPlanksItem(Item item) {
 		return item.getDefaultStack().isIn(ItemTags.PLANKS);
 	}
 
-	private static boolean isQuarryResource(Item item) {
+	public static boolean isQuarryResource(Item item) {
+		if (item == null) return false;
 		return item == Items.COBBLESTONE
 			|| item == Items.STONE
 			|| item == Items.DEEPSLATE
@@ -938,8 +1147,1345 @@ public final class MinionHarvestingHelper {
 			|| item == Items.GRANITE
 			|| item == Items.DIRT
 			|| item == Items.SAND
+			|| item == Items.RED_SAND
 			|| item == Items.GRAVEL
-			|| item == Items.SANDSTONE;
+			|| item == Items.SANDSTONE
+			|| item == Items.RED_SANDSTONE
+			|| item == Items.CLAY
+			|| item == Items.CLAY_BALL
+			|| item == Items.COAL
+			|| item == Items.RAW_IRON
+			|| item == Items.RAW_COPPER
+			|| item == Items.RAW_GOLD
+			|| item == Items.NETHERRACK
+			|| item == Items.BASALT
+			|| item == Items.QUARTZ;
+	}
+
+	// =========================================================================
+	// Smart Block Transformations & Tool Block Utilization
+	// =========================================================================
+
+	public static BlockPos findNearbyToolBlock(ServerWorld world, BlockPos center, int radius, Block... toolBlocks) {
+		if (world == null || center == null || toolBlocks == null || toolBlocks.length == 0) {
+			return null;
+		}
+		for (BlockPos pos : BlockPos.iterateOutwards(center, radius, 4, radius)) {
+			BlockState state = world.getBlockState(pos);
+			for (Block tb : toolBlocks) {
+				if (state.isOf(tb)) {
+					return pos.toImmutable();
+				}
+			}
+		}
+		return null;
+	}
+
+	private static boolean hasSmeltingFuel(SimpleInventory inv) {
+		for (int i = 0; i < inv.size(); i++) {
+			ItemStack s = inv.getStack(i);
+			if (!s.isEmpty()) {
+				Item item = s.getItem();
+				if (item == Items.COAL || item == Items.CHARCOAL || item == Items.LAVA_BUCKET || item == Items.STICK
+					|| s.isIn(ItemTags.LOGS) || s.isIn(ItemTags.PLANKS)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static boolean ensureSmeltingFuel(MinionEntity minion, ServerWorld world, ConstructionSession session) {
+		SimpleInventory inv = minion.getInventory();
+		if (hasSmeltingFuel(inv)) {
+			return true;
+		}
+
+		if (countItemInInventory(inv, ItemTags.PLANKS) >= 1) {
+			consumeItemFromInventory(inv, ItemTags.PLANKS, 1);
+			inv.addStack(new ItemStack(Items.STICK, 4));
+			return true;
+		}
+
+		if (harvestWoodOrAgroForestry(minion, world, session)) {
+			if (countItemInInventory(inv, ItemTags.LOGS) >= 1) {
+				consumeItemFromInventory(inv, ItemTags.LOGS, 1);
+				inv.addStack(new ItemStack(Items.OAK_PLANKS, 4));
+			}
+			return true;
+		}
+
+		if (quarryNaturalStone(minion, world, Items.COAL, 1, session)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private static void consumeSmeltingFuel(SimpleInventory inv) {
+		if (countItemInInventory(inv, Items.STICK) >= 1) {
+			consumeItemFromInventory(inv, Items.STICK, 1);
+			return;
+		}
+		if (countItemInInventory(inv, ItemTags.PLANKS) >= 1) {
+			consumeItemFromInventory(inv, ItemTags.PLANKS, 1);
+			return;
+		}
+		if (countItemInInventory(inv, ItemTags.LOGS) >= 1) {
+			consumeItemFromInventory(inv, ItemTags.LOGS, 1);
+			return;
+		}
+		if (countItemInInventory(inv, Items.CHARCOAL) >= 1) {
+			consumeItemFromInventory(inv, Items.CHARCOAL, 1);
+			return;
+		}
+		if (countItemInInventory(inv, Items.COAL) >= 1) {
+			consumeItemFromInventory(inv, Items.COAL, 1);
+			return;
+		}
+		if (countItemInInventory(inv, Items.LAVA_BUCKET) >= 1) {
+			consumeItemFromInventory(inv, Items.LAVA_BUCKET, 1);
+			inv.addStack(new ItemStack(Items.BUCKET, 1));
+		}
+	}
+
+	private static boolean executeSmelt(
+		MinionEntity minion,
+		ServerWorld world,
+		Item inputItem,
+		int inputCount,
+		Item outputItem,
+		int outputCount,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+		if (countItemInInventory(inv, inputItem) < inputCount) {
+			return false;
+		}
+		if (!ensureSmeltingFuel(minion, world, session)) {
+			return false;
+		}
+		consumeSmeltingFuel(inv);
+
+		BlockPos furnacePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER);
+		if (furnacePos == null) {
+			ensureFurnaceWorkstation(minion, world, session);
+		}
+
+		consumeItemFromInventory(inv, inputItem, inputCount);
+		inv.addStack(new ItemStack(outputItem, outputCount));
+		playSmeltingFeedback(minion, world, furnacePos);
+		return true;
+	}
+
+	private static boolean ensureFurnaceWorkstation(MinionEntity minion, ServerWorld world, ConstructionSession session) {
+		SimpleInventory inv = minion.getInventory();
+		if (countItemInInventory(inv, Items.FURNACE) >= 1 || countItemInInventory(inv, Items.BLAST_FURNACE) >= 1 || countItemInInventory(inv, Items.SMOKER) >= 1) {
+			return true;
+		}
+		if (countItemInInventory(inv, Items.COBBLESTONE) < 8) {
+			quarryNaturalStone(minion, world, Items.COBBLESTONE, 8, session);
+		}
+		if (countItemInInventory(inv, Items.COBBLESTONE) >= 8) {
+			consumeItemFromInventory(inv, Items.COBBLESTONE, 8);
+			inv.addStack(new ItemStack(Items.FURNACE, 1));
+			return true;
+		}
+		return false;
+	}
+
+	private static boolean executeStonecut(
+		MinionEntity minion,
+		ServerWorld world,
+		Item inputItem,
+		int inputCount,
+		Item outputItem,
+		int outputCount
+	) {
+		SimpleInventory inv = minion.getInventory();
+		if (countItemInInventory(inv, inputItem) < inputCount) {
+			return false;
+		}
+		BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+		consumeItemFromInventory(inv, inputItem, inputCount);
+		inv.addStack(new ItemStack(outputItem, outputCount));
+		playStonecutterFeedback(minion, world, cutterPos);
+		return true;
+	}
+
+	private static Item findItemInInventory(SimpleInventory inv, net.minecraft.registry.tag.TagKey<Item> tag) {
+		for (int i = 0; i < inv.size(); i++) {
+			ItemStack stack = inv.getStack(i);
+			if (!stack.isEmpty() && stack.isIn(tag)) {
+				return stack.getItem();
+			}
+		}
+		return null;
+	}
+
+	public static boolean isTransformableResource(Item item) {
+		if (item == null) return false;
+		return isSmeltableBuildingResource(item)
+			|| isSandstoneResource(item)
+			|| isStoneBrickResource(item)
+			|| isDeepslateDerivedResource(item)
+			|| isBrickResource(item)
+			|| isGlassResource(item)
+			|| isNetherBrickResource(item)
+			|| isQuartzDerivedResource(item)
+			|| isBasaltDerivedResource(item)
+			|| isPolishedStoneResource(item)
+			|| isMetalDerivativeResource(item)
+			|| isWoodenDerivative(item)
+			|| item == Items.FLINT
+			|| item == Items.CHARCOAL
+			|| item == Items.TORCH
+			|| item == Items.SOUL_TORCH
+			|| item == Items.WHITE_CARPET
+			|| item.getDefaultStack().isIn(ItemTags.WOOL_CARPETS);
+	}
+
+	public static boolean isSmeltableBuildingResource(Item item) {
+		if (item == null) return false;
+		return item == Items.SMOOTH_STONE
+			|| item == Items.STONE
+			|| item == Items.DEEPSLATE
+			|| item == Items.GLASS
+			|| item == Items.SMOOTH_SANDSTONE
+			|| item == Items.SMOOTH_RED_SANDSTONE
+			|| item == Items.CRACKED_STONE_BRICKS
+			|| item == Items.CRACKED_DEEPSLATE_BRICKS
+			|| item == Items.SMOOTH_BASALT
+			|| item == Items.SMOOTH_QUARTZ
+			|| item == Items.TERRACOTTA
+			|| item == Items.BRICK
+			|| item == Items.CHARCOAL
+			|| item == Items.IRON_INGOT
+			|| item == Items.COPPER_INGOT
+			|| item == Items.GOLD_INGOT
+			|| item == Items.NETHER_BRICK;
+	}
+
+	public static boolean isSandstoneResource(Item item) {
+		if (item == null) return false;
+		return item == Items.SANDSTONE || item == Items.RED_SANDSTONE || isSandstoneDerivative(item);
+	}
+
+	public static boolean isStoneBrickResource(Item item) {
+		if (item == null) return false;
+		return item == Items.STONE_BRICKS || item == Items.CRACKED_STONE_BRICKS || item == Items.CHISELED_STONE_BRICKS
+			|| item == Items.STONE_BRICK_STAIRS || item == Items.STONE_BRICK_SLAB || item == Items.STONE_BRICK_WALL
+			|| item == Items.MOSSY_STONE_BRICKS || item == Items.MOSSY_STONE_BRICK_STAIRS || item == Items.MOSSY_STONE_BRICK_SLAB || item == Items.MOSSY_STONE_BRICK_WALL
+			|| item == Items.COBBLESTONE_STAIRS || item == Items.COBBLESTONE_SLAB || item == Items.COBBLESTONE_WALL || item == Items.MOSSY_COBBLESTONE
+			|| item == Items.STONE_STAIRS || item == Items.STONE_SLAB;
+	}
+
+	public static boolean isDeepslateDerivedResource(Item item) {
+		if (item == null) return false;
+		return item == Items.DEEPSLATE || item == Items.POLISHED_DEEPSLATE || item == Items.DEEPSLATE_BRICKS || item == Items.DEEPSLATE_TILES
+			|| item == Items.CRACKED_DEEPSLATE_BRICKS || item == Items.CRACKED_DEEPSLATE_TILES || item == Items.CHISELED_DEEPSLATE
+			|| item == Items.POLISHED_DEEPSLATE_STAIRS || item == Items.POLISHED_DEEPSLATE_SLAB || item == Items.POLISHED_DEEPSLATE_WALL
+			|| item == Items.DEEPSLATE_BRICK_STAIRS || item == Items.DEEPSLATE_BRICK_SLAB || item == Items.DEEPSLATE_BRICK_WALL
+			|| item == Items.DEEPSLATE_TILE_STAIRS || item == Items.DEEPSLATE_TILE_SLAB || item == Items.DEEPSLATE_TILE_WALL
+			|| item == Items.COBBLED_DEEPSLATE_STAIRS || item == Items.COBBLED_DEEPSLATE_SLAB || item == Items.COBBLED_DEEPSLATE_WALL;
+	}
+
+	public static boolean isBrickResource(Item item) {
+		if (item == null) return false;
+		return item == Items.BRICK || item == Items.BRICKS || item == Items.BRICK_STAIRS || item == Items.BRICK_SLAB || item == Items.BRICK_WALL
+			|| item == Items.CLAY_BALL || item == Items.CLAY || item == Items.TERRACOTTA;
+	}
+
+	public static boolean isGlassResource(Item item) {
+		if (item == null) return false;
+		return item == Items.GLASS || item == Items.GLASS_PANE || item == Items.TINTED_GLASS;
+	}
+
+	public static boolean isNetherBrickResource(Item item) {
+		if (item == null) return false;
+		return item == Items.NETHER_BRICK || item == Items.NETHER_BRICKS || item == Items.NETHER_BRICK_STAIRS || item == Items.NETHER_BRICK_SLAB
+			|| item == Items.NETHER_BRICK_WALL || item == Items.NETHER_BRICK_FENCE || item == Items.CHISELED_NETHER_BRICKS || item == Items.CRACKED_NETHER_BRICKS;
+	}
+
+	public static boolean isQuartzDerivedResource(Item item) {
+		if (item == null) return false;
+		return item == Items.QUARTZ_BLOCK || item == Items.SMOOTH_QUARTZ || item == Items.QUARTZ_STAIRS || item == Items.QUARTZ_SLAB
+			|| item == Items.QUARTZ_BRICKS || item == Items.QUARTZ_PILLAR || item == Items.CHISELED_QUARTZ_BLOCK
+			|| item == Items.SMOOTH_QUARTZ_STAIRS || item == Items.SMOOTH_QUARTZ_SLAB;
+	}
+
+	public static boolean isBasaltDerivedResource(Item item) {
+		if (item == null) return false;
+		return item == Items.POLISHED_BASALT || item == Items.SMOOTH_BASALT;
+	}
+
+	public static boolean isPolishedStoneResource(Item item) {
+		if (item == null) return false;
+		return item == Items.POLISHED_ANDESITE || item == Items.POLISHED_ANDESITE_STAIRS || item == Items.POLISHED_ANDESITE_SLAB
+			|| item == Items.POLISHED_DIORITE || item == Items.POLISHED_DIORITE_STAIRS || item == Items.POLISHED_DIORITE_SLAB
+			|| item == Items.POLISHED_GRANITE || item == Items.POLISHED_GRANITE_STAIRS || item == Items.POLISHED_GRANITE_SLAB;
+	}
+
+	public static boolean isMetalDerivativeResource(Item item) {
+		if (item == null) return false;
+		return item == Items.IRON_INGOT || item == Items.IRON_BARS || item == Items.CHAIN || item == Items.IRON_BLOCK
+			|| item == Items.COPPER_INGOT || item == Items.COPPER_BLOCK || item == Items.CUT_COPPER || item == Items.CUT_COPPER_STAIRS || item == Items.CUT_COPPER_SLAB
+			|| item == Items.GOLD_INGOT || item == Items.GOLD_BLOCK;
+	}
+
+	public static boolean isWoodenDerivative(Item item) {
+		if (item == null) return false;
+		ItemStack stack = item.getDefaultStack();
+		return stack.isIn(ItemTags.WOODEN_STAIRS)
+			|| stack.isIn(ItemTags.WOODEN_SLABS)
+			|| stack.isIn(ItemTags.WOODEN_DOORS)
+			|| stack.isIn(ItemTags.WOODEN_TRAPDOORS)
+			|| stack.isIn(ItemTags.WOODEN_FENCES)
+			|| stack.isIn(ItemTags.FENCE_GATES);
+	}
+
+	private static boolean isSandstoneDerivative(Item item) {
+		return isNormalSandstoneDerivative(item) || isRedSandstoneDerivative(item);
+	}
+
+	private static boolean isNormalSandstoneDerivative(Item item) {
+		return item == Items.CUT_SANDSTONE || item == Items.CHISELED_SANDSTONE || item == Items.SMOOTH_SANDSTONE
+			|| item == Items.SANDSTONE_STAIRS || item == Items.SANDSTONE_SLAB || item == Items.SANDSTONE_WALL
+			|| item == Items.CUT_SANDSTONE_SLAB || item == Items.SMOOTH_SANDSTONE_STAIRS || item == Items.SMOOTH_SANDSTONE_SLAB;
+	}
+
+	private static boolean isRedSandstoneDerivative(Item item) {
+		return item == Items.CUT_RED_SANDSTONE || item == Items.CHISELED_RED_SANDSTONE || item == Items.SMOOTH_RED_SANDSTONE
+			|| item == Items.RED_SANDSTONE_STAIRS || item == Items.RED_SANDSTONE_SLAB || item == Items.RED_SANDSTONE_WALL
+			|| item == Items.CUT_RED_SANDSTONE_SLAB || item == Items.SMOOTH_RED_SANDSTONE_STAIRS || item == Items.SMOOTH_RED_SANDSTONE_SLAB;
+	}
+
+	public static boolean trySmartTransformation(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		if (minion == null || world == null || targetItem == null) return false;
+		SimpleInventory inv = minion.getInventory();
+
+		// 1. Flint: 3 Gravel -> 1 Flint
+		if (targetItem == Items.FLINT) {
+			if (countItemInInventory(inv, Items.GRAVEL) < 3) {
+				quarryNaturalStone(minion, world, Items.GRAVEL, 3, session);
+			}
+			if (countItemInInventory(inv, Items.GRAVEL) >= 3) {
+				consumeItemFromInventory(inv, Items.GRAVEL, 3);
+				inv.addStack(new ItemStack(Items.FLINT, 1));
+				playSiftingFeedback(minion, world);
+				return true;
+			}
+			return false;
+		}
+
+		// 2. Charcoal: Smelt Log in Furnace
+		if (targetItem == Items.CHARCOAL) {
+			if (countItemInInventory(inv, ItemTags.LOGS) < 1) {
+				harvestWoodOrAgroForestry(minion, world, session);
+			}
+			Item log = findItemInInventory(inv, ItemTags.LOGS);
+			if (log != null) {
+				return executeSmelt(minion, world, log, 1, Items.CHARCOAL, 1, session);
+			}
+			return false;
+		}
+
+		// 3. Torches: Coal/Charcoal + Stick -> 4 Torches
+		if (targetItem == Items.TORCH) {
+			ensureSticksAndPlanks(minion);
+			if (countItemInInventory(inv, Items.COAL) < 1 && countItemInInventory(inv, Items.CHARCOAL) < 1) {
+				if (!trySmartTransformation(minion, world, Items.CHARCOAL, session)) {
+					quarryNaturalStone(minion, world, Items.COAL, 1, session);
+				}
+			}
+			Item fuelItem = countItemInInventory(inv, Items.COAL) >= 1 ? Items.COAL : (countItemInInventory(inv, Items.CHARCOAL) >= 1 ? Items.CHARCOAL : null);
+			if (fuelItem != null && countItemInInventory(inv, Items.STICK) >= 1) {
+				consumeItemFromInventory(inv, fuelItem, 1);
+				consumeItemFromInventory(inv, Items.STICK, 1);
+				inv.addStack(new ItemStack(Items.TORCH, 4));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// 4. Smooth Stone: Smelt Stone in Furnace
+		if (targetItem == Items.SMOOTH_STONE) {
+			if (countItemInInventory(inv, Items.STONE) < 1) {
+				if (countItemInInventory(inv, Items.COBBLESTONE) < 1) {
+					quarryNaturalStone(minion, world, Items.COBBLESTONE, 1, session);
+				}
+				if (countItemInInventory(inv, Items.COBBLESTONE) >= 1) {
+					executeSmelt(minion, world, Items.COBBLESTONE, 1, Items.STONE, 1, session);
+				}
+			}
+			if (countItemInInventory(inv, Items.STONE) >= 1) {
+				return executeSmelt(minion, world, Items.STONE, 1, Items.SMOOTH_STONE, 1, session);
+			}
+			return false;
+		}
+
+		// 5. Stone: Smelt Cobblestone in Furnace
+		if (targetItem == Items.STONE) {
+			if (countItemInInventory(inv, Items.COBBLESTONE) < 1) {
+				quarryNaturalStone(minion, world, Items.COBBLESTONE, 1, session);
+			}
+			if (countItemInInventory(inv, Items.COBBLESTONE) >= 1) {
+				return executeSmelt(minion, world, Items.COBBLESTONE, 1, Items.STONE, 1, session);
+			}
+			return false;
+		}
+
+		// 6. Sandstone: 4 Sand -> 1 Sandstone
+		if (targetItem == Items.SANDSTONE) {
+			if (countItemInInventory(inv, Items.SAND) < 4) {
+				quarryNaturalStone(minion, world, Items.SAND, 4 - countItemInInventory(inv, Items.SAND), session);
+			}
+			if (countItemInInventory(inv, Items.SAND) >= 4) {
+				consumeItemFromInventory(inv, Items.SAND, 4);
+				inv.addStack(new ItemStack(Items.SANDSTONE, 1));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			}
+			return false;
+		}
+
+		// 7. Red Sandstone: 4 Red Sand -> 1 Red Sandstone
+		if (targetItem == Items.RED_SANDSTONE) {
+			if (countItemInInventory(inv, Items.RED_SAND) < 4) {
+				quarryNaturalStone(minion, world, Items.RED_SAND, 4 - countItemInInventory(inv, Items.RED_SAND), session);
+			}
+			if (countItemInInventory(inv, Items.RED_SAND) >= 4) {
+				consumeItemFromInventory(inv, Items.RED_SAND, 4);
+				inv.addStack(new ItemStack(Items.RED_SANDSTONE, 1));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			}
+			return false;
+		}
+
+		// 8. Sandstone Variants
+		if (isSandstoneDerivative(targetItem)) {
+			Item baseSandstone = isRedSandstoneDerivative(targetItem) ? Items.RED_SANDSTONE : Items.SANDSTONE;
+			if (countItemInInventory(inv, baseSandstone) < 1) {
+				trySmartTransformation(minion, world, baseSandstone, session);
+			}
+			if (countItemInInventory(inv, baseSandstone) >= 1) {
+				return craftSandstoneDerivative(minion, world, targetItem, baseSandstone, session);
+			}
+			return false;
+		}
+
+		// 9. Glass: Smelt Sand in Furnace
+		if (targetItem == Items.GLASS) {
+			if (countItemInInventory(inv, Items.SAND) < 1 && countItemInInventory(inv, Items.RED_SAND) < 1) {
+				quarryNaturalStone(minion, world, Items.SAND, 1, session);
+			}
+			Item sandItem = countItemInInventory(inv, Items.SAND) >= 1 ? Items.SAND : (countItemInInventory(inv, Items.RED_SAND) >= 1 ? Items.RED_SAND : null);
+			if (sandItem != null) {
+				return executeSmelt(minion, world, sandItem, 1, Items.GLASS, 1, session);
+			}
+			return false;
+		}
+
+		// 10. Glass Pane: 6 Glass -> 16 Glass Panes
+		if (targetItem == Items.GLASS_PANE) {
+			if (countItemInInventory(inv, Items.GLASS) < 6) {
+				trySmartTransformation(minion, world, Items.GLASS, session);
+			}
+			if (countItemInInventory(inv, Items.GLASS) >= 1) {
+				int glassToUse = Math.min(countItemInInventory(inv, Items.GLASS), 6);
+				int panesProduced = glassToUse >= 6 ? 16 : glassToUse * 2;
+				consumeItemFromInventory(inv, Items.GLASS, glassToUse);
+				inv.addStack(new ItemStack(Items.GLASS_PANE, panesProduced));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			}
+			return false;
+		}
+
+		// 11. Stone Bricks & Derivatives
+		if (isStoneBrickResource(targetItem)) {
+			return craftStoneBrickDerivative(minion, world, targetItem, session);
+		}
+
+		// 12. Bricks & Clay
+		if (isBrickResource(targetItem)) {
+			return craftBrickDerivative(minion, world, targetItem, session);
+		}
+
+		// 13. Deepslate Derivatives
+		if (isDeepslateDerivedResource(targetItem)) {
+			return craftDeepslateDerivative(minion, world, targetItem, session);
+		}
+
+		// 14. Nether Bricks Derivatives
+		if (isNetherBrickResource(targetItem)) {
+			return craftNetherBrickDerivative(minion, world, targetItem, session);
+		}
+
+		// 15. Quartz Derivatives
+		if (isQuartzDerivedResource(targetItem)) {
+			return craftQuartzDerivative(minion, world, targetItem, session);
+		}
+
+		// 16. Basalt Derivatives
+		if (isBasaltDerivedResource(targetItem)) {
+			return craftBasaltDerivative(minion, world, targetItem, session);
+		}
+
+		// 17. Polished Andesite / Diorite / Granite
+		if (isPolishedStoneResource(targetItem)) {
+			return craftPolishedStoneDerivative(minion, world, targetItem, session);
+		}
+
+		// 18. Metals (Iron Ingot, Iron Bars, Chains, etc.)
+		if (isMetalDerivativeResource(targetItem)) {
+			return craftMetalDerivative(minion, world, targetItem, session);
+		}
+
+		// 19. Wooden Derivatives (Stairs, Slabs, Fences, Gates, Doors, Trapdoors)
+		if (isWoodenDerivative(targetItem)) {
+			return craftWoodenDerivative(minion, world, targetItem, session);
+		}
+
+		// 20. Wool to Carpet
+		if (targetItem == Items.WHITE_CARPET || targetItem.getDefaultStack().isIn(ItemTags.WOOL_CARPETS)) {
+			Item woolItem = findItemInInventory(inv, ItemTags.WOOL);
+			if (woolItem == null) {
+				synthesizeMaterial(inv, Items.WHITE_WOOL);
+				woolItem = findItemInInventory(inv, ItemTags.WOOL);
+			}
+			if (woolItem != null && countItemInInventory(inv, woolItem) >= 2) {
+				consumeItemFromInventory(inv, woolItem, 2);
+				inv.addStack(new ItemStack(targetItem, 3));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean craftSandstoneDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		Item baseSandstone,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.SMOOTH_SANDSTONE || targetItem == Items.SMOOTH_RED_SANDSTONE) {
+			if (countItemInInventory(inv, baseSandstone) < 1) {
+				trySmartTransformation(minion, world, baseSandstone, session);
+			}
+			if (countItemInInventory(inv, baseSandstone) >= 1) {
+				return executeSmelt(minion, world, baseSandstone, 1, targetItem, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.CUT_SANDSTONE || targetItem == Items.CUT_RED_SANDSTONE) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, baseSandstone) >= 1) {
+				return executeStonecut(minion, world, baseSandstone, 1, targetItem, 1);
+			}
+			if (countItemInInventory(inv, baseSandstone) >= 1) {
+				consumeItemFromInventory(inv, baseSandstone, 1);
+				inv.addStack(new ItemStack(targetItem, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.CHISELED_SANDSTONE || targetItem == Items.CHISELED_RED_SANDSTONE) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, baseSandstone) >= 1) {
+				return executeStonecut(minion, world, baseSandstone, 1, targetItem, 1);
+			}
+			if (countItemInInventory(inv, baseSandstone) >= 1) {
+				consumeItemFromInventory(inv, baseSandstone, 1);
+				inv.addStack(new ItemStack(targetItem, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (countItemInInventory(inv, baseSandstone) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, baseSandstone, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, baseSandstone, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+			playCraftingFeedback(minion, world, tablePos);
+			return true;
+		}
+
+		return false;
+	}
+
+	private static boolean craftStoneBrickDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.CRACKED_STONE_BRICKS) {
+			if (countItemInInventory(inv, Items.STONE_BRICKS) < 1) {
+				craftStoneBrickDerivative(minion, world, Items.STONE_BRICKS, session);
+			}
+			if (countItemInInventory(inv, Items.STONE_BRICKS) >= 1) {
+				return executeSmelt(minion, world, Items.STONE_BRICKS, 1, Items.CRACKED_STONE_BRICKS, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.STONE_BRICKS) {
+			if (countItemInInventory(inv, Items.STONE) < 4) {
+				if (countItemInInventory(inv, Items.COBBLESTONE) < 4) {
+					quarryNaturalStone(minion, world, Items.COBBLESTONE, 4, session);
+				}
+				while (countItemInInventory(inv, Items.COBBLESTONE) >= 1 && countItemInInventory(inv, Items.STONE) < 4) {
+					if (!executeSmelt(minion, world, Items.COBBLESTONE, 1, Items.STONE, 1, session)) {
+						break;
+					}
+				}
+			}
+
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.STONE) >= 1) {
+				return executeStonecut(minion, world, Items.STONE, 1, Items.STONE_BRICKS, 1);
+			}
+
+			if (countItemInInventory(inv, Items.STONE) >= 4) {
+				consumeItemFromInventory(inv, Items.STONE, 4);
+				inv.addStack(new ItemStack(Items.STONE_BRICKS, 4));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			} else if (countItemInInventory(inv, Items.STONE) >= 1) {
+				consumeItemFromInventory(inv, Items.STONE, 1);
+				inv.addStack(new ItemStack(Items.STONE_BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.CHISELED_STONE_BRICKS) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (countItemInInventory(inv, Items.STONE_BRICKS) < 1) {
+				craftStoneBrickDerivative(minion, world, Items.STONE_BRICKS, session);
+			}
+			if (cutterPos != null && countItemInInventory(inv, Items.STONE_BRICKS) >= 1) {
+				return executeStonecut(minion, world, Items.STONE_BRICKS, 1, Items.CHISELED_STONE_BRICKS, 1);
+			}
+			if (countItemInInventory(inv, Items.STONE_BRICKS) >= 1) {
+				consumeItemFromInventory(inv, Items.STONE_BRICKS, 1);
+				inv.addStack(new ItemStack(Items.CHISELED_STONE_BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.STONE_BRICK_STAIRS || targetItem == Items.STONE_BRICK_SLAB || targetItem == Items.STONE_BRICK_WALL
+			|| targetItem == Items.MOSSY_STONE_BRICK_STAIRS || targetItem == Items.MOSSY_STONE_BRICK_SLAB || targetItem == Items.MOSSY_STONE_BRICK_WALL) {
+			if (countItemInInventory(inv, Items.STONE_BRICKS) < 1) {
+				craftStoneBrickDerivative(minion, world, Items.STONE_BRICKS, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.STONE_BRICKS) >= 1) {
+				int yield = targetItem == Items.STONE_BRICK_SLAB || targetItem == Items.MOSSY_STONE_BRICK_SLAB ? 2 : 1;
+				return executeStonecut(minion, world, Items.STONE_BRICKS, 1, targetItem, yield);
+			}
+			if (countItemInInventory(inv, Items.STONE_BRICKS) >= 1) {
+				consumeItemFromInventory(inv, Items.STONE_BRICKS, 1);
+				int yield = targetItem == Items.STONE_BRICK_SLAB || targetItem == Items.MOSSY_STONE_BRICK_SLAB ? 2 : 1;
+				inv.addStack(new ItemStack(targetItem, yield));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			}
+		}
+
+		if (targetItem == Items.COBBLESTONE_STAIRS || targetItem == Items.COBBLESTONE_SLAB || targetItem == Items.COBBLESTONE_WALL || targetItem == Items.MOSSY_COBBLESTONE) {
+			if (countItemInInventory(inv, Items.COBBLESTONE) < 1) {
+				quarryNaturalStone(minion, world, Items.COBBLESTONE, 1, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.COBBLESTONE) >= 1) {
+				int yield = targetItem == Items.COBBLESTONE_SLAB ? 2 : 1;
+				return executeStonecut(minion, world, Items.COBBLESTONE, 1, targetItem, yield);
+			}
+			if (countItemInInventory(inv, Items.COBBLESTONE) >= 1) {
+				consumeItemFromInventory(inv, Items.COBBLESTONE, 1);
+				int yield = targetItem == Items.COBBLESTONE_SLAB ? 2 : 1;
+				inv.addStack(new ItemStack(targetItem, yield));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			}
+		}
+
+		if (targetItem == Items.STONE_STAIRS || targetItem == Items.STONE_SLAB) {
+			if (countItemInInventory(inv, Items.STONE) < 1) {
+				trySmartTransformation(minion, world, Items.STONE, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.STONE) >= 1) {
+				int yield = targetItem == Items.STONE_SLAB ? 2 : 1;
+				return executeStonecut(minion, world, Items.STONE, 1, targetItem, yield);
+			}
+			if (countItemInInventory(inv, Items.STONE) >= 1) {
+				consumeItemFromInventory(inv, Items.STONE, 1);
+				int yield = targetItem == Items.STONE_SLAB ? 2 : 1;
+				inv.addStack(new ItemStack(targetItem, yield));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean craftBrickDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.CLAY_BALL) {
+			return quarryNaturalStone(minion, world, Items.CLAY_BALL, 4, session);
+		}
+
+		if (targetItem == Items.CLAY) {
+			if (countItemInInventory(inv, Items.CLAY_BALL) < 4) {
+				quarryNaturalStone(minion, world, Items.CLAY_BALL, 4, session);
+			}
+			if (countItemInInventory(inv, Items.CLAY_BALL) >= 4) {
+				consumeItemFromInventory(inv, Items.CLAY_BALL, 4);
+				inv.addStack(new ItemStack(Items.CLAY, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.BRICK) {
+			if (countItemInInventory(inv, Items.CLAY_BALL) < 1) {
+				quarryNaturalStone(minion, world, Items.CLAY_BALL, 1, session);
+			}
+			if (countItemInInventory(inv, Items.CLAY_BALL) >= 1) {
+				return executeSmelt(minion, world, Items.CLAY_BALL, 1, Items.BRICK, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.BRICKS) {
+			while (countItemInInventory(inv, Items.BRICK) < 4) {
+				if (countItemInInventory(inv, Items.CLAY_BALL) < 1) {
+					if (!quarryNaturalStone(minion, world, Items.CLAY_BALL, 4, session)) {
+						break;
+					}
+				}
+				if (!executeSmelt(minion, world, Items.CLAY_BALL, 1, Items.BRICK, 1, session)) {
+					break;
+				}
+			}
+
+			if (countItemInInventory(inv, Items.BRICK) >= 4) {
+				consumeItemFromInventory(inv, Items.BRICK, 4);
+				inv.addStack(new ItemStack(Items.BRICKS, 1));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			} else if (countItemInInventory(inv, Items.BRICK) >= 1) {
+				consumeItemFromInventory(inv, Items.BRICK, 1);
+				inv.addStack(new ItemStack(Items.BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.TERRACOTTA) {
+			if (countItemInInventory(inv, Items.CLAY) < 1) {
+				craftBrickDerivative(minion, world, Items.CLAY, session);
+			}
+			if (countItemInInventory(inv, Items.CLAY) >= 1) {
+				return executeSmelt(minion, world, Items.CLAY, 1, Items.TERRACOTTA, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.BRICK_STAIRS || targetItem == Items.BRICK_SLAB || targetItem == Items.BRICK_WALL) {
+			if (countItemInInventory(inv, Items.BRICKS) < 1) {
+				craftBrickDerivative(minion, world, Items.BRICKS, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.BRICKS) >= 1) {
+				int yield = targetItem == Items.BRICK_SLAB ? 2 : 1;
+				return executeStonecut(minion, world, Items.BRICKS, 1, targetItem, yield);
+			}
+			if (countItemInInventory(inv, Items.BRICKS) >= 1) {
+				consumeItemFromInventory(inv, Items.BRICKS, 1);
+				int yield = targetItem == Items.BRICK_SLAB ? 2 : 1;
+				inv.addStack(new ItemStack(targetItem, yield));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean craftDeepslateDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.DEEPSLATE) {
+			if (countItemInInventory(inv, Items.COBBLED_DEEPSLATE) < 1) {
+				quarryNaturalStone(minion, world, Items.COBBLED_DEEPSLATE, 1, session);
+			}
+			if (countItemInInventory(inv, Items.COBBLED_DEEPSLATE) >= 1) {
+				return executeSmelt(minion, world, Items.COBBLED_DEEPSLATE, 1, Items.DEEPSLATE, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.POLISHED_DEEPSLATE) {
+			if (countItemInInventory(inv, Items.COBBLED_DEEPSLATE) < 1) {
+				quarryNaturalStone(minion, world, Items.COBBLED_DEEPSLATE, 4, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.COBBLED_DEEPSLATE) >= 1) {
+				return executeStonecut(minion, world, Items.COBBLED_DEEPSLATE, 1, Items.POLISHED_DEEPSLATE, 1);
+			}
+			if (countItemInInventory(inv, Items.COBBLED_DEEPSLATE) >= 1) {
+				consumeItemFromInventory(inv, Items.COBBLED_DEEPSLATE, 1);
+				inv.addStack(new ItemStack(Items.POLISHED_DEEPSLATE, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.DEEPSLATE_BRICKS) {
+			if (countItemInInventory(inv, Items.POLISHED_DEEPSLATE) < 1) {
+				craftDeepslateDerivative(minion, world, Items.POLISHED_DEEPSLATE, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.POLISHED_DEEPSLATE) >= 1) {
+				return executeStonecut(minion, world, Items.POLISHED_DEEPSLATE, 1, Items.DEEPSLATE_BRICKS, 1);
+			}
+			if (countItemInInventory(inv, Items.POLISHED_DEEPSLATE) >= 1) {
+				consumeItemFromInventory(inv, Items.POLISHED_DEEPSLATE, 1);
+				inv.addStack(new ItemStack(Items.DEEPSLATE_BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.DEEPSLATE_TILES) {
+			if (countItemInInventory(inv, Items.DEEPSLATE_BRICKS) < 1) {
+				craftDeepslateDerivative(minion, world, Items.DEEPSLATE_BRICKS, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.DEEPSLATE_BRICKS) >= 1) {
+				return executeStonecut(minion, world, Items.DEEPSLATE_BRICKS, 1, Items.DEEPSLATE_TILES, 1);
+			}
+			if (countItemInInventory(inv, Items.DEEPSLATE_BRICKS) >= 1) {
+				consumeItemFromInventory(inv, Items.DEEPSLATE_BRICKS, 1);
+				inv.addStack(new ItemStack(Items.DEEPSLATE_TILES, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.CRACKED_DEEPSLATE_BRICKS) {
+			if (countItemInInventory(inv, Items.DEEPSLATE_BRICKS) < 1) {
+				craftDeepslateDerivative(minion, world, Items.DEEPSLATE_BRICKS, session);
+			}
+			if (countItemInInventory(inv, Items.DEEPSLATE_BRICKS) >= 1) {
+				return executeSmelt(minion, world, Items.DEEPSLATE_BRICKS, 1, Items.CRACKED_DEEPSLATE_BRICKS, 1, session);
+			}
+			return false;
+		}
+
+		Item baseBlock = resolveDeepslateBaseBlock(targetItem);
+		if (countItemInInventory(inv, baseBlock) < 1) {
+			craftDeepslateDerivative(minion, world, baseBlock, session);
+		}
+		if (countItemInInventory(inv, baseBlock) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, baseBlock, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, baseBlock, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+
+		return false;
+	}
+
+	private static Item resolveDeepslateBaseBlock(Item item) {
+		String path = Registries.ITEM.getId(item).getPath();
+		if (path.contains("tile")) return Items.DEEPSLATE_TILES;
+		if (path.contains("brick")) return Items.DEEPSLATE_BRICKS;
+		if (path.contains("polished")) return Items.POLISHED_DEEPSLATE;
+		return Items.COBBLED_DEEPSLATE;
+	}
+
+	private static boolean isSlabItem(Item item) {
+		return item.getDefaultStack().isIn(ItemTags.SLABS);
+	}
+
+	private static boolean craftNetherBrickDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.NETHER_BRICK) {
+			if (countItemInInventory(inv, Items.NETHERRACK) < 1) {
+				quarryNaturalStone(minion, world, Items.NETHERRACK, 1, session);
+			}
+			if (countItemInInventory(inv, Items.NETHERRACK) >= 1) {
+				return executeSmelt(minion, world, Items.NETHERRACK, 1, Items.NETHER_BRICK, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.NETHER_BRICKS) {
+			while (countItemInInventory(inv, Items.NETHER_BRICK) < 4) {
+				if (countItemInInventory(inv, Items.NETHERRACK) < 1) {
+					if (!quarryNaturalStone(minion, world, Items.NETHERRACK, 4, session)) break;
+				}
+				if (!executeSmelt(minion, world, Items.NETHERRACK, 1, Items.NETHER_BRICK, 1, session)) break;
+			}
+			if (countItemInInventory(inv, Items.NETHER_BRICK) >= 4) {
+				consumeItemFromInventory(inv, Items.NETHER_BRICK, 4);
+				inv.addStack(new ItemStack(Items.NETHER_BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			} else if (countItemInInventory(inv, Items.NETHER_BRICK) >= 1) {
+				consumeItemFromInventory(inv, Items.NETHER_BRICK, 1);
+				inv.addStack(new ItemStack(Items.NETHER_BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (countItemInInventory(inv, Items.NETHER_BRICKS) < 1) {
+			craftNetherBrickDerivative(minion, world, Items.NETHER_BRICKS, session);
+		}
+		if (countItemInInventory(inv, Items.NETHER_BRICKS) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, Items.NETHER_BRICKS, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, Items.NETHER_BRICKS, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
+	private static boolean craftQuartzDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.SMOOTH_QUARTZ) {
+			if (countItemInInventory(inv, Items.QUARTZ_BLOCK) < 1) {
+				craftQuartzDerivative(minion, world, Items.QUARTZ_BLOCK, session);
+			}
+			if (countItemInInventory(inv, Items.QUARTZ_BLOCK) >= 1) {
+				return executeSmelt(minion, world, Items.QUARTZ_BLOCK, 1, Items.SMOOTH_QUARTZ, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.QUARTZ_BLOCK) {
+			if (countItemInInventory(inv, Items.QUARTZ) < 4) {
+				quarryNaturalStone(minion, world, Items.QUARTZ, 4, session);
+			}
+			if (countItemInInventory(inv, Items.QUARTZ) >= 4) {
+				consumeItemFromInventory(inv, Items.QUARTZ, 4);
+				inv.addStack(new ItemStack(Items.QUARTZ_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			} else if (countItemInInventory(inv, Items.QUARTZ) >= 1) {
+				consumeItemFromInventory(inv, Items.QUARTZ, 1);
+				inv.addStack(new ItemStack(Items.QUARTZ_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (countItemInInventory(inv, Items.QUARTZ_BLOCK) < 1) {
+			craftQuartzDerivative(minion, world, Items.QUARTZ_BLOCK, session);
+		}
+		if (countItemInInventory(inv, Items.QUARTZ_BLOCK) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, Items.QUARTZ_BLOCK, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, Items.QUARTZ_BLOCK, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
+	private static boolean craftBasaltDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.SMOOTH_BASALT) {
+			if (countItemInInventory(inv, Items.BASALT) < 1) {
+				quarryNaturalStone(minion, world, Items.BASALT, 1, session);
+			}
+			if (countItemInInventory(inv, Items.BASALT) >= 1) {
+				return executeSmelt(minion, world, Items.BASALT, 1, Items.SMOOTH_BASALT, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.POLISHED_BASALT) {
+			if (countItemInInventory(inv, Items.BASALT) < 1) {
+				quarryNaturalStone(minion, world, Items.BASALT, 1, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.BASALT) >= 1) {
+				return executeStonecut(minion, world, Items.BASALT, 1, Items.POLISHED_BASALT, 1);
+			}
+			if (countItemInInventory(inv, Items.BASALT) >= 1) {
+				consumeItemFromInventory(inv, Items.BASALT, 1);
+				inv.addStack(new ItemStack(Items.POLISHED_BASALT, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+		return false;
+	}
+
+	private static boolean craftPolishedStoneDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+		Item rawItem = resolveRawStoneForPolished(targetItem);
+		Item polishedItem = resolvePolishedBaseForDerivative(targetItem);
+
+		if (countItemInInventory(inv, polishedItem) < 1) {
+			if (countItemInInventory(inv, rawItem) < 1) {
+				quarryNaturalStone(minion, world, rawItem, 4, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, rawItem) >= 1) {
+				executeStonecut(minion, world, rawItem, 1, polishedItem, 1);
+			} else if (countItemInInventory(inv, rawItem) >= 1) {
+				consumeItemFromInventory(inv, rawItem, 1);
+				inv.addStack(new ItemStack(polishedItem, 1));
+				playCraftingFeedback(minion, world, null);
+			}
+		}
+
+		if (targetItem == polishedItem) {
+			return countItemInInventory(inv, polishedItem) >= 1;
+		}
+
+		if (countItemInInventory(inv, polishedItem) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, polishedItem, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, polishedItem, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
+	private static Item resolveRawStoneForPolished(Item item) {
+		String path = Registries.ITEM.getId(item).getPath();
+		if (path.contains("andesite")) return Items.ANDESITE;
+		if (path.contains("diorite")) return Items.DIORITE;
+		return Items.GRANITE;
+	}
+
+	private static Item resolvePolishedBaseForDerivative(Item item) {
+		String path = Registries.ITEM.getId(item).getPath();
+		if (path.contains("andesite")) return Items.POLISHED_ANDESITE;
+		if (path.contains("diorite")) return Items.POLISHED_DIORITE;
+		return Items.POLISHED_GRANITE;
+	}
+
+	private static boolean craftMetalDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.IRON_INGOT) {
+			if (countItemInInventory(inv, Items.RAW_IRON) < 1 && countItemInInventory(inv, Items.IRON_ORE) < 1) {
+				quarryNaturalStone(minion, world, Items.RAW_IRON, 1, session);
+			}
+			Item raw = countItemInInventory(inv, Items.RAW_IRON) >= 1 ? Items.RAW_IRON : (countItemInInventory(inv, Items.IRON_ORE) >= 1 ? Items.IRON_ORE : null);
+			if (raw != null) {
+				return executeSmelt(minion, world, raw, 1, Items.IRON_INGOT, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.IRON_BARS) {
+			if (countItemInInventory(inv, Items.IRON_INGOT) < 1) {
+				craftMetalDerivative(minion, world, Items.IRON_INGOT, session);
+			}
+			if (countItemInInventory(inv, Items.IRON_INGOT) >= 1) {
+				int consumed = Math.min(countItemInInventory(inv, Items.IRON_INGOT), 6);
+				int yield = consumed >= 6 ? 16 : consumed * 2;
+				consumeItemFromInventory(inv, Items.IRON_INGOT, consumed);
+				inv.addStack(new ItemStack(Items.IRON_BARS, yield));
+				BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+				playCraftingFeedback(minion, world, tablePos);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.CHAIN) {
+			if (countItemInInventory(inv, Items.IRON_INGOT) < 1) {
+				craftMetalDerivative(minion, world, Items.IRON_INGOT, session);
+			}
+			if (countItemInInventory(inv, Items.IRON_INGOT) >= 1) {
+				consumeItemFromInventory(inv, Items.IRON_INGOT, 1);
+				inv.addStack(new ItemStack(Items.CHAIN, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.COPPER_INGOT) {
+			if (countItemInInventory(inv, Items.RAW_COPPER) < 1 && countItemInInventory(inv, Items.COPPER_ORE) < 1) {
+				quarryNaturalStone(minion, world, Items.RAW_COPPER, 1, session);
+			}
+			Item raw = countItemInInventory(inv, Items.RAW_COPPER) >= 1 ? Items.RAW_COPPER : (countItemInInventory(inv, Items.COPPER_ORE) >= 1 ? Items.COPPER_ORE : null);
+			if (raw != null) {
+				return executeSmelt(minion, world, raw, 1, Items.COPPER_INGOT, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.GOLD_INGOT) {
+			if (countItemInInventory(inv, Items.RAW_GOLD) < 1 && countItemInInventory(inv, Items.GOLD_ORE) < 1) {
+				quarryNaturalStone(minion, world, Items.RAW_GOLD, 1, session);
+			}
+			Item raw = countItemInInventory(inv, Items.RAW_GOLD) >= 1 ? Items.RAW_GOLD : (countItemInInventory(inv, Items.GOLD_ORE) >= 1 ? Items.GOLD_ORE : null);
+			if (raw != null) {
+				return executeSmelt(minion, world, raw, 1, Items.GOLD_INGOT, 1, session);
+			}
+			return false;
+		}
+
+		if (targetItem == Items.IRON_BLOCK) {
+			if (countItemInInventory(inv, Items.IRON_INGOT) < 9) {
+				while (countItemInInventory(inv, Items.IRON_INGOT) < 9) {
+					if (!craftMetalDerivative(minion, world, Items.IRON_INGOT, session)) break;
+				}
+			}
+			if (countItemInInventory(inv, Items.IRON_INGOT) >= 9) {
+				consumeItemFromInventory(inv, Items.IRON_INGOT, 9);
+				inv.addStack(new ItemStack(Items.IRON_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			} else if (countItemInInventory(inv, Items.IRON_INGOT) >= 1) {
+				consumeItemFromInventory(inv, Items.IRON_INGOT, countItemInInventory(inv, Items.IRON_INGOT));
+				inv.addStack(new ItemStack(Items.IRON_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.GOLD_BLOCK) {
+			if (countItemInInventory(inv, Items.GOLD_INGOT) < 9) {
+				while (countItemInInventory(inv, Items.GOLD_INGOT) < 9) {
+					if (!craftMetalDerivative(minion, world, Items.GOLD_INGOT, session)) break;
+				}
+			}
+			if (countItemInInventory(inv, Items.GOLD_INGOT) >= 9) {
+				consumeItemFromInventory(inv, Items.GOLD_INGOT, 9);
+				inv.addStack(new ItemStack(Items.GOLD_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			} else if (countItemInInventory(inv, Items.GOLD_INGOT) >= 1) {
+				consumeItemFromInventory(inv, Items.GOLD_INGOT, countItemInInventory(inv, Items.GOLD_INGOT));
+				inv.addStack(new ItemStack(Items.GOLD_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.COPPER_BLOCK) {
+			if (countItemInInventory(inv, Items.COPPER_INGOT) < 9) {
+				while (countItemInInventory(inv, Items.COPPER_INGOT) < 9) {
+					if (!craftMetalDerivative(minion, world, Items.COPPER_INGOT, session)) break;
+				}
+			}
+			if (countItemInInventory(inv, Items.COPPER_INGOT) >= 9) {
+				consumeItemFromInventory(inv, Items.COPPER_INGOT, 9);
+				inv.addStack(new ItemStack(Items.COPPER_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			} else if (countItemInInventory(inv, Items.COPPER_INGOT) >= 1) {
+				consumeItemFromInventory(inv, Items.COPPER_INGOT, countItemInInventory(inv, Items.COPPER_INGOT));
+				inv.addStack(new ItemStack(Items.COPPER_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.CUT_COPPER || targetItem == Items.CUT_COPPER_STAIRS || targetItem == Items.CUT_COPPER_SLAB) {
+			if (countItemInInventory(inv, Items.COPPER_BLOCK) < 1) {
+				craftMetalDerivative(minion, world, Items.COPPER_BLOCK, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.COPPER_BLOCK) >= 1) {
+				int yield = targetItem == Items.CUT_COPPER_SLAB ? 2 : (targetItem == Items.CUT_COPPER ? 4 : 1);
+				return executeStonecut(minion, world, Items.COPPER_BLOCK, 1, targetItem, yield);
+			}
+			if (countItemInInventory(inv, Items.COPPER_BLOCK) >= 1) {
+				consumeItemFromInventory(inv, Items.COPPER_BLOCK, 1);
+				int yield = targetItem == Items.CUT_COPPER_SLAB ? 2 : (targetItem == Items.CUT_COPPER ? 4 : 1);
+				inv.addStack(new ItemStack(targetItem, yield));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		return false;
+	}
+
+	public static Item resolvePlanksForWoodenItem(Item item) {
+		if (item == null) return Items.OAK_PLANKS;
+		String path = Registries.ITEM.getId(item).getPath();
+		if (path.startsWith("spruce_")) return Items.SPRUCE_PLANKS;
+		if (path.startsWith("birch_")) return Items.BIRCH_PLANKS;
+		if (path.startsWith("jungle_")) return Items.JUNGLE_PLANKS;
+		if (path.startsWith("acacia_")) return Items.ACACIA_PLANKS;
+		if (path.startsWith("dark_oak_")) return Items.DARK_OAK_PLANKS;
+		if (path.startsWith("mangrove_")) return Items.MANGROVE_PLANKS;
+		if (path.startsWith("cherry_")) return Items.CHERRY_PLANKS;
+		if (path.startsWith("bamboo_")) return Items.BAMBOO_PLANKS;
+		if (path.startsWith("crimson_")) return Items.CRIMSON_PLANKS;
+		if (path.startsWith("warped_")) return Items.WARPED_PLANKS;
+		return Items.OAK_PLANKS;
+	}
+
+	private static boolean craftWoodenDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+		Item planksItem = resolvePlanksForWoodenItem(targetItem);
+
+		int neededPlanks = 6;
+		if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_SLABS)) {
+			neededPlanks = 3;
+		} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_FENCES)) {
+			neededPlanks = 4;
+		} else if (targetItem.getDefaultStack().isIn(ItemTags.FENCE_GATES)) {
+			neededPlanks = 2;
+		}
+
+		ensurePlanks(minion, world, session, neededPlanks);
+		if (countItemInInventory(inv, planksItem) < neededPlanks && countItemInInventory(inv, ItemTags.PLANKS) >= neededPlanks) {
+			planksItem = findItemInInventory(inv, ItemTags.PLANKS);
+		}
+
+		if (planksItem != null && countItemInInventory(inv, planksItem) >= neededPlanks) {
+			consumeItemFromInventory(inv, planksItem, neededPlanks);
+
+			int yield = 4;
+			if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_SLABS)) {
+				yield = 6;
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_DOORS)) {
+				yield = 3;
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_TRAPDOORS)) {
+				yield = 2;
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_FENCES)) {
+				yield = 3;
+				consumeItemFromInventory(inv, Items.STICK, 2);
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.FENCE_GATES)) {
+				yield = 1;
+				consumeItemFromInventory(inv, Items.STICK, 4);
+			}
+
+			inv.addStack(new ItemStack(targetItem, yield));
+			BlockPos tablePos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.CRAFTING_TABLE);
+			playCraftingFeedback(minion, world, tablePos);
+			return true;
+		}
+		return false;
 	}
 
 	// =========================================================================

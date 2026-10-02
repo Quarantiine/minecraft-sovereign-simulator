@@ -33,6 +33,8 @@ This document provides a comprehensive technical breakdown of all gameplay featu
 22. [Unified Surface Anchoring Contract & Hollow Grid Mechanics](#22-unified-surface-anchoring-contract--hollow-grid-mechanics)
 23. [Survival Crafting Recipes & Progression](#23-survival-crafting-recipes--progression)
 24. [Cross-Version Compatibility Architecture (Minecraft 1.21.x Family)](#24-cross-version-compatibility-architecture-minecraft-121x-family)
+25. [Smart Builder Transformations, Workstation Tool Blocks & Multi-Tier Supply Chains](#25-smart-builder-transformations-workstation-tool-blocks--multi-tier-supply-chains)
+26. [Material Bill of Materials (BOM) & Resource Estimator GUI](#26-material-bill-of-materials-bom--resource-estimator-gui)
 
 ---
 
@@ -91,9 +93,9 @@ The scepter features an integrated 64-block line-of-sight raycasting engine:
 - **Visual Projection VFX**: Renders a curved outer arc and two radiating boundary rays along the left ($-45^\circ$) and right ($+45^\circ$) borders using alternating `PORTAL` and `FLAME` particles.
 - **Real-Time Targeting Illumination**:
   - While charging, all owned minions located inside the expanding 90° sector immediately illuminate with team glowing outlines and emit beacon sparkle particles in real time. Minions outside the cone or moving out of view have their preview glow automatically extinguished.
-  - All hostile mobs inside the sector are marked with real-time targeting cues (`ANGRY_VILLAGER` and `CRIT` particles), providing full visual targeting confirmation.
+  - All candidate hostile mobs inside the sector are marked with real-time targeting cues (`ANGRY_VILLAGER` and `CRIT` particles), providing full visual targeting confirmation. Innocent villagers (and wandering traders) and iron golems are strictly protected (`isSectorTargetableEntity`) and will never be marked as targets.
 - **Coordinated Mass Assault on Release**:
-  - If hostile mobs are enclosed in the 90° sector upon release, minions automatically unleash a coordinated **Mass Attack**! Frontline enemies are assigned to melee fighters, while backline or ranged enemies are assigned to archers. The attack is heralded by a raid horn fanfare (`SoundEvents.EVENT_RAID_HORN`) and war drum cadences.
+  - If hostile mobs are enclosed in the 90° sector upon release, minions automatically unleash a coordinated **Mass Attack**! Frontline enemies are assigned to melee fighters, while backline or ranged enemies are assigned to archers. The attack is heralded by a raid horn fanfare (`SoundEvents.EVENT_RAID_HORN`) and war drum cadences. Villagers and iron golems caught in the cone are never included in the mass assault.
   - Any owned minions enclosed in the cone are simultaneously selected and rallied into the attack squad.
 - **Persistent 90° Mass Assault Queue Targeting (Multi-Target Chaining)**:
   - When the 90° forward sector encloses multiple hostile mobs upon release, all enclosed hostiles are sorted frontline-to-backline and assigned to each participating minion as a persistent combat queue via `minion.setAssaultTargets(enclosedHostiles)`.
@@ -1265,9 +1267,11 @@ The tactical retreat system (`RetreatPayload`, `ExampleModClient`, `CommandScept
 ### Tier 1: Tactical Squad Retreat (Quick `R`)
 
 - **Execution**: Press **`R`** while holding the Command Scepter.
-- **Scope**: Affects units belonging to the active squad within **64 blocks** (strictly preserving units assigned to patrol routes).
+- **Scope**: Affects **selected** units belonging to the active squad within **64 blocks** (strictly preserving units assigned to patrol routes as well as stationed units in hold position / sitting / anchored at guard posts).
 - **Action**:
-  - Clears hostile combat targets (`setTarget(null)`).
+  - Only recalls units that are currently **selected** (`m.isSelected()`) and **not** on hold position (`!m.isHoldingPosition() && !m.isSitting() && m.getGuardAnchorPos() == null`).
+  - Minions in hold position remain steadfast at their stations guarding perimeters or completed structures; commanders rely on the **`FOLLOW`** command mode to mobilize and select held minions.
+  - Clears hostile combat targets (`setTarget(null)`) and clears assault queues on retreating units.
   - Dismisses 3D holographic wireframes (`ClientConstructionTracker.clear()`).
   - Cancels active construction sessions for the commander.
   - Recalls units directly into their **structured formation stations** (Warriors front, Sentinels mid, Builders rear) calculated via `calculateFormationStation` rather than crowding onto a single block.
@@ -1614,4 +1618,111 @@ To ensure seamless operation across 1.21.x release cycles (1.21.0, 1.21.1, 1.21.
    - Supplies both legacy item models (`models/item/`) and modern 1.21.2+ item definitions (`items/`).
 4. **Fabric Loader 1.21.x Version Pinning**:
    - Declares `depends.minecraft: "~1.21"` in `fabric.mod.json`, ensuring the mod cleanly and exclusively targets the Minecraft 1.21.x family.
+
+---
+
+## 25. Smart Builder Transformations, Workstation Tool Blocks & Multi-Tier Supply Chains
+
+Builder minions feature autonomous material synthesis, multi-tier supply chain resolution, and world workstation utilization (`MinionHarvestingHelper`):
+
+### 25.1 Block-to-Block Transformations & Masonry Variants
+Builders synthesize architectural blocks on demand from raw harvested materials:
+- **Sandstone & Red Sandstone Variants**: Converts Sand or Red Sand ($4 \to 1$) into Sandstone, Cut Sandstone, Chiseled Sandstone, Smooth Sandstone, Stairs, Slabs, and Walls.
+- **Cobblestone $\to$ Stone $\to$ Smooth Stone**: Multi-stage smelting turning Cobblestone into Stone, and Stone into Smooth Stone. Crafts Stone Bricks, Cracked Stone Bricks, Chiseled Stone Bricks, Stone Brick Stairs, Slabs, and Walls.
+- **Cobbled Deepslate $\to$ Deepslate Derivatives**: Converts Cobbled Deepslate into Smelted Deepslate, Polished Deepslate, Deepslate Bricks, Deepslate Tiles, Stairs, Slabs, and Walls.
+- **Bricks & Terracotta**: Smelts clay balls into Bricks ($4 \to 1\text{ Brick Block}$), crafts Brick Stairs/Slabs/Walls, and smelts clay blocks into Terracotta.
+- **Nether & Quartz Architecture**: Smelts Netherrack into Nether Brick items $\to$ Nether Bricks blocks, stairs, and fences. Converts Nether Quartz into Quartz Blocks $\to$ Smooth Quartz.
+- **Basalt Masonry**: Converts Basalt into Polished Basalt, and smelts into Smooth Basalt.
+- **Metal Structural Components**: Smelts Raw Iron / Iron Ore into Iron Ingots $\to$ crafts Iron Bars, Chains, and Iron Blocks. Smelts Raw Copper into Copper Ingots $\to$ crafts Copper Blocks $\to$ stonecuts or crafts Cut Copper, Cut Copper Stairs, and Cut Copper Slabs. Smelts Raw Gold into Gold Ingots $\to$ crafts Gold Blocks.
+- **Wooden Architectural Derivatives**: Converts timber into Planks $\to$ crafts Wooden Stairs, Slabs, Doors, Trapdoors, Fences, and Fence Gates across all wood types using vanilla tags.
+
+### 25.2 Block-to-Non-Block Items & Sifting Mechanics
+Builders transform rough natural terrain into essential functional items:
+- **Gravel $\to$ Flint Sifting**: When flint is required, builders sift 3 gravel blocks into 1 flint, accompanied by sand/gravel sifting sounds (`BLOCK_GRAVEL_BREAK`) and cloud particle bursts.
+- **Wood Logs $\to$ Charcoal Smelting**: Smelts raw logs in a furnace into Charcoal for fuel and crafting.
+- **Torches & Illumination**: Synthesizes 4 Torches from Coal or Charcoal combined with Sticks.
+- **Wool $\to$ Carpet**: Converts Wool into Carpet ($2 \to 3$).
+
+### 25.3 Autonomous World Workstation Tool Block Utilization
+When complex transformations require specialized workstations, builders actively seek out and utilize tool blocks in the surrounding world within a 24-block radius:
+- **Furnace, Blast Furnace & Smoker (`Blocks.FURNACE`, `BLAST_FURNACE`, `SMOKER`)**:
+  - Utilized for all smelting tasks (sand $\to$ glass, cobble $\to$ stone $\to$ smooth stone, clay $\to$ bricks, logs $\to$ charcoal, raw iron $\to$ ingots).
+  - Emits real-time furnace crackle sound (`BLOCK_FURNACE_FIRE_CRACKLE`) and fiery flame/smoke particles (`FLAME`, `SMOKE`) from the workstation face.
+  - **Fuel Management**: Autonomously manages smelting fuel from minion inventory, consuming sticks, planks, logs, coal, charcoal, or lava buckets.
+  - **Self-Crafting Workstations**: If no furnace exists nearby in the world and smelting is required, the builder crafts a Furnace from 8 cobblestone and deploys it on site!
+- **Stonecutter (`Blocks.STONECUTTER`)**:
+  - Discovered within 24m to execute 1:1 resource-efficient stone cutting for stairs, slabs, walls, chiseled, and cut variants.
+  - Emits stonecutter take-result audio (`UI_STONECUTTER_TAKE_RESULT`) and stone dust particles.
+- **Crafting Table (`Blocks.CRAFTING_TABLE`)**:
+  - Utilized for complex multi-ingredient items and wooden derivatives.
+  - Emits crafting tool audio cues and particle effects.
+
+### 25.4 Multi-Tier Supply Chain & Targeted Quarrying
+- **Recursive Supply Chain Resolution**: If a builder requires Smooth Stone but possesses neither smooth stone nor stone, it automatically identifies the root raw material (Cobblestone), quarries it, smelts Cobblestone to Stone in a furnace, and smelts Stone to Smooth Stone.
+- **Target-Specific Quarrying (`matchesQuarryTarget`)**: Instead of mining indiscriminate stone, `quarryNaturalStone` targets specific natural blocks matching the required supply chain:
+  - Sand / Red Sand for sandstone and glass.
+  - Gravel for flint.
+  - Clay for bricks and terracotta.
+  - Coal Ore & Iron Ore for metals and torches.
+  - Netherrack, Basalt, and Nether Quartz for Nether architecture.
+- **Specialized Tool Selection**: Builders craft and equip Shovels (`craftShovel`) when harvesting sand, gravel, dirt, and clay; and Pickaxes (`craftPickaxe`) when quarrying stone, deepslate, and ores.
+
+---
+
+## 26. Material Bill of Materials (BOM) & Resource Estimator GUI
+
+Before anchoring an architectural blueprint in survival mode, the **Material Bill of Materials (BOM) & Resource Estimator GUI** renders a live inventory delta—calculating required raw materials (stone, timber, glass, organic) against the player's personal inventory and nearby minion backpacks within 64 meters.
+
+```
+                              [Material BOM & Resource Estimator]
+                                               │
+               ┌───────────────────────────────┼───────────────────────────────┐
+               ▼                               ▼                               ▼
+       [Player Inventory]             [Minion Backpacks]            [Builder Harvestability]
+     Direct personal slots         Scanned within 64 meters        Tagging: Quarry, Smelting,
+     (Main, offhand, hotbar)       (All owned allied minions)      Forestry & Mob Synthesis
+               │                               │                               │
+               └───────────────────────────────┼───────────────────────────────┘
+                                               ▼
+                              [Live Delta & Readiness Calculation]
+                              • Clamped per-item contribution
+                              • Category Pills: 🪨 Stone | 🪵 Timber | 🪟 Glass | 🌿 Organic
+                              • Badges: ✔ Ready (+X) | ⚒ Auto (-X) | ✕ Need (-X)
+```
+
+### 26.1 Live Multi-Source Inventory Delta
+- **Commander Inventory Aggregation**: Scans all 36 player inventory slots plus off-hand to compute exact carried quantities of every item type required by the active blueprint.
+- **Nearby Minion Backpack Aggregation**: Queries all alive, owned allied minions within 64 meters (`MINION_COMMAND_RADIUS`) and scans their 18-slot inventories (`minion.getInventory()`), combining thrall resources with player resources.
+- **Capped Contribution Math**: Readiness percentage uses clamped individual item contributions (`totalAvailableBlocks += Math.min(requiredCount, availableForItem)`) so that an excess of one material (e.g. 500 Cobblestone) cannot artificially mask deficits in other critical components (e.g. 0 Oak Planks or Glass).
+
+### 26.2 Server-Authoritative C2S/S2C Networking & Zero-Latency Client Fallback
+- **C2S Request Packet (`RequestResourceEstimationPayload`)**: Dispatched when opening the Command Hub, selecting a blueprint from the catalog, clicking the `[ 📋 BOM ]` button, or pressing `[ ↻ Rescan Live ]`. Passes `blueprintId`.
+- **S2C Sync Packet (`SyncResourceEstimationPayload`)**: Server gathers live player inventory and minion backpacks, evaluates builder harvestability, and streams back `blueprintId`, `totalBlocks`, `totalAvailable`, `nearbyMinionsCount`, and the list of `ResourceEstimateEntry` records.
+- **Zero-Latency Client Tracker Fallback (`ClientResourceEstimatorTracker`)**: Computes instant client-side estimates from local player inventory and visible minions so the GUI renders with zero lag while awaiting packet response.
+
+### 26.3 Smart Builder Harvestability & Supply Chain Tagging
+Deficient items (`delta < 0`) are dynamically tagged using `MinionHarvestingHelper.isHarvestable`:
+- **`§6⚒ Auto (-X)` (Harvestable by Minions)**: Resources that builder minions can autonomously quarry (stone, deepslate, sandstone), smelt in furnaces (glass, smooth stone, bricks, terracotta, iron/copper), harvest via bone-meal agro-forestry (logs, planks, wooden derivatives), or synthesize from mob contracts (wool, bone meal, leather).
+- **`§c✕ Need (-X)` (Manual Procurement Required)**: Rare, uncraftable, or non-harvestable resources (e.g. Nether Stars, End crystals, obsidian, special decorative blocks) that require commander acquisition.
+- **`§a✔ Ready (+X)` (Satisfied)**: Available carried inventory satisfies or exceeds blueprint requirements.
+
+### 26.4 Interactive Modal Screen (`BlueprintResourceEstimatorModalScreen`)
+- **Dimensions & Layout**: 340x246 framed modal plate with gold borders (`#E2B007`) and dark arcane styling (`#111822`).
+- **Dynamic Readiness Meter**: Real-time progress bar displaying `X% Ready (avail/req blocks) | N Minions nearby`, color-coded dynamically (Green $\ge 100\%$, Amber $\ge 50\%$, Red $< 50\%$).
+- **Category Pill Badges**: At-a-glance status indicators showing required vs. available blocks across 4 functional categories:
+  - 🪨 **Stone & Masonry**: Stone, Cobblestone, Deepslate, Stone Bricks, Sandstone, Basalt, Quartz.
+  - 🪵 **Timber & Wood**: Logs, Planks, Wooden Stairs, Slabs, Doors, Fences.
+  - 🪟 **Glass & Details**: Glass blocks, Glass Panes, Lanterns, Torches.
+  - 🌿 **Organic & Misc**: Wool, Bone Meal, Mob materials, Furnishings.
+- **Paginated Breakdown Table**: Displays 4 material entries per page with interactive hover tooltips, rendered item stack icons, exact requirement counts, player inventory counts, minion backpack tallies, and delta badges.
+- **Action Controls**:
+  - `[ 🏗 Select & Ready ]`: Sets the blueprint on the Command Scepter and returns to the battlefield.
+  - `[ ↻ Rescan Live ]`: Dispatches an instant server-side rescan with sound feedback.
+  - `[ ✕ Close ]`: Returns to the previous screen.
+
+### 26.5 Tactical Battlefield Situational Awareness & Survival Actionbar Delta
+- **Background Blur Suppression**: Overrides `applyBlur` in `BlueprintResourceEstimatorModalScreen` and `CommandScepterScreen`, disabling the world blur post-processing shader. Players maintain full peripheral vision of surrounding minions, moving hostile mobs, and base defenses.
+- **Survival Placement Actionbar Delta**: When right-clicking to anchor a blueprint in Survival mode, the server calculates real-time availability across bags and minions, sending an instant actionbar update (`§6📋 BOM Delta: §a✔ 100% Ready` or `§eX% Ready (Y/Z blocks in bags & N minions)`).
+- **Catalog Live Readiness Badges**: Blueprint catalog buttons in the Command Hub display live readiness percentages (`§a✔100%`, `§6X%`, `§c0%`) and rich tooltips detailing block counts, readiness status, and nearby minion contributions.
+
 

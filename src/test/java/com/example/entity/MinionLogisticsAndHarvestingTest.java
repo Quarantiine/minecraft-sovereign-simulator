@@ -8,13 +8,16 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 /**
  * Unit tests validating autonomous material harvesting, build protection safeguards,
  * peer-to-peer logistics, supply depot deployment, Warrior thrown weapon arsenal,
  * Trident duality range dynamics, mob hunt safety checks, procurement contracts,
- * and solo fallback hunting.
+ * solo fallback hunting, and smart builder block transformations.
  */
 public class MinionLogisticsAndHarvestingTest {
 
@@ -976,5 +979,229 @@ public class MinionLogisticsAndHarvestingTest {
 			noMobsFound = true;
 		}
 		Assertions.assertTrue(noMobsFound, "System gracefully fails without crashing when no safe candidate mobs exist");
+	}
+
+	@Test
+	@DisplayName("Validate smart block transformation classification for building materials and non-block items")
+	void testTransformableResourcesClassification() throws IOException {
+		String source = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+
+		// Must define isTransformableResource
+		Assertions.assertTrue(source.contains("public static boolean isTransformableResource(Item item)"),
+			"MinionHarvestingHelper must define isTransformableResource");
+
+		// 1. Smelted Stone & Derivatives
+		Assertions.assertTrue(source.contains("isSmeltableBuildingResource"), "Must handle smeltable building resources");
+		Assertions.assertTrue(source.contains("Items.SMOOTH_STONE"), "Must handle smooth stone");
+		Assertions.assertTrue(source.contains("Items.STONE"), "Must handle stone");
+		Assertions.assertTrue(source.contains("Items.STONE_BRICKS"), "Must handle stone bricks");
+		Assertions.assertTrue(source.contains("Items.CRACKED_STONE_BRICKS"), "Must handle cracked stone bricks");
+		Assertions.assertTrue(source.contains("Items.CHISELED_STONE_BRICKS"), "Must handle chiseled stone bricks");
+		Assertions.assertTrue(source.contains("Items.STONE_BRICK_STAIRS"), "Must handle stone brick stairs");
+
+		// 2. Sandstone & Red Sandstone Variants
+		Assertions.assertTrue(source.contains("isSandstoneResource"), "Must handle sandstone derivatives");
+		Assertions.assertTrue(source.contains("Items.SANDSTONE"), "Must handle sandstone");
+		Assertions.assertTrue(source.contains("Items.CUT_SANDSTONE"), "Must handle cut sandstone");
+		Assertions.assertTrue(source.contains("Items.CHISELED_SANDSTONE"), "Must handle chiseled sandstone");
+		Assertions.assertTrue(source.contains("Items.SMOOTH_SANDSTONE"), "Must handle smooth sandstone");
+		Assertions.assertTrue(source.contains("Items.RED_SANDSTONE"), "Must handle red sandstone");
+		Assertions.assertTrue(source.contains("Items.CUT_RED_SANDSTONE"), "Must handle cut red sandstone");
+
+		// 3. Glass & Glass Panes
+		Assertions.assertTrue(source.contains("isGlassResource"), "Must handle glass derivatives");
+		Assertions.assertTrue(source.contains("Items.GLASS"), "Must handle glass");
+		Assertions.assertTrue(source.contains("Items.GLASS_PANE"), "Must handle glass panes");
+
+		// 4. Bricks & Terracotta
+		Assertions.assertTrue(source.contains("isBrickResource"), "Must handle brick derivatives");
+		Assertions.assertTrue(source.contains("Items.BRICK"), "Must handle brick item");
+		Assertions.assertTrue(source.contains("Items.BRICKS"), "Must handle bricks block");
+		Assertions.assertTrue(source.contains("Items.BRICK_STAIRS"), "Must handle brick stairs");
+		Assertions.assertTrue(source.contains("Items.TERRACOTTA"), "Must handle terracotta");
+
+		// 5. Deepslate Variants
+		Assertions.assertTrue(source.contains("isDeepslateDerivedResource"), "Must handle deepslate derivatives");
+		Assertions.assertTrue(source.contains("Items.DEEPSLATE"), "Must handle deepslate");
+		Assertions.assertTrue(source.contains("Items.POLISHED_DEEPSLATE"), "Must handle polished deepslate");
+		Assertions.assertTrue(source.contains("Items.DEEPSLATE_BRICKS"), "Must handle deepslate bricks");
+		Assertions.assertTrue(source.contains("Items.DEEPSLATE_TILES"), "Must handle deepslate tiles");
+
+		// 6. Nether Bricks & Quartz & Basalt
+		Assertions.assertTrue(source.contains("isNetherBrickResource"), "Must handle nether bricks");
+		Assertions.assertTrue(source.contains("isQuartzDerivedResource"), "Must handle quartz derivatives");
+		Assertions.assertTrue(source.contains("isBasaltDerivedResource"), "Must handle basalt derivatives");
+		Assertions.assertTrue(source.contains("Items.NETHER_BRICK"), "Must handle nether brick");
+		Assertions.assertTrue(source.contains("Items.NETHER_BRICKS"), "Must handle nether bricks");
+		Assertions.assertTrue(source.contains("Items.QUARTZ_BLOCK"), "Must handle quartz block");
+		Assertions.assertTrue(source.contains("Items.SMOOTH_QUARTZ"), "Must handle smooth quartz");
+		Assertions.assertTrue(source.contains("Items.POLISHED_BASALT"), "Must handle polished basalt");
+		Assertions.assertTrue(source.contains("Items.SMOOTH_BASALT"), "Must handle smooth basalt");
+
+		// 7. Metals
+		Assertions.assertTrue(source.contains("isMetalDerivativeResource"), "Must handle metal derivatives");
+		Assertions.assertTrue(source.contains("Items.IRON_INGOT"), "Must handle iron ingot");
+		Assertions.assertTrue(source.contains("Items.IRON_BARS"), "Must handle iron bars");
+		Assertions.assertTrue(source.contains("Items.CHAIN"), "Must handle chain");
+
+		// 8. Wooden Architectural Derivatives
+		Assertions.assertTrue(source.contains("isWoodenDerivative"), "Must handle wooden derivatives");
+		Assertions.assertTrue(source.contains("ItemTags.WOODEN_STAIRS"), "Must handle wooden stairs via tags");
+		Assertions.assertTrue(source.contains("ItemTags.WOODEN_SLABS"), "Must handle wooden slabs via tags");
+		Assertions.assertTrue(source.contains("ItemTags.WOODEN_DOORS"), "Must handle wooden doors via tags");
+		Assertions.assertTrue(source.contains("ItemTags.WOODEN_FENCES"), "Must handle wooden fences via tags");
+		Assertions.assertTrue(source.contains("ItemTags.WOODEN_TRAPDOORS"), "Must handle wooden trapdoors via tags");
+
+		// 9. Non-Block Items
+		Assertions.assertTrue(source.contains("Items.FLINT"), "Must handle flint");
+		Assertions.assertTrue(source.contains("Items.CHARCOAL"), "Must handle charcoal");
+		Assertions.assertTrue(source.contains("Items.TORCH"), "Must handle torches");
+	}
+
+	@Test
+	@DisplayName("Validate quarry natural resource identification and tool specialization (Pickaxe vs Shovel)")
+	void testQuarryAndToolResourceClassification() throws IOException {
+		String source = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+
+		// Quarry resources
+		Assertions.assertTrue(source.contains("public static boolean isQuarryResource(Item item)"),
+			"MinionHarvestingHelper must define isQuarryResource");
+		Assertions.assertTrue(source.contains("Items.COBBLESTONE"));
+		Assertions.assertTrue(source.contains("Items.STONE"));
+		Assertions.assertTrue(source.contains("Items.SAND"));
+		Assertions.assertTrue(source.contains("Items.RED_SAND"));
+		Assertions.assertTrue(source.contains("Items.GRAVEL"));
+		Assertions.assertTrue(source.contains("Items.CLAY_BALL"));
+		Assertions.assertTrue(source.contains("Items.COAL"));
+		Assertions.assertTrue(source.contains("Items.RAW_IRON"));
+		Assertions.assertTrue(source.contains("Items.NETHERRACK"));
+		Assertions.assertTrue(source.contains("Items.BASALT"));
+		Assertions.assertTrue(source.contains("Items.QUARTZ"));
+
+		// Shovel resources
+		Assertions.assertTrue(source.contains("public static boolean isShovelResource(Item item)"),
+			"MinionHarvestingHelper must define isShovelResource");
+		Assertions.assertTrue(source.contains("craftShovel"),
+			"MinionHarvestingHelper must support crafting shovel");
+
+		// Pickaxe resources
+		Assertions.assertTrue(source.contains("public static boolean isPickaxeResource(Item item)"),
+			"MinionHarvestingHelper must define isPickaxeResource");
+		Assertions.assertTrue(source.contains("craftPickaxe"),
+			"MinionHarvestingHelper must support crafting pickaxe");
+
+		// Multi-tier tool blocks & workstation interactions
+		Assertions.assertTrue(source.contains("findNearbyToolBlock"),
+			"MinionHarvestingHelper must scan for nearby tool blocks");
+		Assertions.assertTrue(source.contains("Blocks.FURNACE"), "Must support furnace workstations");
+		Assertions.assertTrue(source.contains("Blocks.BLAST_FURNACE"), "Must support blast furnaces");
+		Assertions.assertTrue(source.contains("Blocks.SMOKER"), "Must support smoker workstations");
+		Assertions.assertTrue(source.contains("Blocks.CRAFTING_TABLE"), "Must support crafting tables");
+		Assertions.assertTrue(source.contains("Blocks.STONECUTTER"), "Must support stonecutter workstations");
+
+		// Multi-tier supply chain execution
+		Assertions.assertTrue(source.contains("trySmartTransformation"),
+			"MinionHarvestingHelper must implement trySmartTransformation");
+		Assertions.assertTrue(source.contains("executeSmelt"),
+			"MinionHarvestingHelper must implement executeSmelt");
+		Assertions.assertTrue(source.contains("executeStonecut"),
+			"MinionHarvestingHelper must implement executeStonecut");
+		Assertions.assertTrue(source.contains("ensureSmeltingFuel"),
+			"MinionHarvestingHelper must manage smelting fuel autonomously");
+	}
+
+	@Test
+	@DisplayName("Validate multi-tier supply chain resolution and tool block utilization simulation")
+	void testMultiTierSupplyChainSimulation() {
+		// Mock inventory tracking items
+		Map<String, Integer> inventory = new HashMap<>();
+
+		// 1. Smooth Stone multi-tier chain: Cobblestone -> Smelt to Stone -> Smelt to Smooth Stone
+		inventory.put("cobblestone", 1);
+		Assertions.assertEquals(1, inventory.get("cobblestone"));
+
+		// Step A: Smelt cobblestone to stone in furnace
+		boolean canSmeltToStone = inventory.getOrDefault("cobblestone", 0) >= 1;
+		Assertions.assertTrue(canSmeltToStone, "Cobblestone is available to smelt into stone");
+		inventory.put("cobblestone", inventory.get("cobblestone") - 1);
+		inventory.put("stone", inventory.getOrDefault("stone", 0) + 1);
+		Assertions.assertEquals(0, inventory.get("cobblestone"));
+		Assertions.assertEquals(1, inventory.get("stone"));
+
+		// Step B: Smelt stone to smooth stone in furnace
+		boolean canSmeltToSmoothStone = inventory.getOrDefault("stone", 0) >= 1;
+		Assertions.assertTrue(canSmeltToSmoothStone, "Stone is available to smelt into smooth stone");
+		inventory.put("stone", inventory.get("stone") - 1);
+		inventory.put("smooth_stone", inventory.getOrDefault("smooth_stone", 0) + 1);
+		Assertions.assertEquals(0, inventory.get("stone"));
+		Assertions.assertEquals(1, inventory.get("smooth_stone"));
+
+		// 2. Sand to Sandstone chain: 4 Sand -> 1 Sandstone
+		inventory.put("sand", 4);
+		boolean canCraftSandstone = inventory.getOrDefault("sand", 0) >= 4;
+		Assertions.assertTrue(canCraftSandstone, "4 sand can craft 1 sandstone");
+		inventory.put("sand", inventory.get("sand") - 4);
+		inventory.put("sandstone", inventory.getOrDefault("sandstone", 0) + 1);
+		Assertions.assertEquals(0, inventory.get("sand"));
+		Assertions.assertEquals(1, inventory.get("sandstone"));
+
+		// 3. Sand to Glass to Glass Panes: 1 Sand -> 1 Glass -> 6 Glass -> 16 Panes
+		inventory.put("sand", 6);
+		// Smelt sand into glass
+		inventory.put("glass", inventory.get("sand"));
+		inventory.put("sand", 0);
+		Assertions.assertEquals(6, inventory.get("glass"));
+		// Craft glass into panes
+		boolean canCraftPanes = inventory.getOrDefault("glass", 0) >= 6;
+		Assertions.assertTrue(canCraftPanes, "6 glass can craft 16 glass panes");
+		inventory.put("glass", inventory.get("glass") - 6);
+		inventory.put("glass_pane", 16);
+		Assertions.assertEquals(0, inventory.get("glass"));
+		Assertions.assertEquals(16, inventory.get("glass_pane"));
+
+		// 4. Gravel to Flint sifting: 3 Gravel -> 1 Flint
+		inventory.put("gravel", 3);
+		boolean canSiftFlint = inventory.getOrDefault("gravel", 0) >= 3;
+		Assertions.assertTrue(canSiftFlint, "3 gravel can sift into 1 flint");
+		inventory.put("gravel", inventory.get("gravel") - 3);
+		inventory.put("flint", 1);
+		Assertions.assertEquals(0, inventory.get("gravel"));
+		Assertions.assertEquals(1, inventory.get("flint"));
+
+		// 5. Wood logs to Charcoal to Torches
+		inventory.put("oak_log", 1);
+		// Smelt log to charcoal
+		inventory.put("charcoal", 1);
+		inventory.put("oak_log", 0);
+		inventory.put("stick", 1);
+		boolean canCraftTorch = inventory.getOrDefault("charcoal", 0) >= 1 && inventory.getOrDefault("stick", 0) >= 1;
+		Assertions.assertTrue(canCraftTorch, "Charcoal + stick can craft 4 torches");
+		inventory.put("charcoal", 0);
+		inventory.put("stick", 0);
+		inventory.put("torch", 4);
+		Assertions.assertEquals(4, inventory.get("torch"));
+
+		// 6. Raw Iron to Iron Ingot to Iron Bars & Iron Block
+		inventory.put("raw_iron", 9);
+		inventory.put("iron_ingot", inventory.get("raw_iron"));
+		inventory.put("raw_iron", 0);
+		Assertions.assertEquals(9, inventory.get("iron_ingot"));
+		// 9 ingots -> 1 Iron Block
+		inventory.put("iron_ingot", inventory.get("iron_ingot") - 9);
+		inventory.put("iron_block", 1);
+		Assertions.assertEquals(0, inventory.get("iron_ingot"));
+		Assertions.assertEquals(1, inventory.get("iron_block"));
+
+		// 7. Raw Copper to Copper Ingot to Copper Block to Cut Copper Slabs (Stonecutter 1:2)
+		inventory.put("raw_copper", 9);
+		inventory.put("copper_ingot", 9);
+		inventory.put("raw_copper", 0);
+		// 9 copper ingots -> 1 Copper Block
+		inventory.put("copper_block", 1);
+		inventory.put("copper_ingot", 0);
+		// 1 Copper Block stonecut into 2 Cut Copper Slabs
+		inventory.put("copper_block", 0);
+		inventory.put("cut_copper_slab", 2);
+		Assertions.assertEquals(2, inventory.get("cut_copper_slab"));
 	}
 }

@@ -33,6 +33,8 @@ import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.InventoryOwner;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.IronGolemEntity;
+import net.minecraft.entity.passive.MerchantEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.ProjectileUtil;
 import net.minecraft.inventory.Inventory;
@@ -1588,7 +1590,7 @@ public class CommandScepterItem extends Item {
 					List<LivingEntity> nearbyLiving = serverWorld.getEntitiesByClass(
 						LivingEntity.class,
 						queryBox,
-						e -> isTargetableEntity(player, e)
+						e -> isSectorTargetableEntity(player, e)
 					);
 					for (LivingEntity hostile : nearbyLiving) {
 						if (isWithinSector(player, hostile.getX(), hostile.getZ(), radius)) {
@@ -1738,11 +1740,11 @@ public class CommandScepterItem extends Item {
 				minion.setPreviewGlowing(false);
 			}
 
-			// Gather enclosed hostiles in the sector
+			// Gather enclosed hostiles in the sector (excluding villagers and iron golems)
 			List<LivingEntity> potentialHostiles = serverWorld.getEntitiesByClass(
 				LivingEntity.class,
 				rallyBox,
-				e -> isTargetableEntity(player, e)
+				e -> isSectorTargetableEntity(player, e)
 			);
 			List<LivingEntity> enclosedHostiles = new ArrayList<>();
 			for (LivingEntity hostile : potentialHostiles) {
@@ -2329,6 +2331,40 @@ public class CommandScepterItem extends Item {
 		// Rotate to commander's orientation with 100% exact captured blocks
 		blueprint = blueprint.rotate(getRotation(stack));
 		ConstructionManager.getInstance().startSession(serverWorld, anchorPos, blueprint, player);
+
+		if (!player.isCreative()) {
+			Box searchBox = player.getBoundingBox().expand(MINION_COMMAND_RADIUS);
+			List<MinionEntity> nearbyMinions = serverWorld.getEntitiesByClass(
+				MinionEntity.class,
+				searchBox,
+				m -> m.isAlive() && m.isOwner(player)
+			);
+			int totalReq = blueprint.getBlockCount();
+			int totalAvail = 0;
+			for (java.util.Map.Entry<net.minecraft.item.Item, Integer> entry : blueprint.getRequiredItems().entrySet()) {
+				net.minecraft.item.Item item = entry.getKey();
+				int req = entry.getValue();
+				int count = 0;
+				for (int i = 0; i < player.getInventory().size(); i++) {
+					ItemStack s = player.getInventory().getStack(i);
+					if (!s.isEmpty() && s.isOf(item)) count += s.getCount();
+				}
+				for (MinionEntity m : nearbyMinions) {
+					net.minecraft.inventory.SimpleInventory inv = m.getInventory();
+					for (int s = 0; s < inv.size(); s++) {
+						ItemStack st = inv.getStack(s);
+						if (!st.isEmpty() && st.isOf(item)) count += st.getCount();
+					}
+				}
+				totalAvail += Math.min(req, count);
+			}
+			int pct = totalReq > 0 ? (int) Math.round((double) totalAvail / (double) totalReq * 100.0D) : 100;
+			String readinessText = (pct >= 100)
+				? "§a✔ 100% Ready (All materials in bags)"
+				: "§e" + pct + "% Ready §7(" + totalAvail + "/" + totalReq + "b in bags & " + nearbyMinions.size() + " minions)";
+			player.sendMessage(Text.literal("§6📋 BOM Delta: " + readinessText), true);
+		}
+
 		return true;
 	}
 
@@ -2563,6 +2599,25 @@ public class CommandScepterItem extends Item {
 			return false;
 		}
 		return entity instanceof LivingEntity;
+	}
+
+	/**
+	 * Evaluates whether an entity caught in the channeled 90° forward sector command area is a valid attackable target.
+	 * Excludes villagers (and wandering traders) as well as iron golems so innocent village inhabitants and defenders
+	 * caught in the cone are strictly protected from mass attacks.
+	 *
+	 * @param commander The commanding player.
+	 * @param entity    The candidate entity.
+	 * @return true if the entity is a valid hostile target within the forward command sector.
+	 */
+	public static boolean isSectorTargetableEntity(PlayerEntity commander, Entity entity) {
+		if (!isTargetableEntity(commander, entity)) {
+			return false;
+		}
+		if (entity instanceof MerchantEntity || entity instanceof IronGolemEntity) {
+			return false;
+		}
+		return true;
 	}
 
 	/**
@@ -3397,7 +3452,7 @@ public class CommandScepterItem extends Item {
 		List<MinionEntity> minions = world.getEntitiesByClass(
 			MinionEntity.class,
 			searchBox,
-			m -> m.isAlive() && m.isOwner(player) && (isEmergencyCitadelCall || (!m.hasLeader() && m.getPatrolRouteId() < 0 && filterSquad.matches(m.getSquad())))
+			m -> m.isAlive() && m.isOwner(player) && (isEmergencyCitadelCall || (!m.hasLeader() && m.getPatrolRouteId() < 0 && filterSquad.matches(m.getSquad()) && m.isSelected() && !m.isHoldingPosition() && !m.isSitting() && m.getGuardAnchorPos() == null))
 		);
 
 		MinionFormationFollowGoal.refreshFormationAnchor(player);
@@ -3453,7 +3508,11 @@ public class CommandScepterItem extends Item {
 				1.1F
 			);
 			String squadLabel = filterSquad.getFormattedName();
-			player.sendMessage(Text.literal("§e🔔 Tactical Retreat! Recalled " + minions.size() + " minion(s) [" + squadLabel + "§e] to formation!§r"), true);
+			if (minions.isEmpty()) {
+				player.sendMessage(Text.literal("§e🔔 Tactical Retreat: No selected minions in [" + squadLabel + "§e] to retreat (held minions require FOLLOW command).§r"), true);
+			} else {
+				player.sendMessage(Text.literal("§e🔔 Tactical Retreat! Recalled " + minions.size() + " selected minion(s) [" + squadLabel + "§e] to formation!§r"), true);
+			}
 		}
 	}
 

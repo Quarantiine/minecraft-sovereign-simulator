@@ -18,11 +18,11 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 | **Ctrl + Mouse Scroll**                     | In **MINE** Mode (AREA Mode)  | **In-World Mining Height Adjustment**: Scroll up/down with Ctrl to expand or contract 3D excavation boundary height in real time (Shift for $\pm 5$ fast stepping, or keys `[` / `]`).                                                                                                                                               |
 | **Shift + Left-Click**                      | In **MINE** Mode (AREA Mode)  | **Reset Mining Corners**: Clears both `Pos1` and `Pos2` excavation boundary corners with a bass tone, ensuring the next Left-Click places `Pos1` afresh.                                                                                                                                                                             |
 | **Right-Click** _(Quick Tap)_               | Open Air / Sky                | **Broadcast Directive**: Broadcasts current mode directive to active squad (excluding minions on patrol routes).                                                                                                                                                                                                                     |
-| **Hold Right-Click** _(≥ 8 ticks)_          | All Modes _(incl. PATHWAY)_   | **Banner of Courage (90° Forward Sector)**: Real-time unit highlight; on release rallies and selects all enclosed minions into your squad. Any escorts or patrolling units caught in the sweep automatically detach and follow you!                                                                                                  |
+| **Hold Right-Click** _(≥ 8 ticks)_          | All Modes _(incl. PATHWAY)_   | **Banner of Courage (90° Forward Sector)**: Real-time unit highlight; on release rallies and selects all enclosed minions into your squad. If hostiles are enclosed, triggers Mass Assault (villagers and iron golems are strictly protected and never attacked). Any escorts or patrolling units caught in the sweep automatically detach and follow you! |
 | **Shift + Hold Right-Click**                | In **PATHWAY** Mode           | **Sector Pathway Dispatch (90° Forward Sector)**: On release dispatches all enclosed minions (or active selection) directly to the active patrol route!                                                                                                                                                                              |
 | **Shift + Right-Click**                     | In Air / On Block             | **Cycle Command Mode**: Cycles `FOLLOW` → `STAY` → `MINE` → `BUILD` → `RECRUIT` → `PATHWAY`.                                                                                                                                                                                                                                         |
 | **Keybind `R`**                             | In **BUILD** Mode             | **Rotate Blueprint**: Rotates hologram 90° clockwise (North → East → South → West).                                                                                                                                                                                                                                                  |
-| **Keybind `R`**                             | Any Other Mode                | **Tactical Squad Retreat**: Recalls active squad members within 64m into their **structured formation stations** (Warriors front, Sentinels mid, Builders rear) rather than crowding onto a single block. Cancels combat, clears targets, and preserves minions on patrol routes.                                                    |
+| **Keybind `R`**                             | Any Other Mode                | **Tactical Squad Retreat**: Recalls active **selected** squad members within 64m into their **structured formation stations** (Warriors front, Sentinels mid, Builders rear). Preserves minions on hold position or patrol routes; use **`FOLLOW`** mode to mobilize held minions instead.                                       |
 | **Shift + Keybind `R`**                     | Anywhere                      | **Emergency Citadel Call**: Fortress-wide emergency muster across 128m! Unbinds all patrol routes, sounds raid horn & bell, and sprints all units home.                                                                                                                                                                              |
 | **Left-Click**                              | In **BUILD** Mode             | **Rotate Blueprint**: Rotates hologram 90° clockwise (on air, terrain, or block, without requiring Shift).                                                                                                                                                                                                                           |
 | **Left-Click**                              | In **DESIGN** Mode            | **Set Corner Pos1 / Pos2 (Sequential)**: 1st Left-Click sets Corner 1 (`Pos1`) anchored **on top of the clicked block face** (excluding terrain dirt beneath); 2nd Left-Click sets Corner 2 (`Pos2`), completing the footprint and rendering full holographic ghost grid blocks.                                                     |
@@ -43,6 +43,7 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 | **Keybind `H`**                             | In **BUILD** Mode             | **Tactical Zoom**: Cycles tactical camera zoom presets (0.75x, 1.0x default, 1.5x, 2.0x).                                                                                                                                                                                                                                            |
 | **Arcane Build Flight**                     | In **BUILD** Mode             | **Free Survival Build Flight**: Enjoy unconstrained 3D vanilla flight in Survival mode while holding the Scepter in **BUILD** mode (Space to ascend, Shift to descend, full WASD mobility). Flying over water automatically cancels construction and revokes flight!                                                                 |
 | **Ctrl + Scroll**                           | In **BUILD** Mode             | **Smooth Camera Zoom**: Smoothly zooms tactical view in and out without hotbar cycling conflicts.                                                                                                                                                                                                                                    |
+| **`[ 📋 BOM ]` Button** _(in Command Hub)_ | In **BUILD** Mode             | **Material Bill of Materials (BOM) Modal**: Inspect live inventory delta & resource readiness calculating required materials across player inventory and nearby minion backpacks within 64m before anchoring.                                                                                                                      |
 | **Keybind `V`**                             | Anywhere (with Scepter)       | **Command Hub GUI**: Tactical screen for squads, modes, custom blueprint catalog, 4-role archetypes (`AUTO`), rotation controls, and **Patrol Route Dashboard**.                                                                                                                                                                     |
 | **Catalog Delete `[✕]`** _(in Command Hub)_ | In **BUILD** Mode             | **Delete Custom Blueprint**: Click the `[✕]` button beside any player-authored blueprint in the catalog. Opens a safety confirmation modal to permanently delete the blueprint across all clients and world storage.                                                                                                                 |
 | **Dismiss / Destroy** _(in Command Hub)_    | Anywhere (with Scepter)       | **Decommission Minions with Confirmation**: Opens a confirmation dialog. If minions are currently selected, prompts whether to destroy only **Selected** minions or **All** minions. Also features a 2-step confirmation toggle in the Minion screen.                                                                                |
@@ -76,7 +77,7 @@ Channeling projects an expanding **90° forward conical sector** (from 3.0 up to
   - Owned minions inside the cone glow with an outline and sparkle with enchant dust.
   - Hostile mobs inside the cone are marked with angry villager and crit target cues.
 - **On Release**:
-  - **Mass Attack**: If enemy mobs are in the cone, minions automatically distribute targets across the enemy group and charge in a coordinated assault!
+  - **Mass Attack**: If enemy mobs are in the cone, minions automatically distribute targets across the enemy group and charge in a coordinated assault! *(Note: Innocent villagers and iron golems caught in the cone are strictly protected and never attacked).*
   - **Rally & Transfigure**: Minions inside the cone are gathered into your active squad and transfigured into your primed archetype (if selected in the Command Hub).
   - Sounds a deep war horn (`SoundEvents.EVENT_RAID_HORN` / goat horn) and war drum blast.
 
@@ -320,9 +321,18 @@ Press **`V`** with a scepter anywhere in your inventory to open the tactical com
      - **Roof Trim & Eaves**: ❄️ Ice Blue (`#70B8FF`).
 4. **Command Hub GUI (`V` Key)**:
    - **Active Construction Directives**: When **`BUILD`** mode is active, the Command Hub displays active directives confirming that minions construct 100% exact captured blocks without procedural alteration.
-   - **Custom Blueprint Viewport**: Clean 3-slot catalog displaying user-authored blueprints with dimensions and block counts, complete with `◀` / `▶` pagination and `Page X/Y` indicators.
-   - **Rotation Controls**: Click the **`[ ↻ Rotate ]`** button to rotate the blueprint 90° clockwise.
-5. **100% Exact Block Fidelity**:
+   - **Custom Blueprint Viewport**: Clean 3-slot catalog displaying user-authored blueprints with dimensions, block counts, and **Live BOM Readiness Badges** (`§a✔100%`, `§6X%`, `§c0%`), complete with `◀` / `▶` pagination and `Page X/Y` indicators.
+   - **Material Bill of Materials (BOM) & Resource Estimator**: Click the **`[ 📋 BOM ]`** button to open the live inventory delta modal.
+   - **Rotation Controls**: Click the **`[ ↻ X° ]`** button to rotate the blueprint 90° clockwise.
+5. **📋 Material Bill of Materials (BOM) & Live Resource Estimator**:
+   - **Multiplayer & Survival Authoritative Sync**: Dispatches C2S/S2C packets (`RequestResourceEstimationPayload` & `SyncResourceEstimationPayload`) calculating real-time inventory deltas across both the commander's bag and all nearby allied minion backpacks within 64m.
+   - **Zero-Latency Offline Fallback**: Features an instant client-side calculation fallback (`ClientResourceEstimatorTracker`) that renders immediately while awaiting network packet confirmation.
+   - **Smart Builder Harvestability Tagging**: Categorizes deficient items into autonomously harvestable (`§6⚒ Auto (-X)`) for materials builder minions can quarry, smelt, cultivate, or synthesize versus manual procurement (`§c✕ Need (-X)`).
+   - **Category Pill Tallies**: Displays at-a-glance status pills for 🪨 Stone & Masonry, 🪵 Timber & Wood, 🪟 Glass & Details, and 🌿 Organic/Misc materials.
+   - **Capped Contribution Math**: Prevents a surplus of one item (e.g. 500 cobblestone) from masking shortages of another (e.g. 0 oak planks) in the overall readiness percentage.
+   - **Survival Placement Actionbar Delta**: When right-clicking to anchor in Survival mode, displays an instant actionbar update (`§6📋 BOM Delta: §a✔ 100% Ready` or `§eX% Ready (Y/Z blocks in bags & N minions)`).
+   - **Tactical Battlefield Awareness**: Suppresses background blur shader (`applyBlur` override) so you can keep full visual awareness of surrounding minions, hostile threats, and terrain while inspecting the modal.
+6. **100% Exact Block Fidelity**:
    - Minions place every block (stairs, slabs, glass, lanterns, masonry, containers) in the exact position, orientation, and block type captured in **`DESIGN`** mode.
    - Retired legacy architecture styles, biome substitutions, procedural size scaling, and noise weathering to ensure full player creative fidelity.
 6. **Rotate Blueprint (3 Ways)**:
@@ -439,12 +449,14 @@ The mod provides two tiers of tactical emergency recall:
 
 Press **`R`** at any time while holding the Command Scepter (or with it in your inventory):
 
-- **Range**: Recalls active squad thralls within **64 blocks**.
-- **Combat Disengage**: Immediately clears combat targets on all active minions (`setTarget(null)`).
-- **Cancel Holding/Guarding**: Cancels stationary guard or waypoint hold positions.
+- **Selective Recall (Selected Only)**: Only retreats minions that are currently **selected**. Minions currently stationed in **hold position** (sitting or stationed at guard anchors) are strictly preserved and will **not** retreat.
+- **Rely on `FOLLOW` for Held Minions**: To mobilize and recall minions from hold position, switch to or trigger the **`FOLLOW`** command mode.
+- **Range**: Recalls active selected squad thralls within **64 blocks**.
+- **Combat Disengage**: Immediately clears combat targets on retreating minions (`setTarget(null)`).
+- **Preserve Stationed Defense**: Leaves stationary guard posts and perimeter defenses undisturbed.
 - **Wireframe Dismissal**: Instantly dismisses all 3D holographic wireframes and cancels active construction sessions for the commander.
-- **Sprint Regroup**: Minions sprint back at 1.35x speed and reassemble into **Ranked Army Lines** behind you.
-- **Audio/Visual**: Sounds a warning retreat bell (`SoundEvents.BLOCK_BELL_USE`), bursts cloud particles, and displays action bar confirmation: `§e🔔 RETREAT! [Squad] disengaging and falling back!§r`.
+- **Sprint Regroup**: Selected minions sprint back at 1.50x speed and reassemble into **Ranked Army Lines** behind you.
+- **Audio/Visual**: Sounds a warning retreat bell (`SoundEvents.BLOCK_BELL_USE`), bursts campfire smoke particles, and displays action bar confirmation.
 
 ### B. `Shift + R`: Emergency Citadel Call (Fortress Muster)
 

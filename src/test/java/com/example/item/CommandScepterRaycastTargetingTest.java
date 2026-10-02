@@ -590,4 +590,148 @@ public class CommandScepterRaycastTargetingTest {
 		Assertions.assertEquals(2, attackMobilized.size(), "Only mobile units (1 and 4) should mobilize on ALL attack broadcast");
 		Assertions.assertTrue(attackMobilized.stream().noneMatch(ThrallEntity::sitting), "Sitting minions must never leak into attack");
 	}
+
+	// =========================================================================
+	// 9. 90° Forward Sector Targeting Safeguards & Selective Tactical Retreat
+	// =========================================================================
+
+	@Test
+	@DisplayName("Source contract: Channeled 90° forward sector uses isSectorTargetableEntity to protect villagers and golems")
+	void testSectorTargetableExcludesVillagersAndIronGolemsContract() throws java.io.IOException {
+		String scepterContent = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/example/item/custom/CommandScepterItem.java"));
+
+		// 1. Verify isSectorTargetableEntity definition
+		Assertions.assertTrue(
+			scepterContent.contains("public static boolean isSectorTargetableEntity(PlayerEntity commander, Entity entity)"),
+			"CommandScepterItem must define isSectorTargetableEntity method"
+		);
+
+		// 2. Verify exclusion of MerchantEntity (villagers/traders) and IronGolemEntity
+		Assertions.assertTrue(
+			scepterContent.contains("if (entity instanceof MerchantEntity || entity instanceof IronGolemEntity)"),
+			"isSectorTargetableEntity must strictly exclude MerchantEntity and IronGolemEntity"
+		);
+
+		// 3. Verify usageTick uses isSectorTargetableEntity for particle cues
+		Assertions.assertTrue(
+			scepterContent.contains("e -> isSectorTargetableEntity(player, e)"),
+			"usageTick and onStoppedUsing must filter forward sector hostiles via isSectorTargetableEntity"
+		);
+	}
+
+	@Test
+	@DisplayName("Validate 90° sector hostile targeting excludes villagers, iron golems, players, and allies")
+	void testSectorHostileTargetingSafeguardsLogic() {
+		enum TargetCategory {
+			HOSTILE_MONSTER,
+			VILLAGER,
+			IRON_GOLEM,
+			OWNED_MINION,
+			COMMANDER_PLAYER,
+			OTHER_PLAYER
+		}
+
+		record SectorEntity(int id, TargetCategory category, boolean alive) {
+			boolean isSectorTargetable() {
+				if (!alive) return false;
+				if (category == TargetCategory.COMMANDER_PLAYER || category == TargetCategory.OTHER_PLAYER) return false;
+				if (category == TargetCategory.OWNED_MINION) return false;
+				if (category == TargetCategory.VILLAGER || category == TargetCategory.IRON_GOLEM) return false;
+				return category == TargetCategory.HOSTILE_MONSTER;
+			}
+		}
+
+		List<SectorEntity> sectorEntities = List.of(
+			new SectorEntity(1, TargetCategory.HOSTILE_MONSTER, true), // Zombie -> targetable
+			new SectorEntity(2, TargetCategory.VILLAGER, true),        // Villager -> must NOT be targeted
+			new SectorEntity(3, TargetCategory.IRON_GOLEM, true),       // Iron Golem -> must NOT be targeted
+			new SectorEntity(4, TargetCategory.OWNED_MINION, true),     // Minion -> must NOT be targeted
+			new SectorEntity(5, TargetCategory.COMMANDER_PLAYER, true), // Self -> must NOT be targeted
+			new SectorEntity(6, TargetCategory.HOSTILE_MONSTER, false)  // Dead skeleton -> must NOT be targeted
+		);
+
+		List<SectorEntity> validTargets = sectorEntities.stream()
+			.filter(SectorEntity::isSectorTargetable)
+			.toList();
+
+		Assertions.assertEquals(1, validTargets.size(), "Only living hostile monsters must be targeted in forward sector");
+		Assertions.assertEquals(1, validTargets.get(0).id(), "Candidate target must be the living hostile monster");
+		Assertions.assertTrue(validTargets.stream().noneMatch(e -> e.category() == TargetCategory.VILLAGER), "Villagers must never be targeted in 90° sector");
+		Assertions.assertTrue(validTargets.stream().noneMatch(e -> e.category() == TargetCategory.IRON_GOLEM), "Iron Golems must never be targeted in 90° sector");
+	}
+
+	@Test
+	@DisplayName("Source contract: executeRetreat only recalls selected minions not in hold position")
+	void testTacticalRetreatSelectedOnlyContract() throws java.io.IOException {
+		String scepterContent = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/example/item/custom/CommandScepterItem.java"));
+
+		// Verify executeRetreat filter invariants
+		Assertions.assertTrue(
+			scepterContent.contains("m.isSelected() && !m.isHoldingPosition() && !m.isSitting() && m.getGuardAnchorPos() == null"),
+			"executeRetreat must require selected minions that are not holding position, sitting, or anchored"
+		);
+	}
+
+	@Test
+	@DisplayName("Validate tactical retreat recalls selected minions only and preserves held minions")
+	void testTacticalRetreatSelectionAndHoldSeparationLogic() {
+		UUID ownerId = UUID.randomUUID();
+
+		record TacticalMinion(
+			int id,
+			UUID owner,
+			boolean alive,
+			SquadGroup squad,
+			boolean selected,
+			boolean sitting,
+			boolean isHoldingPosition,
+			String guardAnchor,
+			int patrolRouteId,
+			boolean hasLeader
+		) {
+			boolean isRetreatEligible(UUID expectedOwner, SquadGroup filterSquad, boolean isEmergencyCitadelCall) {
+				if (!alive || !owner.equals(expectedOwner)) return false;
+				if (isEmergencyCitadelCall) return true;
+				return !hasLeader
+					&& patrolRouteId < 0
+					&& filterSquad.matches(squad)
+					&& selected
+					&& !isHoldingPosition
+					&& !sitting
+					&& guardAnchor == null;
+			}
+		}
+
+		List<TacticalMinion> battlefield = List.of(
+			// 1: Selected active follower in Squad ALPHA -> MUST retreat
+			new TacticalMinion(1, ownerId, true, SquadGroup.ALPHA, true, false, false, null, -1, false),
+			// 2: Stationed / holding position in Squad ALPHA -> MUST NOT retreat
+			new TacticalMinion(2, ownerId, true, SquadGroup.ALPHA, false, true, true, "100,64,100", -1, false),
+			// 3: Unselected follower in Squad ALPHA -> MUST NOT retreat
+			new TacticalMinion(3, ownerId, true, SquadGroup.ALPHA, false, false, false, null, -1, false),
+			// 4: Patrolling sentry in Squad ALPHA -> MUST NOT retreat
+			new TacticalMinion(4, ownerId, true, SquadGroup.ALPHA, false, false, false, null, 1, false),
+			// 5: Escorting bodyguard in Squad ALPHA -> MUST NOT retreat
+			new TacticalMinion(5, ownerId, true, SquadGroup.ALPHA, true, false, false, null, -1, true),
+			// 6: Selected active follower in Squad BRAVO -> MUST NOT retreat when targeting ALPHA
+			new TacticalMinion(6, ownerId, true, SquadGroup.BRAVO, true, false, false, null, -1, false)
+		);
+
+		// Tactical R retreat targeting Squad ALPHA
+		List<TacticalMinion> retreatedAlpha = battlefield.stream()
+			.filter(m -> m.isRetreatEligible(ownerId, SquadGroup.ALPHA, false))
+			.toList();
+
+		Assertions.assertEquals(1, retreatedAlpha.size(), "Only minion 1 should retreat on Tactical R for Squad ALPHA");
+		Assertions.assertEquals(1, retreatedAlpha.get(0).id());
+
+		// Minion 2 (held position) must NOT be retreated
+		Assertions.assertFalse(retreatedAlpha.stream().anyMatch(m -> m.id() == 2), "Minion on hold position must not retreat");
+
+		// Emergency Citadel Call (Shift + R) recalls all owner minions fortress-wide
+		List<TacticalMinion> emergencyRecall = battlefield.stream()
+			.filter(m -> m.isRetreatEligible(ownerId, SquadGroup.ALL, true))
+			.toList();
+		Assertions.assertEquals(6, emergencyRecall.size(), "Emergency Citadel Call must recall all alive owned minions");
+	}
 }

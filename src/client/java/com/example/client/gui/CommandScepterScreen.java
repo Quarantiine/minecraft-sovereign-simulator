@@ -6,7 +6,9 @@ import com.example.client.ExampleModClient;
 import com.example.client.network.ModClientNetworking;
 import com.example.client.renderer.ClientDesignCaptureTracker;
 import com.example.client.renderer.ClientMiningCaptureTracker;
+import com.example.client.resource.ClientResourceEstimatorTracker;
 import com.example.component.CommandMode;
+import com.example.network.SyncResourceEstimationPayload;
 import com.example.component.MiningMode;
 import com.example.component.SquadGroup;
 import com.example.entity.custom.MinionEntity;
@@ -74,6 +76,7 @@ public class CommandScepterScreen extends Screen {
 	private ButtonWidget prevPathwayPageBtn;
 	private ButtonWidget nextPathwayPageBtn;
 	private ButtonWidget rotateBtn;
+	private ButtonWidget materialBomBtn;
 	private ButtonWidget captureModalBtn;
 	private ButtonWidget clearCornersBtn;
 	private ButtonWidget miningModeBtn;
@@ -161,6 +164,10 @@ public class CommandScepterScreen extends Screen {
 			);
 			this.nearbyThralls = minions.size();
 			this.nearbySelectedThralls = (int) minions.stream().filter(MinionEntity::isSelected).count();
+		}
+
+		if (this.selectedBlueprintId != null && !this.selectedBlueprintId.isBlank()) {
+			ModClientNetworking.sendRequestResourceEstimation(this.selectedBlueprintId);
 		}
 
 		int startX = (this.width - WINDOW_WIDTH) / 2;
@@ -304,11 +311,22 @@ public class CommandScepterScreen extends Screen {
 			getRotateButtonText(),
 			b -> cycleRotationGui()
 		)
-		.dimensions(startX + 16, pageControlsY, 142, 19)
+		.dimensions(startX + 16, pageControlsY, 68, 19)
 		.tooltip(Tooltip.of(Text.literal("§6✦ Rotate Blueprint 90° Clockwise\n§7In-Game: Press [R] or Left-Click with Scepter.")))
 		.build();
 		this.rotateBtn.visible = this.selectedMode == CommandMode.BUILD;
 		this.addDrawableChild(this.rotateBtn);
+
+		// Material Bill of Materials (BOM) & Resource Estimator Button (visible in BUILD mode)
+		this.materialBomBtn = ButtonWidget.builder(
+			Text.literal("§e📋 BOM"),
+			b -> openResourceEstimatorModal()
+		)
+		.dimensions(startX + 88, pageControlsY, 70, 19)
+		.tooltip(Tooltip.of(Text.literal("§e📋 Material Bill of Materials (BOM)\n§7Inspect live raw material delta across your inventory\nand nearby minion backpacks before anchoring.")))
+		.build();
+		this.materialBomBtn.visible = this.selectedMode == CommandMode.BUILD;
+		this.addDrawableChild(this.materialBomBtn);
 
 		// Spatial Capture Modal Button (visible in DESIGN mode)
 		this.captureModalBtn = ButtonWidget.builder(
@@ -621,7 +639,27 @@ public class CommandScepterScreen extends Screen {
 		int dimZ = box.getBlockCountZ();
 
 		String prefix = isSelected ? "§6✦ " : "§f";
-		return Text.literal(prefix + bp.getName() + "\n§8" + dimX + "x" + dimY + "x" + dimZ + " §8| §e" + bp.getBlockCount() + "b");
+		SyncResourceEstimationPayload est = ClientResourceEstimatorTracker.getEstimation(bp.getId());
+		String readinessBadge = "";
+		if (est != null && est.totalBlocks() > 0) {
+			int pct = est.getReadinessPercentage();
+			readinessBadge = est.isFullySatisfied() ? " §a✔100%" : (pct > 0 ? " §6" + pct + "%" : " §c0%");
+		}
+		return Text.literal(prefix + bp.getName() + readinessBadge + "\n§8" + dimX + "x" + dimY + "x" + dimZ + " §8| §e" + bp.getBlockCount() + "b");
+	}
+
+	private Text getBlueprintTooltip(StructureBlueprint bp) {
+		SyncResourceEstimationPayload est = ClientResourceEstimatorTracker.getEstimation(bp.getId());
+		StringBuilder sb = new StringBuilder();
+		sb.append("§6✦ ").append(bp.getName()).append(" §7(").append(bp.getBlockCount()).append(" blocks)\n");
+		if (est != null && est.totalBlocks() > 0) {
+			int pct = est.getReadinessPercentage();
+			String color = pct >= 100 ? "§a" : (pct >= 50 ? "§6" : "§c");
+			sb.append(color).append("Readiness: ").append(pct).append("% (").append(est.totalAvailable()).append("/").append(est.totalBlocks()).append(" blocks)\n");
+			sb.append("§8Nearby Minions Contributing: §e").append(est.nearbyMinionsCount()).append("\n");
+		}
+		sb.append("§7Click to select blueprint.\n§e[ 📋 Material BOM ] to inspect item delta.");
+		return Text.literal(sb.toString());
 	}
 
 	private void selectSquad(SquadGroup squad) {
@@ -670,6 +708,9 @@ public class CommandScepterScreen extends Screen {
 		}
 		if (this.rotateBtn != null) {
 			this.rotateBtn.visible = isBuild;
+		}
+		if (this.materialBomBtn != null) {
+			this.materialBomBtn.visible = isBuild;
 		}
 		if (this.captureModalBtn != null) {
 			this.captureModalBtn.visible = isDesign;
@@ -863,6 +904,16 @@ public class CommandScepterScreen extends Screen {
 
 	public ButtonWidget getRotateButton() {
 		return this.rotateBtn;
+	}
+
+	public ButtonWidget getMaterialBomBtn() {
+		return this.materialBomBtn;
+	}
+
+	public void openResourceEstimatorModal() {
+		if (this.client != null) {
+			this.client.setScreen(new BlueprintResourceEstimatorModalScreen(this.selectedBlueprintId, this.scepterStack, this));
+		}
 	}
 
 	public ButtonWidget getCaptureModalButton() {
@@ -1060,6 +1111,7 @@ public class CommandScepterScreen extends Screen {
 		for (ButtonWidget b : this.blueprintDeleteButtons) b.active = !isConfirming;
 		for (ButtonWidget b : this.pathwayWidgets) b.active = !isConfirming;
 		if (this.rotateBtn != null) this.rotateBtn.active = !isConfirming;
+		if (this.materialBomBtn != null) this.materialBomBtn.active = !isConfirming;
 		if (this.captureModalBtn != null) this.captureModalBtn.active = !isConfirming;
 		if (this.clearCornersBtn != null) this.clearCornersBtn.active = !isConfirming;
 		if (this.miningModeBtn != null) this.miningModeBtn.active = !isConfirming;
@@ -1155,13 +1207,7 @@ public class CommandScepterScreen extends Screen {
 	}
 
 	private Text getRotateButtonText() {
-		String dir = switch (this.selectedRotation) {
-			case 1 -> "East";
-			case 2 -> "South";
-			case 3 -> "West";
-			default -> "North";
-		};
-		return Text.literal("§6↻ Rotate: §b" + (this.selectedRotation * 90) + "° §7(" + dir + ")");
+		return Text.literal("§6↻ " + (this.selectedRotation * 90) + "°");
 	}
 
 	private void selectMode(CommandMode mode) {
@@ -1185,6 +1231,7 @@ public class CommandScepterScreen extends Screen {
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.setBlueprintId(this.scepterStack, blueprintId);
 		}
+		ModClientNetworking.sendRequestResourceEstimation(blueprintId);
 		syncToServer(false);
 		refreshButtonLabels();
 	}
@@ -1377,6 +1424,7 @@ public class CommandScepterScreen extends Screen {
 				btn.active = (this.pendingConfirmation == ConfirmationType.NONE);
 				btn.setWidth(isCustom ? 134 : 160);
 				btn.setMessage(getBlueprintButtonText(bp));
+				btn.setTooltip(Tooltip.of(getBlueprintTooltip(bp)));
 
 				if (delBtn != null) {
 					delBtn.visible = isCustom;
@@ -1607,6 +1655,14 @@ public class CommandScepterScreen extends Screen {
 
 		if (hasBottomControls) {
 			Text bannerText = Text.literal("§f" + this.selectedMode.getFormattedName() + " §8| " + modeDesc);
+			if (this.selectedMode == CommandMode.BUILD) {
+				SyncResourceEstimationPayload est = ClientResourceEstimatorTracker.getEstimation(this.selectedBlueprintId);
+				if (est != null && est.totalBlocks() > 0) {
+					int pct = est.getReadinessPercentage();
+					String color = pct >= 100 ? "§a" : (pct >= 50 ? "§6" : "§c");
+					bannerText = Text.literal("§bBUILD §8| " + color + pct + "% Ready §7(" + est.totalAvailable() + "/" + est.totalBlocks() + "b) §8[📋BOM]");
+				}
+			}
 			int rawWidth = this.textRenderer.getWidth(bannerText);
 			int maxBoxWidth = 144 - 8;
 			float fittedScale = (rawWidth * scale > maxBoxWidth) ? ((float) maxBoxWidth / (float) rawWidth) : scale;

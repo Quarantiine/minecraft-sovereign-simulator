@@ -51,12 +51,14 @@ public class ModNetworking {
 		PayloadTypeRegistry.playC2S().register(CaptureSpatialBlueprintPayload.ID, CaptureSpatialBlueprintPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(DeleteCustomBlueprintPayload.ID, DeleteCustomBlueprintPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(StartMiningAreaPayload.ID, StartMiningAreaPayload.PACKET_CODEC);
+		PayloadTypeRegistry.playC2S().register(RequestResourceEstimationPayload.ID, RequestResourceEstimationPayload.PACKET_CODEC);
 
 		// S2C Payloads for active blueprint wireframe and patrol route synchronization
 		PayloadTypeRegistry.playS2C().register(SyncConstructionSessionPayload.ID, SyncConstructionSessionPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playS2C().register(EndConstructionSessionPayload.ID, EndConstructionSessionPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playS2C().register(SyncPatrolRoutesPayload.ID, SyncPatrolRoutesPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playS2C().register(SyncCustomBlueprintsPayload.ID, SyncCustomBlueprintsPayload.PACKET_CODEC);
+		PayloadTypeRegistry.playS2C().register(SyncResourceEstimationPayload.ID, SyncResourceEstimationPayload.PACKET_CODEC);
 	}
 
 	/**
@@ -119,6 +121,10 @@ public class ModNetworking {
 		ServerPlayNetworking.registerGlobalReceiver(StartMiningAreaPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> handleStartMiningArea(player, payload));
+		});
+		ServerPlayNetworking.registerGlobalReceiver(RequestResourceEstimationPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> handleRequestResourceEstimation(player, payload));
 		});
 	}
 
@@ -863,5 +869,88 @@ public class ModNetworking {
 		} catch (Exception e) {
 			player.sendMessage(Text.literal("§c⚠ Failed to start area mining: " + e.getMessage()), true);
 		}
+	}
+
+	/**
+	 * Handles C2S request for live blueprint resource estimation (Material Bill of Materials).
+	 * Aggregates required materials from the blueprint against the commanding player's inventory
+	 * and nearby minion backpacks within 64 meters, evaluating Builder autonomous harvestability.
+	 *
+	 * @param player  The commanding server player.
+	 * @param payload The request payload containing target blueprintId.
+	 */
+	private static void handleRequestResourceEstimation(ServerPlayerEntity player, RequestResourceEstimationPayload payload) {
+		if (player == null || payload == null || payload.blueprintId() == null) {
+			return;
+		}
+
+		String blueprintId = payload.blueprintId();
+		com.example.blueprint.StructureBlueprint blueprint = BlueprintRegistry.getOrDefault(blueprintId);
+		if (blueprint == null || blueprint.getBlockCount() == 0) {
+			SyncResourceEstimationPayload emptySync = new SyncResourceEstimationPayload(
+				blueprintId, 0, 0, 0, List.of()
+			);
+			ServerPlayNetworking.send(player, emptySync);
+			return;
+		}
+
+		ServerWorld world = player.getServerWorld();
+		Box searchBox = player.getBoundingBox().expand(CommandScepterItem.MINION_COMMAND_RADIUS);
+		List<MinionEntity> nearbyMinions = world.getEntitiesByClass(
+			MinionEntity.class,
+			searchBox,
+			m -> m.isAlive() && m.isOwner(player)
+		);
+
+		java.util.Map<net.minecraft.item.Item, Integer> requiredItems = blueprint.getRequiredItems();
+		List<ResourceEstimateEntry> entries = new ArrayList<>();
+		int totalReqBlocks = blueprint.getBlockCount();
+		int totalAvailableBlocks = 0;
+
+		for (java.util.Map.Entry<net.minecraft.item.Item, Integer> entry : requiredItems.entrySet()) {
+			net.minecraft.item.Item item = entry.getKey();
+			int req = entry.getValue();
+			if (req <= 0) continue;
+
+			// Commander player inventory count
+			int playerCount = 0;
+			for (int i = 0; i < player.getInventory().size(); i++) {
+				ItemStack stack = player.getInventory().getStack(i);
+				if (!stack.isEmpty() && stack.isOf(item)) {
+					playerCount += stack.getCount();
+				}
+			}
+
+			// Nearby minion backpacks count within 64m
+			int minionCount = 0;
+			for (MinionEntity minion : nearbyMinions) {
+				net.minecraft.inventory.SimpleInventory inv = minion.getInventory();
+				for (int s = 0; s < inv.size(); s++) {
+					ItemStack stack = inv.getStack(s);
+					if (!stack.isEmpty() && stack.isOf(item)) {
+						minionCount += stack.getCount();
+					}
+				}
+			}
+
+			// Builder autonomous harvestability
+			boolean harvestable = com.example.entity.ai.logistics.MinionHarvestingHelper.isHarvestable(item);
+
+			String itemId = net.minecraft.registry.Registries.ITEM.getId(item).toString();
+			entries.add(new ResourceEstimateEntry(itemId, req, playerCount, minionCount, harvestable));
+
+			// Clamped contribution for overall percentage so surplus of 1 item doesn't mask shortages
+			int availableForItem = playerCount + minionCount;
+			totalAvailableBlocks += Math.min(req, availableForItem);
+		}
+
+		SyncResourceEstimationPayload syncPayload = new SyncResourceEstimationPayload(
+			blueprintId,
+			totalReqBlocks,
+			totalAvailableBlocks,
+			nearbyMinions.size(),
+			entries
+		);
+		ServerPlayNetworking.send(player, syncPayload);
 	}
 }
