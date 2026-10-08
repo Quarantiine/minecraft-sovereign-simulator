@@ -1811,6 +1811,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 				LivingEntity.class,
 				this.getBoundingBox().expand(16.0D),
 				e -> e.isAlive() && (e instanceof net.minecraft.entity.mob.HostileEntity || e instanceof net.minecraft.entity.mob.Monster)
+						&& com.example.targeting.MinionTargetFilterManager.getInstance().isAllowed(this.getOwnerUuid(), e.getType())
 			);
 			if (!nearbyHostiles.isEmpty()) {
 				targetAdaptiveRole = MinionRole.WARRIOR;

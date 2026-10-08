@@ -47,6 +47,7 @@ public class ExampleMod implements ModInitializer {
 				LOGGER.info("Initializing PatrolRouteManager and CustomBlueprintManager persistent state for overworld: {}", world.getRegistryKey().getValue());
 				com.example.patrol.PatrolRouteManager.getInstance().init(world);
 				com.example.blueprint.CustomBlueprintManager.getInstance().init(world);
+				com.example.targeting.MinionTargetFilterManager.getInstance().init(world);
 			}
 		});
 
@@ -57,6 +58,7 @@ public class ExampleMod implements ModInitializer {
 				LOGGER.info("Ensuring PatrolRouteManager and CustomBlueprintManager initialized on SERVER_STARTED for overworld");
 				com.example.patrol.PatrolRouteManager.getInstance().init(overworld);
 				com.example.blueprint.CustomBlueprintManager.getInstance().init(overworld);
+				com.example.targeting.MinionTargetFilterManager.getInstance().init(overworld);
 			}
 		});
 
@@ -64,12 +66,14 @@ public class ExampleMod implements ModInitializer {
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
 			com.example.patrol.PatrolRouteManager.getInstance().onServerStopping();
 			com.example.blueprint.CustomBlueprintManager.getInstance().onServerStopping();
+			com.example.targeting.MinionTargetFilterManager.getInstance().onServerStopping();
 		});
 
 		// Register player connect event to sync saved patrol routes and custom blueprints immediately on world join
 		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(handler.getPlayer());
 			com.example.blueprint.CustomBlueprintManager.getInstance().syncToPlayer(handler.getPlayer());
+			com.example.targeting.MinionTargetFilterManager.getInstance().syncToPlayer(handler.getPlayer());
 		});
 
 		// Register server tick event to update construction sessions and holograms

@@ -84,6 +84,7 @@ public class CommandScepterScreen extends Screen {
 	private ButtonWidget clearMineCornersBtn;
 	private ButtonWidget prevPageBtn;
 	private ButtonWidget nextPageBtn;
+	private ButtonWidget targetFilterBtn;
 
 	public enum ConfirmationType {
 		NONE,
@@ -232,6 +233,18 @@ public class CommandScepterScreen extends Screen {
 			this.modeButtons.add(btn);
 			this.addDrawableChild(btn);
 		}
+
+		// Minion Target Filter Button: occupies the first free slot after the command mode grid (always visible)
+		int filterCol = modes.length % 2;
+		int filterRow = modes.length / 2;
+		this.targetFilterBtn = ButtonWidget.builder(
+			Text.literal("§c⚔ Targets"),
+			b -> openTargetFilterModal()
+		)
+		.dimensions(startX + 16 + filterCol * 70, startY + 118 + filterRow * 21, 66, 19)
+		.tooltip(Tooltip.of(Text.literal("§c⚔ Minion Target Filter\n§7Choose which mobs your Auto, Sentinel & Warrior\nminions are allowed to attack on sight.")))
+		.build();
+		this.addDrawableChild(this.targetFilterBtn);
 
 		// Architectural Blueprint Catalog with fixed 3-item viewport and pagination controls
 		List<StructureBlueprint> blueprints = new ArrayList<>(BlueprintRegistry.getAll());
@@ -965,6 +978,20 @@ public class CommandScepterScreen extends Screen {
 		}
 	}
 
+	public ButtonWidget getTargetFilterButton() {
+		return this.targetFilterBtn;
+	}
+
+	/**
+	 * Opens the Minion Target Filter modal letting the commander select which hostile mobs
+	 * Auto, Sentinel, and Warrior minions may attack on sight.
+	 */
+	public void openTargetFilterModal() {
+		if (this.client != null) {
+			this.client.setScreen(new MinionTargetFilterModalScreen(this));
+		}
+	}
+
 	public void clearMineCornersGui() {
 		ClientMiningCaptureTracker.clear();
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
@@ -1119,6 +1146,7 @@ public class CommandScepterScreen extends Screen {
 		if (this.clearMineCornersBtn != null) this.clearMineCornersBtn.active = !isConfirming;
 		if (this.prevPageBtn != null) this.prevPageBtn.active = !isConfirming && this.blueprintPage > 0;
 		if (this.nextPageBtn != null) this.nextPageBtn.active = !isConfirming;
+		if (this.targetFilterBtn != null) this.targetFilterBtn.active = !isConfirming;
 
 		int modalW = 240;
 		int modalH = 110;

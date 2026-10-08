@@ -722,4 +722,72 @@ public class NetworkingPayloadTest {
 		);
 		Assertions.assertEquals(ConfigurePatrolRoutePayload.Action.DELETE, deletePayload.action());
 	}
+
+	@Test
+	@DisplayName("Validate UpdateTargetFilterPayload fields, IDs, and packet codec roundtrip")
+	void testUpdateTargetFilterPayload() {
+		List<net.minecraft.util.Identifier> ids = List.of(
+			net.minecraft.util.Identifier.ofVanilla("creeper"),
+			net.minecraft.util.Identifier.ofVanilla("slime")
+		);
+		UpdateTargetFilterPayload payload = new UpdateTargetFilterPayload(ids);
+
+		Assertions.assertEquals(ids, payload.disabledTypes());
+		Assertions.assertEquals(UpdateTargetFilterPayload.ID, payload.getId());
+		Assertions.assertEquals(ExampleMod.MOD_ID, payload.getId().id().getNamespace());
+		Assertions.assertEquals("update_target_filter", payload.getId().id().getPath());
+		Assertions.assertNotNull(UpdateTargetFilterPayload.PACKET_CODEC);
+
+		// Record equality & hashing
+		UpdateTargetFilterPayload copy = new UpdateTargetFilterPayload(ids);
+		Assertions.assertEquals(payload, copy);
+		Assertions.assertEquals(payload.hashCode(), copy.hashCode());
+
+		// Packet codec roundtrip
+		RegistryByteBuf buf = new RegistryByteBuf(Unpooled.buffer(), null);
+		try {
+			UpdateTargetFilterPayload.PACKET_CODEC.encode(buf, payload);
+			Assertions.assertTrue(buf.readableBytes() > 0);
+
+			UpdateTargetFilterPayload decoded = UpdateTargetFilterPayload.PACKET_CODEC.decode(buf);
+			Assertions.assertEquals(payload, decoded);
+			Assertions.assertEquals(0, buf.readableBytes());
+		} finally {
+			buf.release();
+		}
+	}
+
+	@Test
+	@DisplayName("Validate SyncTargetFilterPayload fields, IDs, and packet codec roundtrip")
+	void testSyncTargetFilterPayload() {
+		List<net.minecraft.util.Identifier> ids = List.of(
+			net.minecraft.util.Identifier.ofVanilla("phantom"),
+			net.minecraft.util.Identifier.ofVanilla("ghast")
+		);
+		SyncTargetFilterPayload payload = new SyncTargetFilterPayload(ids);
+
+		Assertions.assertEquals(ids, payload.disabledTypes());
+		Assertions.assertEquals(SyncTargetFilterPayload.ID, payload.getId());
+		Assertions.assertEquals(ExampleMod.MOD_ID, payload.getId().id().getNamespace());
+		Assertions.assertEquals("sync_target_filter", payload.getId().id().getPath());
+		Assertions.assertNotNull(SyncTargetFilterPayload.PACKET_CODEC);
+
+		// Record equality & hashing
+		SyncTargetFilterPayload copy = new SyncTargetFilterPayload(ids);
+		Assertions.assertEquals(payload, copy);
+		Assertions.assertEquals(payload.hashCode(), copy.hashCode());
+
+		// Packet codec roundtrip
+		RegistryByteBuf buf = new RegistryByteBuf(Unpooled.buffer(), null);
+		try {
+			SyncTargetFilterPayload.PACKET_CODEC.encode(buf, payload);
+			Assertions.assertTrue(buf.readableBytes() > 0);
+
+			SyncTargetFilterPayload decoded = SyncTargetFilterPayload.PACKET_CODEC.decode(buf);
+			Assertions.assertEquals(payload, decoded);
+			Assertions.assertEquals(0, buf.readableBytes());
+		} finally {
+			buf.release();
+		}
+	}
 }

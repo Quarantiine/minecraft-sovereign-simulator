@@ -23,7 +23,6 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Box;
 
 /**
  * Central networking registry for Fabric C2S / S2C payloads and server receivers.
@@ -52,6 +51,7 @@ public class ModNetworking {
 		PayloadTypeRegistry.playC2S().register(DeleteCustomBlueprintPayload.ID, DeleteCustomBlueprintPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(StartMiningAreaPayload.ID, StartMiningAreaPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(RequestResourceEstimationPayload.ID, RequestResourceEstimationPayload.PACKET_CODEC);
+		PayloadTypeRegistry.playC2S().register(UpdateTargetFilterPayload.ID, UpdateTargetFilterPayload.PACKET_CODEC);
 
 		// S2C Payloads for active blueprint wireframe and patrol route synchronization
 		PayloadTypeRegistry.playS2C().register(SyncConstructionSessionPayload.ID, SyncConstructionSessionPayload.PACKET_CODEC);
@@ -59,6 +59,7 @@ public class ModNetworking {
 		PayloadTypeRegistry.playS2C().register(SyncPatrolRoutesPayload.ID, SyncPatrolRoutesPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playS2C().register(SyncCustomBlueprintsPayload.ID, SyncCustomBlueprintsPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playS2C().register(SyncResourceEstimationPayload.ID, SyncResourceEstimationPayload.PACKET_CODEC);
+		PayloadTypeRegistry.playS2C().register(SyncTargetFilterPayload.ID, SyncTargetFilterPayload.PACKET_CODEC);
 	}
 
 	/**
@@ -126,6 +127,40 @@ public class ModNetworking {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> handleRequestResourceEstimation(player, payload));
 		});
+		ServerPlayNetworking.registerGlobalReceiver(UpdateTargetFilterPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> handleUpdateTargetFilter(player, payload));
+		});
+	}
+
+	/**
+	 * Handles the minion combat target filter submitted from the Target Filter modal.
+	 * Sanitizes the requested disabled mob types, persists them for the commander,
+	 * and echoes the accepted filter back to the client.
+	 *
+	 * @param player  The commanding server player.
+	 * @param payload The target filter payload containing the unchecked mob types.
+	 */
+	private static void handleUpdateTargetFilter(ServerPlayerEntity player, UpdateTargetFilterPayload payload) {
+		if (player == null || payload == null) {
+			return;
+		}
+
+		com.example.targeting.MinionTargetFilterManager manager = com.example.targeting.MinionTargetFilterManager.getInstance();
+		List<net.minecraft.util.Identifier> disabled = com.example.targeting.MinionTargetFilterManager.sanitize(payload.disabledTypes());
+		manager.setDisabled(player.getUuid(), disabled);
+		manager.syncToPlayer(player);
+
+		int total = com.example.targeting.MinionTargetFilterManager.getCandidateIds().size();
+		int allowed = Math.max(0, total - disabled.size());
+		player.getServerWorld().playSound(
+			null, player.getX(), player.getY(), player.getZ(),
+			SoundEvents.BLOCK_NOTE_BLOCK_CHIME, SoundCategory.PLAYERS, 1.0F, 1.4F
+		);
+		player.sendMessage(
+			Text.literal("§a✔ Minion target filter updated: §e" + allowed + "§7/§e" + total + " §7mob types allowed on sight.§r"),
+			true
+		);
 	}
 
 	/**

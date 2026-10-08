@@ -120,16 +120,16 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 ### Tactical Controls Cheat Sheet
 
-| Key / Action           | Context            | Tactical Function                                                                                |
-| :--------------------- | :----------------- | :----------------------------------------------------------------------------------------------- |
-| **`V` Key**            | Scepter in Hand    | Opens the **Command Hub GUI** (squad channels, modes, patrol dashboard, blueprints).             |
-| **`R` Key**            | Scepter in Hand    | **Squad Retreat**: Recalls selected active squad minions within 64m.                             |
-| **`Shift + R`**        | Scepter in Hand    | **Citadel Call**: Army-wide emergency alarm (128m) recalling all units and unbinding patrols.    |
-| **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                              |
-| **`Ctrl` + Scroll**    | `DESIGN` / `MINE`  | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).       |
-| **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault.   |
-| **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader. |
-| **Sneak + Left-Click** | `DESIGN` / `MINE`  | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.           |
+| Key / Action           | Context            | Tactical Function                                                                                   |
+| :--------------------- | :----------------- | :-------------------------------------------------------------------------------------------------- |
+| **`V` Key**            | Scepter in Hand    | Opens the **Command Hub GUI** (squad channels, modes, patrol dashboard, blueprints, target filter). |
+| **`R` Key**            | Scepter in Hand    | **Squad Retreat**: Recalls selected active squad minions within 64m.                                |
+| **`Shift + R`**        | Scepter in Hand    | **Citadel Call**: Army-wide emergency alarm (128m) recalling all units and unbinding patrols.       |
+| **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                 |
+| **`Ctrl` + Scroll**    | `DESIGN` / `MINE`  | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).          |
+| **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault.      |
+| **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.    |
+| **Sneak + Left-Click** | `DESIGN` / `MINE`  | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.              |
 
 > 📖 For the exhaustive controls manual, see [**COMMANDS.md**](COMMANDS.md).
 

@@ -68,10 +68,16 @@ public class ModClientNetworking {
 			})
 		);
 
+		ClientPlayNetworking.registerGlobalReceiver(
+			com.example.network.SyncTargetFilterPayload.ID,
+			(payload, context) -> context.client().execute(() -> com.example.client.targeting.ClientTargetFilterTracker.setDisabled(payload.disabledTypes()))
+		);
+
 		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			com.example.client.renderer.ClientPatrolRouteTracker.clear();
 			com.example.blueprint.BlueprintRegistry.clearCustomBlueprints();
 			com.example.client.resource.ClientResourceEstimatorTracker.clear();
+			com.example.client.targeting.ClientTargetFilterTracker.clear();
 		});
 	}
 
@@ -393,6 +399,17 @@ public class ModClientNetworking {
 	 */
 	public static void sendRequestResourceEstimation(String blueprintId) {
 		com.example.network.RequestResourceEstimationPayload payload = new com.example.network.RequestResourceEstimationPayload(blueprintId);
+		ClientPlayNetworking.send(payload);
+	}
+
+	/**
+	 * Dispatches a {@link com.example.network.UpdateTargetFilterPayload} submitting the commander's minion
+	 * combat target filter from the Target Filter modal.
+	 *
+	 * @param disabledTypes Hostile mob type ids minions must NOT attack on sight (the unchecked mobs).
+	 */
+	public static void sendUpdateTargetFilter(java.util.List<net.minecraft.util.Identifier> disabledTypes) {
+		com.example.network.UpdateTargetFilterPayload payload = new com.example.network.UpdateTargetFilterPayload(disabledTypes);
 		ClientPlayNetworking.send(payload);
 	}
 }

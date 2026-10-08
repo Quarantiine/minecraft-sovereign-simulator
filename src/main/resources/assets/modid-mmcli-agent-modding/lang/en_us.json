@@ -148,5 +148,11 @@
   "gui.modid-mmcli-agent-modding.patrol_route_modal.save_button": "Save Route",
   "gui.modid-mmcli-agent-modding.patrol_route_modal.cancel_button": "Cancel",
   "gui.modid-mmcli-agent-modding.patrol_route_modal.delete_button": "Delete Route",
-  "gui.modid-mmcli-agent-modding.command_hub.add_route": "+ New Route"
+  "gui.modid-mmcli-agent-modding.command_hub.add_route": "+ New Route",
+
+  "gui.modid-mmcli-agent-modding.target_filter_modal.title": "Minion Target Filter",
+  "gui.modid-mmcli-agent-modding.target_filter_modal.select_all": "Select All",
+  "gui.modid-mmcli-agent-modding.target_filter_modal.clear_all": "Clear All",
+  "gui.modid-mmcli-agent-modding.target_filter_modal.submit": "Submit",
+  "gui.modid-mmcli-agent-modding.target_filter_modal.cancel": "Cancel"
 }
