@@ -278,6 +278,7 @@ For in-depth guides and technical specifications, consult our companion document
 
 - 🎮 [**COMMANDS.md**](COMMANDS.md) — Exhaustive scepter control manual, keybindings, and tactical commands.
 - ⚙️ [**FEATURES.md**](FEATURES.md) — Deep-dive architectural specification, math formulations, packet schemas, and AI goal hierarchies.
+- 📜 [**CHANGELOG.md**](CHANGELOG.md) — Release notes and version history across all updates.
 - ⚖️ [**LICENSE**](LICENSE) — The complete Visible Source & All Rights Reserved legal license.
 
 ---
