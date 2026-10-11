@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 #### 🔍 Interactive 3D Architectural Blueprint Explorer GUI & Clarity Overhaul
+
 - **Dedicated `BlueprintExplorerScreen`**: Added a dedicated GUI screen (`BlueprintExplorerScreen`) providing interactive 3D voxel structure previews, real-time catalog search, detailed spatial metrics, and single-click scepter arming.
 - **True 3D Rotated Quad Projection**: Transformed the voxel engine from flat 2D stamps into a true 3D rotated quad renderer. For each visible face, all four spatial corners are projected onto the screen based on camera yaw and pitch, rendering perspective-accurate 3D quads via hardware vertex buffer shaders.
 - **6-Directional Interior Block Occlusion Culling**: Implemented neighbor occlusion culling (`isOpaque(BlockState)`). Internal faces and completely enclosed blocks inside solid masonry, floors, and thick walls are culled before rendering, eliminating thousands of overlapping interior lines, black borders, and visual clutter while preserving transparent blocks (glass, doors, stairs, slabs, iron bars).
@@ -35,10 +36,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Command Hub Integration**: Added a prominent `[ 🔍 3D View ]` launcher button directly inside the Command Scepter Hub (`BUILD` mode) next to the blueprint catalog header.
 
 #### 🥇 Newest-First Custom Blueprint Ordering (Slide 1 Slot 1 Default)
+
 - **Immediate Slide 1 Availability**: When players save a new custom blueprint, it is registered at index 0 (Slot 1 on Slide 1 / Page 0) by default in both `BlueprintRegistry` and world persistent state (`CustomBlueprintPersistentState`), eliminating the need to page through older blueprints.
 - **Auto-Selection on Held Scepter**: Newly captured and saved blueprints are automatically armed on the commanding player's held Command Scepter on both client and server upon saving.
 
 #### 🧱 Anti-Suffocation, Anti-Entombment & Safe Evacuation System
+
 - **Surface Quarry vs. Subterranean Excavation Evacuation**: In `ConstructionManager.completeSession()`, mining (dismantle) sessions distinguish between open surface quarries (with sky access) and underground excavations. Open pit quarries evacuate minions to the surface rim surrounding the pit under open sky. Underground excavations safely station minions onto the cleared interior floor (`box.getMinY()`) or entrance anchor, completely preventing minions from being teleported into unmined perimeter rock walls.
 - **Full-Column Safe Perimeter Scanning**: Replaced rigid -3..+2 downward-only scans in `findSafePerimeterGround()` with dynamic surface-level scanning (`world.getTopY`) down to foundation depth, evaluating candidate positions with strict `isSafeStandingPosition()` checks. Guaranteed safe footing with 2 vertical blocks of clear headroom, solid non-hazardous ground, and zero lava/fire hazards.
 - **Continuous In-Wall Detection & Emergency Auto-Unstuck**: Added server-side `unstuckIfInSolidWall()` into `MinionEntity.tick()`. If a minion ever ends up with its head or feet inside solid blocks while not phasing (e.g. from physics nudges, falling gravel, block placements, or edge-case teleports), it immediately detects collision, finds the nearest safe 2-block open space within 8 blocks, and teleports them out with portal VFX and audio cues.
@@ -46,12 +49,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Automated Safety Test Suite**: Added `MinionWallAndUndergroundSafetyTest.java` verifying safe standing position constraints, in-wall extraction simulations, hazardous floor rejection, and underground vs. surface stationing invariants.
 
 #### 🏗️ Multi-Minion Task Stealing & Peer Handoff
+
 - **Dynamic Absentee Task Stealing**: When multiple minions build a structure together, tasks claimed by absent or delayed workers are automatically detected. If a claimant is farther than 24 blocks away, missing from the server, or stalled past grace thresholds (`STEAL_GRACE_TICKS = 60L`, `STALLED_LEASE_TICKS = 200L`), nearby active builders steal the task without deadlocks.
 - **Instant Peer Handoff & Memory Reset**: In `MinionBuildGoal`, each minion continuously monitors its task lease. The instant another minion completes or claims the task, the original claimant immediately forgets the task (`forgetLostTask`) as if completed and acquires the next available block task without idling or stalling.
 - **World State Pre-Completion**: `ConstructionSession.claimNextTask()` checks if the target block already matches the blueprint state in the world, marking it completed immediately.
 - **Lease-Safe Releases**: `ConstructionTask.releaseIfOwnedBy(UUID)` ensures former claimants cannot inadvertently release tasks currently reassigned to peer workers.
 
 #### 🎯 Global Minion Target Filter Search & Named Presets
+
 - **Real-Time Search Bar**: Added an interactive search box to `MinionTargetFilterModalScreen` allowing players to quickly filter candidates by mob name or ID path.
 - **Named Presets**: Added `TargetFilterPresetManager` featuring 5 standard built-in presets:
   - `All Hostiles`: All hostiles enabled.
@@ -62,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Custom Preset Saving & JSON Persistence**: Commanders can save their current selection as a custom preset by title only, persisting to `config/sovereign-sim/target_filter_presets.json`. Custom presets can be cycled with one click or deleted safely.
 
 #### 🛡️ Individual Minion Combat Policies
+
 - **Per-Minion Combat Policy (`MinionCombatPolicy`)**: Added 4 distinct engagement policies configured per minion:
   - `GLOBAL`: Follows the master global target filter set in the Command Hub.
   - `PASSIVE`: Pacifist mode; never targets hostiles and never retaliates when harmed.
@@ -71,6 +77,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **C2S Payload & NBT Persistence**: Registered `UpdateMinionCombatPolicyPayload` and serialized policies and individual disabled target lists to minion NBT.
 
 #### 📖 Vanilla Recipe Book Integration & Advancements
+
 - **Dynamic Recipe Book Blueprint Unlocking**: Native recipe advancements automatically unlock blueprints in the player's crafting table recipe book upon acquiring constituent ingredients in Survival mode (Amethyst Shards, Gold Ingots, Emeralds, Gunpowder, or Snowballs).
 - **Dual Datapack Compatibility**: Populated both `advancement/` (Minecraft 1.21+ standard) and `advancements/` (legacy loader fallback) paths across `recipes/equipment/` and `recipes/misc/`.
 - **Automated Validation Test Suite**: Added `RecipeAdvancementJsonValidationTest.java` verifying advancement syntax, root parent references, criteria, and reward IDs.
@@ -78,19 +85,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 #### 🚶 Minion Waypoint Navigation & Pathing Anti-Jitter
+
 - **Slab, Stair, Carpet, Snow & Path Block Clearance**: Fixed an issue where minions walking towards tactical ground waypoints jittered in place, spawned purple portal particles, made teleport sounds, and had forward momentum zeroed out.
 - **Torso & Head Suffocation Safeguard**: Refined `unstuckIfInSolidWall()` to evaluate the minion's torso (`getY() + 0.6D`) and head (`getEyeY()`) using `shouldSuffocate()` and `isFullCube()`, excluding walkable ground surfaces beneath feet (slabs, stairs, carpets, snow layers, path blocks).
 - **Teleport Cooldown & Anti-Looping**: Added a 20-tick safety cooldown to `unstuckCooldownTicks` on successful emergency extractions, completely eliminating stutter and teleportation loops.
 - **Arcane Levitation Traversal Stability**: Ensured obstacle-climbing maneuvers maintain at least 4 ticks of lift before touchdown, preventing rapid ground chatter.
 
 #### 🏗️ Blueprint Placement & Selection Persistence
+
 - **Persistent Blueprint Selection in BUILD Mode**: Fixed an issue where placing down a blueprint or right-clicking into the air automatically cycled to the next blueprint in the catalog. Blueprint selection now stays firmly locked on the commander's chosen blueprint across repeated placements, quick taps, and cooldowns. Blueprints only change when explicitly selected in the Command Hub GUI (`V` key / Shift + Right-Click).
 
 #### 📜 Minecraft 1.21 Recipe Ingredient Format
+
 - **Strict Object Ingredients**: Fixed `Parsing error loading recipe` errors where Minecraft 1.21 DataFixerUpper/Codec rejected raw string identifiers in recipe `key` maps and `ingredients` arrays. Updated all recipe files (`command_scepter`, `frost_grenade_stick`, `tnt_stick`, `minion_spawn_egg`) across both `recipe/` and `recipes/` to use strict `{ "item": ... }` objects.
 - **Automated Recipe Codec Test**: Expanded `RecipeAdvancementJsonValidationTest` to validate all recipe files and enforce 1.21 object ingredient standards.
 
 #### 🌊 Shallow Water Build Flight Tolerance & Water Safeguards
+
 - **Water 5 Blocks High Flight Allowance**: Updated `CommandScepterItem.isPlayerOverWater()` to measure the vertical column depth of water bodies beneath the player. If the water column is 5 blocks high or less ($\le 5$ blocks deep of water above solid ground, such as creeks, shallow ponds, canals, or streams), the player is permitted to fly over it freely in `BUILD` mode without triggering build cancellation or losing flight. Only deep water bodies ($> 5$ blocks deep) trigger the water flight safeguard, cancelling `BUILD` mode only (reverting held scepter to `FOLLOW` and revoking flight) while allowing active minion construction sessions to continue building uninterrupted.
 - **Water Flight Edge Cases & Safe Descent Safeguard**:
   - **Bridges, Slabs & Glass Platforms**: Downward surface scanning checks `!state.getCollisionShape().isEmpty()`, ensuring players flying over bridges, glass walkways, slabs, stairs, or docks above deep water are recognized as standing over solid architecture and are not erroneously cancelled. Lily pads on open water are gracefully traversed down to evaluate the underlying depth.
@@ -98,12 +109,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Descent Fall Damage Immunity**: When `BUILD` mode and flight are cancelled over water, `fallDistance = 0.0F` is maintained via `ACTIVE_SERVER_BUILD_FLIERS` until the player safely touches ground or splashes into water (`isOnGround() || isTouchingWater()`), eliminating lethal fall damage from high-altitude cancellation.
 
 #### 🖱️ 3D Blueprint Explorer Mouse-Click Button Priority & Viewport Interaction
+
 - **Button Click Delegation Before Viewport Drag**: Fixed an issue where clicking toolbar buttons (`[ ⛶ / 🗗 ]` Maximize, `[ ⏸ / ▶ ]` Spin, `[ ↻ ]` Reset, `[ ▾ ]` Slice Down, `[ 🏢 All ]` Slice Reset, `[ ▴ ]` Slice Up) with the mouse failed to trigger actions because `BlueprintExplorerScreen.mouseClicked()` checked viewport coordinates first and consumed left-clicks for camera dragging. Calling `super.mouseClicked(mouseX, mouseY, button)` before viewport coordinates ensures all buttons handle mouse clicks cleanly while preserving smooth orbit dragging and right-click panning.
 
 #### 🌸 Botanical Flora, Crops & Multi-Face Block Texturing
+
 - **Elimination of Stone Fallback on Flora**: Fixed an issue where flowers, saplings, mushrooms, and crops appeared as dull gray stone cubes in the 3D Blueprint Explorer. Implemented dedicated botanical bounds and multi-face bloom/stem palettes for all Minecraft flowers and crops, wood species cut rings vs. bark, utility workstations, and the 16-color dye palette.
 
 #### 🏷️ Stale `[HOLD]` Badge on Following Minions
+
 - **Following Always Overrides Hold State**: Fixed minions that were following the commander (or escorting/patrolling) still displaying the `[HOLD]` overhead label because a leftover sit pose or guard anchor lingered. `MinionEntity.isHoldingPosition()` now returns `false` whenever a minion is selected, has a leader, or is on a patrol route, and `setSelected(true)` clears any stale guard anchor and sitting pose.
 
 ---
@@ -119,6 +133,7 @@ Initial public release of **Sovereign Simulator: Arcane Strategy & Engineering**
 ### Added
 
 #### 🪄 Loki Command Scepter & Tactical Warfare
+
 - **Loki Command Scepter (`command_scepter`)**: Epic tactical command staff supporting multiple command modes: `FOLLOW`, `STAY`, `MINE`, `BUILD`, `RECRUIT`, and `DESIGN`.
 - **Channeled 90° Forward Sector ("Banner of Courage")**:
   - Right-click channeled ability projecting an expanding forward cone ($\pm 45^\circ$ FOV) with boundary laser particles and real-time outline highlighting.
@@ -133,6 +148,7 @@ Initial public release of **Sovereign Simulator: Arcane Strategy & Engineering**
   - Dedicated **Patrol Route Edit Modal (`PatrolRouteEditModalScreen`)** for route configuration and squad assignment.
 
 #### 🤖 Autonomous Minion Thralls & Archetype System
+
 - **Minion Thralls (`MinionEntity`) & Spawn Egg**: Recruitable autonomous humanoid units with custom equipment slots, 9-slot backpacks, and overhead status badges.
 - **Clean-Slate Spawning & Dynamic Role Disarming**: Minions initialize with empty hands and backpacks; switching roles automatically disarms invalid equipment into the backpack or drops overflow at their feet.
 - **Upright Attention Stance**: Minions stand at full 100% military posture on station with zero sitting offsets or decoupled riding hitches.
@@ -149,6 +165,7 @@ Initial public release of **Sovereign Simulator: Arcane Strategy & Engineering**
 - **Parallel Military Rank Formations**: Units align cleanly along commander-facing battle lines: Frontline Warriors (+4.0D), Midline Sentinels (+1.8D), and Rearguard Builders (-2.0D) with mutual push suppression to prevent collision jitter.
 
 #### 🏛️ Multiblock Architecture & Spatial Blueprint Engine
+
 - **Universal Arcane Levitation (Scaffolding-Free Construction AI)**:
   - Completely eliminates temporary scaffolding blocks, climbing hitches, and suffocating towers.
   - Builders fly and hover in 3D at optimal work stations with swirling portal/enchant rune particles and fall damage immunity.
@@ -173,12 +190,14 @@ Initial public release of **Sovereign Simulator: Arcane Strategy & Engineering**
   - Elevated confirmation modal (`Z = 400.0F` layering) for safe blueprint deletion without GUI bleed-through.
 
 #### ⛏️ Structure Deconstruction & Area Mining
+
 - **Dual Operational Modes**:
   - **`DIRECT` Mode**: Point-and-click deconstruction with 96-meter crosshair reach.
   - **`AREA` Mode**: Sequential corner selection (`Pos1` ➔ `Pos2`), fiery orange/amber ghost wireframes, real-time height adjustment (`Ctrl` + Scroll), and interactive confirmation modal (**`MiningConfirmModalScreen`**).
 - **Top-to-Bottom Excavation Engine**: Scans volumes from top to bottom, skipping air and bedrock voxels with zero air-mining or pickaxe swinging desync.
 
 #### 🌲 Survival Economy, Multi-Tier Supply Chains & Logistics
+
 - **Autonomous Material Harvesting**: Builders quarry natural stone, deepslate, sandstone, sand, and clay when materials are missing from inventories.
 - **Smart Supply Chain Transformations & Workstations**:
   - Multi-stage smelting (Cobblestone $\to$ Stone $\to$ Smooth Stone/Bricks; Sand $\to$ Glass; Clay $\to$ Bricks/Terracotta; Netherrack $\to$ Nether Bricks; Raw Ores $\to$ Metal Ingots/Blocks).
@@ -199,17 +218,20 @@ Initial public release of **Sovereign Simulator: Arcane Strategy & Engineering**
   - Dual directory compatibility across `recipe/` (1.21+ standard) and `recipes/` (legacy loader fallback) namespaces.
 
 #### 💣 Tactical Ordnance & Special Items
+
 - **Frost Grenade Projectile Stick (`frost_grenade_stick`)**: Throwable cryogenic stick freezing water to ice, lava to obsidian, and solid ground into snow blocks/powder snow while inflicting Slowness III and freezing ticks.
 - **TNT Stick (`tnt_stick`)**: Tactical explosive stick with impact detonation.
 - **Custom Construction Block (`construction_block`)**: Non-suffocating phase-through structural block for sapper bridging and chasm traversal.
 
 #### 🖥️ Interactive User Interfaces & Visual Experience
+
 - **Command Hub Screen (`CommandScepterScreen`, `V` key / Shift + Right-Click)**: Comprehensive tactical terminal with squad channel management (Alpha through Echo), mass role transfiguration, mode switches, blueprint catalog cards, and rotation buttons.
 - **Minion Management Screen (`MinionScreen`)**: Right-click minion interface showing health, equipment slots, 9-slot backpack inventory, and 2-step confirmation destroy actions.
 - **Clean In-Game GUI Overlays**: Custom transparent GUI backgrounds with disabled full-screen world blur (`applyBlur` disabled) across all modals, preserving complete battlefield situational awareness.
 - **Overhead Crest Badges & Visual Identity**: Client-rendered overhead badges displaying minion role, health, squad channel, and activity state, complemented by squad-colored clothing highlights.
 
 #### ⚙️ Cross-Version & Engine Invariants
+
 - **Target Minecraft Version**: `1.21` (Compatible with `1.21.x` family).
 - **Mod Loader**: Fabric Loader `>= 0.16.0`.
 - **Dependencies**: Fabric API (`>= 0.100.4+1.21`).

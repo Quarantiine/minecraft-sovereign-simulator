@@ -153,7 +153,7 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 | **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault.      |
 | **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.    |
 | **Sneak + Left-Click** | `DESIGN` / `MINE`  | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.              |
-| **`Tab` / `F` Key**    | In 3D Explorer     | **Maximize Viewport**: Toggles full-width $404 \times 194$ px 3D inspection view.                    |
+| **`Tab` / `F` Key**    | In 3D Explorer     | **Maximize Viewport**: Toggles full-width $404 \times 194$ px 3D inspection view.                   |
 | **Right-Click Drag**   | In 3D Explorer     | **Camera Pan**: Translates 3D model horizontally and vertically.                                    |
 | **`▲` / `▼` Slicer**   | In 3D Explorer     | **Architectural Floor Slicer**: Steps through floors to inspect interior room layouts.              |
 
