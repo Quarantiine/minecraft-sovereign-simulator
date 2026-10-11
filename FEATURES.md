@@ -71,7 +71,7 @@ The scepter cycles through 7 distinct operational modes via **Sneak + Right-Clic
 4. **`BUILD`** (`1.6F` pitch, `§bBuild`): Projects blueprint holographic wireframes and anchors new multiblock construction sessions.
 5. **`DESIGN`** (`1.7F` pitch, `§dDesign`): Sequential left-click spatial corner selection (1st left-click sets `Pos1`, 2nd left-click sets `Pos2`, subsequent left-clicks restart a new selection cycle) with real-time in-world holographic ghost grid structure rendering (semantic color-coded block outlines for doors, lighting, containers, stairs, and masonry) to capture, normalize, and compile existing world structures into custom blueprints.
 6. **`RECRUIT`** (`1.8F` pitch, `§dRecruit`): Targets wild or enemy mobs to transfigure them into loyal minion thralls.
-7. **`PATHWAY`** (`2.0F` pitch, `§3Pathway`): Projects 3D block wireframe checkpoints and establishes autonomous looping patrol routes across 5 distinct color channels.
+7. **`PATHWAY`** (`2.0F` pitch, `§3Pathway`): Projects 3D block wireframe checkpoints and establishes autonomous looping patrol routes across customizable color channels (starting with single default Route 1 🟡 Gold and newest-first custom route creation).
 
 > [!TIP]
 > **Contextual Combat Control**:
@@ -1259,7 +1259,7 @@ The commander's active game mode dynamically dictates minion logistics, resource
     - **Stationed Post Precedence**: Stationed minions holding an anchor post or ground ping yield in `MinionPatrolGoal` to ensure they maintain their defensive posts.
     - **Direct Command Precedence**: Toggling stance with an empty hand (following or stationed) immediately clears active patrol routes and escort links.
     - **Circular Escort Prevention**: Self-escort and reciprocal loops (A escorts B while B escorts A) are automatically rejected and broken.
-    - **Zero-Overlap Protection & Universal Cross-Channel Removal**: Waypoints are mutually exclusive across all 5 channels—a block coordinate can only belong to one route at a time. Right-clicking or punching an existing waypoint from ANY channel removes/undoes it from whichever route it belongs to without adding duplicates on top.
+    - **Zero-Overlap Protection & Universal Cross-Channel Removal**: Waypoints are mutually exclusive across all custom routes—a block coordinate can only belong to one route at a time. Right-clicking or punching an existing waypoint from ANY route removes/undoes it from whichever route it belongs to without adding duplicates on top.
   - **Surface Block Type Fidelity**:
     - Waypoints anchor cleanly on **any** surface block type (full solid blocks, slabs, stairs, carpets, fences, walls, glass roofs, leaves, and iron bars).
     - Elevated surface holograms (`y + 0.15D`) and vector laser tethers float cleanly atop the exact surface profile without clipping or appearing buried.

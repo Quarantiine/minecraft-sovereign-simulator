@@ -40,6 +40,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Immediate Slide 1 Availability**: When players save a new custom blueprint, it is registered at index 0 (Slot 1 on Slide 1 / Page 0) by default in both `BlueprintRegistry` and world persistent state (`CustomBlueprintPersistentState`), eliminating the need to page through older blueprints.
 - **Auto-Selection on Held Scepter**: Newly captured and saved blueprints are automatically armed on the commanding player's held Command Scepter on both client and server upon saving.
 
+#### ⚔️ Frontline Warrior Attack Damage Boost (+4.0 Attack Damage)
+
+- **Vanguard Strike Power (`WARRIOR_ATTACK_DAMAGE_BONUS = 4.0D`)**: Empowered frontline Warrior minions with a permanent `+4.0` Attack Damage bonus, raising bare-handed fist attacks to `9.0` base damage (vs. Sentinel/Builder `5.0`) and scaling all equipped melee weapons (`15.0` damage with Iron Sword; `16.0` with Diamond Sword).
+- **Visceral Combat Particle & Audio Feedback**: Successful Warrior attacks trigger server-side critical strike particles (`ParticleTypes.CRIT`) and impactful knockback audio cues (`SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK`).
+- **GUI & Tooltip Documentation**: Updated `MinionScreen` and role tooltips to accurately reflect the +4 Attack Damage frontline bonus for Warriors.
+
+#### 🚩 Single Default Pathway, Zero Phantom Route Creation & Newest-First Route Ordering
+
+- **Single Initial Default Route Invariant**: Players start with strictly **one** initial default pathway (**Route 1 🟡 Gold `#FFD700`**).
+- **Zero Phantom Route Auto-Creation**: Querying, rendering, cycling, or opening modals for non-existent route IDs strictly returns `null` instead of auto-populating ghost channels in memory or world saves.
+- **Newest-First Insertion Order**: Newly created custom routes are prepended at index 0 (Slide 1 Slot 1) across server storage (`PatrolRouteManager`), world persistence (`PatrolRoutePersistentState` via `LinkedHashMap`), and client trackers (`ClientPatrolRouteTracker`).
+- **Dynamic Paginated Pathway Dashboard (`PATHWAY_PAGE_SIZE = 4`)**: Command Hub GUI manages routes across pages of 4 cards per page with Prev/Next buttons, custom route creation (`[ + New Route ]`), configuration modal (`PatrolRouteEditModalScreen`), and route deletion with automatic minion unbinding.
+
 #### 🧱 Anti-Suffocation, Anti-Entombment & Safe Evacuation System
 
 - **Surface Quarry vs. Subterranean Excavation Evacuation**: In `ConstructionManager.completeSession()`, mining (dismantle) sessions distinguish between open surface quarries (with sky access) and underground excavations. Open pit quarries evacuate minions to the surface rim surrounding the pit under open sky. Underground excavations safely station minions onto the cleared interior floor (`box.getMinY()`) or entrance anchor, completely preventing minions from being teleported into unmined perimeter rock walls.

@@ -4,7 +4,7 @@
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-600%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-622%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -239,7 +239,7 @@ All builds and runtime tasks are managed via the included Gradle wrapper (`./gra
 # Launch a standalone dedicated server for network/multiplayer debugging
 ./gradlew runServer
 
-# Run the complete automated test suite (537 tests)
+# Run the complete automated test suite (622 tests)
 ./gradlew test
 
 # Compile and package the production mod JAR (outputs to build/libs/)
