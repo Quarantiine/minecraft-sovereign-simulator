@@ -46,9 +46,12 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 
 	private MinionRole currentRole;
 	private SquadGroup currentSquad;
+	private com.example.entity.custom.MinionCombatPolicy currentPolicy;
 
 	private CyclingButtonWidget<MinionRole> roleButton;
 	private CyclingButtonWidget<SquadGroup> squadButton;
+	private CyclingButtonWidget<com.example.entity.custom.MinionCombatPolicy> combatPolicyButton;
+	private ButtonWidget targetsModalBtn;
 	private ButtonWidget teleportBtn;
 	private ButtonWidget destroyBtn;
 	private ButtonWidget cancelBtn;
@@ -67,9 +70,15 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 		if (minion != null) {
 			this.currentRole = minion.getRole();
 			this.currentSquad = minion.getSquad();
+			this.currentPolicy = minion.getCombatPolicy();
 		} else {
 			this.currentRole = MinionRole.WARRIOR;
 			this.currentSquad = SquadGroup.ALPHA;
+			this.currentPolicy = com.example.entity.custom.MinionCombatPolicy.GLOBAL;
+		}
+
+		if (this.currentPolicy == null) {
+			this.currentPolicy = com.example.entity.custom.MinionCombatPolicy.GLOBAL;
 		}
 
 		if (this.currentRole == null) {
@@ -111,10 +120,10 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 		int btnWidth = 82;
 		int btnHeight = 20;
 
-		// Cycling badge widgets for Role and Squad positioned inside top header frame
+		// Cycling badge widgets positioned inside top header frame (Role, Squad, Combat Policy)
 		int badgeY = this.y - 22;
 
-		// 1. Role Cycling Badge Widget (Warrior -> Sentinel -> Builder)
+		// 1. Role Cycling Badge Widget (width 56)
 		this.roleButton = CyclingButtonWidget.<MinionRole>builder(role -> Text.literal(role.getColorCode() + getRoleBadgeSymbol(role) + " " + role.getDisplayName()))
 			.values(MinionRole.values())
 			.initially(this.currentRole)
@@ -123,7 +132,7 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 			.build(
 				this.x + 4,
 				badgeY,
-				btnWidth,
+				56,
 				btnHeight,
 				Text.literal("Role"),
 				(button, newRole) -> {
@@ -133,16 +142,16 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 			);
 		this.roleButton.active = isOwner;
 
-		// 2. Squad Cycling Badge Widget (Alpha -> Bravo -> Charlie -> Delta)
+		// 2. Squad Cycling Badge Widget (width 54)
 		this.squadButton = CyclingButtonWidget.<SquadGroup>builder(squad -> Text.literal(squad.getColorCode() + "⚑ " + formatSquadName(squad)))
 			.values(SquadGroup.getSelectableSquads())
 			.initially(this.currentSquad)
 			.omitKeyText()
 			.tooltip(squad -> Tooltip.of(getSquadTooltip(squad)))
 			.build(
-				this.x + 90,
+				this.x + 62,
 				badgeY,
-				btnWidth,
+				54,
 				btnHeight,
 				Text.literal("Squad"),
 				(button, newSquad) -> {
@@ -152,11 +161,30 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 			);
 		this.squadButton.active = isOwner;
 
+		// 3. Combat Rules of Engagement Badge Widget (width 54)
+		this.combatPolicyButton = CyclingButtonWidget.<com.example.entity.custom.MinionCombatPolicy>builder(policy -> Text.literal(policy.getDisplayName()))
+			.values(com.example.entity.custom.MinionCombatPolicy.values())
+			.initially(this.currentPolicy)
+			.omitKeyText()
+			.tooltip(policy -> Tooltip.of(Text.literal(policy.getDescription())))
+			.build(
+				this.x + 118,
+				badgeY,
+				54,
+				btnHeight,
+				Text.literal("Engagement"),
+				(button, newPolicy) -> {
+					this.currentPolicy = newPolicy;
+					this.syncCombatPolicy();
+				}
+			);
+		this.combatPolicyButton.active = isOwner;
+
 		// Action buttons framed inside bottom panel (2 rows)
 		int actionRow1Y = this.y + this.backgroundHeight + 3;
 		int actionRow2Y = this.y + this.backgroundHeight + 24;
 
-		// 3. Teleport to Me action button (Row 1, full width 168px)
+		// 4. Teleport to Me action button (Row 1, left, 108px)
 		this.teleportBtn = ButtonWidget.builder(
 			Text.literal("§d✦ ").append(Text.translatable("gui.modid-mmcli-agent-modding.minion.teleport")),
 			button -> {
@@ -169,12 +197,22 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 				this.close();
 			}
 		)
-		.dimensions(this.x + 4, actionRow1Y, 168, btnHeight)
+		.dimensions(this.x + 4, actionRow1Y, 108, btnHeight)
 		.tooltip(Tooltip.of(Text.translatable("tooltip.modid-mmcli-agent-modding.minion_screen.teleport_desc")))
 		.build();
 		this.teleportBtn.active = isOwner;
 
-		// 4. Destroy Minion action button (Row 2, left, 82px)
+		// 5. Targets Modal launcher button (Row 1, right, 58px)
+		this.targetsModalBtn = ButtonWidget.builder(
+			Text.literal("§d🎯 Targets"),
+			button -> this.openTargetsModal()
+		)
+		.dimensions(this.x + 114, actionRow1Y, 58, btnHeight)
+		.tooltip(Tooltip.of(Text.literal("§dConfigure combat targets or load presets for this minion")))
+		.build();
+		this.targetsModalBtn.active = isOwner;
+
+		// 6. Destroy Minion action button (Row 2, left, 82px)
 		this.destroyBtn = ButtonWidget.builder(
 			Text.literal("§c✖ ").append(Text.translatable("gui.modid-mmcli-agent-modding.minion.destroy")),
 			button -> {
@@ -198,7 +236,7 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 		.build();
 		this.destroyBtn.active = isOwner;
 
-		// 5. Cancel action button (Row 2, right, 82px)
+		// 7. Cancel action button (Row 2, right, 82px)
 		this.cancelBtn = ButtonWidget.builder(
 			Text.translatable("gui.modid-mmcli-agent-modding.minion.cancel"),
 			button -> this.close()
@@ -210,9 +248,54 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 
 		this.addDrawableChild(this.roleButton);
 		this.addDrawableChild(this.squadButton);
+		this.addDrawableChild(this.combatPolicyButton);
 		this.addDrawableChild(this.teleportBtn);
+		this.addDrawableChild(this.targetsModalBtn);
 		this.addDrawableChild(this.destroyBtn);
 		this.addDrawableChild(this.cancelBtn);
+	}
+
+	private void openTargetsModal() {
+		MinionEntity minion = this.handler != null ? this.handler.getMinion() : null;
+		java.util.Set<net.minecraft.util.Identifier> disabled = minion != null ? minion.getIndividualDisabledTargets() : java.util.Set.of();
+		if (disabled.isEmpty() && (minion == null || minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.GLOBAL)) {
+			disabled = com.example.client.targeting.ClientTargetFilterTracker.getDisabled();
+		}
+		int id = this.resolveMinionId();
+		if (this.client != null) {
+			this.client.setScreen(new MinionTargetFilterModalScreen(
+				this,
+				com.example.targeting.MinionTargetFilterManager.getCandidateIds(),
+				disabled,
+				newDisabled -> {
+					this.currentPolicy = com.example.entity.custom.MinionCombatPolicy.CUSTOM;
+					if (minion != null) {
+						minion.setCombatPolicy(com.example.entity.custom.MinionCombatPolicy.CUSTOM);
+						minion.setIndividualDisabledTargets(newDisabled);
+					}
+					if (id >= 0) {
+						ModClientNetworking.sendUpdateMinionCombatPolicy(id, com.example.entity.custom.MinionCombatPolicy.CUSTOM, new java.util.ArrayList<>(newDisabled));
+					}
+					if (this.combatPolicyButton != null) {
+						this.combatPolicyButton.setValue(com.example.entity.custom.MinionCombatPolicy.CUSTOM);
+					}
+				}
+			));
+		}
+	}
+
+	private void syncCombatPolicy() {
+		int id = this.resolveMinionId();
+		MinionEntity minion = this.handler != null ? this.handler.getMinion() : null;
+		if (minion != null) {
+			minion.setCombatPolicy(this.currentPolicy);
+		}
+		if (id >= 0) {
+			java.util.List<net.minecraft.util.Identifier> disabled = minion != null
+				? new java.util.ArrayList<>(minion.getIndividualDisabledTargets())
+				: java.util.List.of();
+			ModClientNetworking.sendUpdateMinionCombatPolicy(id, this.currentPolicy, disabled);
+		}
 	}
 
 	private int resolveMinionId() {
@@ -346,9 +429,10 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 		// Subtle header separator divider above role/squad badges
 		context.fill(startX + 2, startY - 24, startX + this.backgroundWidth - 2, startY - 23, 0x443D4F66);
 
-		// Real-time dynamic accent trims under Role and Squad badge widgets
-		context.fill(startX + 4, startY - 2, startX + 86, startY, roleColor);
-		context.fill(startX + 90, startY - 2, startX + 172, startY, squadColor);
+		// Real-time dynamic accent trims under Role, Squad, and Engagement badge widgets
+		context.fill(startX + 4, startY - 2, startX + 60, startY, roleColor);
+		context.fill(startX + 62, startY - 2, startX + 116, startY, squadColor);
+		context.fill(startX + 118, startY - 2, startX + 172, startY, 0xFF00E5FF);
 
 		// 1. Draw standard container background frame (contains player inventory and hotbar slots)
 		context.drawTexture(CONTAINER_TEXTURE, startX, startY, 0, 0, this.backgroundWidth, this.backgroundHeight);
@@ -387,7 +471,8 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 		context.drawBorder(startX, bottomPanelY, this.backgroundWidth, BOTTOM_PANEL_HEIGHT, squadColor);
 
 		// Action accent trims for the 2 button rows
-		context.fill(startX + 4, bottomPanelY, startX + 172, bottomPanelY + 2, 0xFFE040FB); // Teleport top trim
+		context.fill(startX + 4, bottomPanelY, startX + 112, bottomPanelY + 2, 0xFFE040FB); // Teleport top trim
+		context.fill(startX + 114, bottomPanelY, startX + 172, bottomPanelY + 2, 0xFF00E5FF); // Targets top trim
 		context.fill(startX + 4, bottomPanelY + 22, startX + 86, bottomPanelY + 24, 0xFFFF5252); // Destroy top trim (left)
 		context.fill(startX + 90, bottomPanelY + 22, startX + 172, bottomPanelY + 24, 0xFF9E9E9E); // Cancel top trim (right)
 

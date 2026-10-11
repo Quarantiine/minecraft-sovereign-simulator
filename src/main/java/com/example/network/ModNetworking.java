@@ -52,6 +52,7 @@ public class ModNetworking {
 		PayloadTypeRegistry.playC2S().register(StartMiningAreaPayload.ID, StartMiningAreaPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(RequestResourceEstimationPayload.ID, RequestResourceEstimationPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(UpdateTargetFilterPayload.ID, UpdateTargetFilterPayload.PACKET_CODEC);
+		PayloadTypeRegistry.playC2S().register(UpdateMinionCombatPolicyPayload.ID, UpdateMinionCombatPolicyPayload.PACKET_CODEC);
 
 		// S2C Payloads for active blueprint wireframe and patrol route synchronization
 		PayloadTypeRegistry.playS2C().register(SyncConstructionSessionPayload.ID, SyncConstructionSessionPayload.PACKET_CODEC);
@@ -78,6 +79,10 @@ public class ModNetworking {
 		ServerPlayNetworking.registerGlobalReceiver(UpdateMinionConfigPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> handleUpdateMinionConfig(player, payload));
+		});
+		ServerPlayNetworking.registerGlobalReceiver(UpdateMinionCombatPolicyPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> handleUpdateMinionCombatPolicy(player, payload));
 		});
 		ServerPlayNetworking.registerGlobalReceiver(DismissMinionPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
@@ -289,6 +294,45 @@ public class ModNetworking {
 
 			player.sendMessage(
 				Text.literal("§a✔ Minion configuration updated: " + minion.getRole().getFormattedName() + " §7| " + minion.getSquad().getFormattedName()),
+				true
+			);
+		}
+	}
+
+	/**
+	 * Handles individual minion combat policy and custom target filter updates.
+	 *
+	 * @param player  The commanding server player.
+	 * @param payload The payload containing entity ID, combat policy, and disabled mob IDs.
+	 */
+	private static void handleUpdateMinionCombatPolicy(ServerPlayerEntity player, UpdateMinionCombatPolicyPayload payload) {
+		if (player == null || payload == null) {
+			return;
+		}
+
+		ServerWorld world = player.getServerWorld();
+		Entity entity = world.getEntityById(payload.minionId());
+		if (entity instanceof MinionEntity minion && minion.isOwner(player)) {
+			if (payload.policy() != null) {
+				minion.setCombatPolicy(payload.policy());
+			}
+			if (payload.disabledTargets() != null) {
+				minion.setIndividualDisabledTargets(payload.disabledTargets());
+			}
+
+			world.playSound(
+				null,
+				minion.getX(),
+				minion.getY(),
+				minion.getZ(),
+				SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP,
+				SoundCategory.NEUTRAL,
+				0.6F,
+				1.4F
+			);
+
+			player.sendMessage(
+				Text.literal("§a✔ Minion rules of engagement: " + minion.getCombatPolicy().getDisplayName()),
 				true
 			);
 		}

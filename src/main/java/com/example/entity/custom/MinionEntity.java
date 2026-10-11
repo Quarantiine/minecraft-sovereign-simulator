@@ -4,10 +4,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 
 import com.example.component.SquadGroup;
 import com.example.entity.ai.goal.MinionActiveTargetGoal;
@@ -26,7 +30,9 @@ import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.DoorBlock;
+import net.minecraft.fluid.FluidState;
 import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.world.LocalDifficulty;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.FoodComponent;
@@ -125,6 +131,10 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	private static final TrackedData<Integer> CURRENT_WAYPOINT_INDEX = DataTracker.registerData(MinionEntity.class, TrackedDataHandlerRegistry.INTEGER);
 	private static final TrackedData<Optional<UUID>> LEADER_MINION_UUID = DataTracker.registerData(MinionEntity.class, TrackedDataHandlerRegistry.OPTIONAL_UUID);
 	private static final TrackedData<Integer> ADAPTIVE_ROLE_ID = DataTracker.registerData(MinionEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	private static final TrackedData<Integer> COMBAT_POLICY_ID = DataTracker.registerData(MinionEntity.class, TrackedDataHandlerRegistry.INTEGER);
+	private static final TrackedData<String> INDIVIDUAL_DISABLED_TARGETS = DataTracker.registerData(MinionEntity.class, TrackedDataHandlerRegistry.STRING);
+
+	private final Set<Identifier> individualDisabledTargets = new LinkedHashSet<>();
 
 	private LivingEntity lastCombatTarget;
 	private int outOfCombatTicks = 0;
@@ -187,6 +197,8 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		builder.add(CURRENT_WAYPOINT_INDEX, 0);
 		builder.add(LEADER_MINION_UUID, Optional.empty());
 		builder.add(ADAPTIVE_ROLE_ID, MinionRole.WARRIOR.getId());
+		builder.add(COMBAT_POLICY_ID, MinionCombatPolicy.GLOBAL.getId());
+		builder.add(INDIVIDUAL_DISABLED_TARGETS, "");
 	}
 
 	/**
@@ -238,6 +250,115 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 	public int getCurrentWaypointIndex() {
 		return this.dataTracker.get(CURRENT_WAYPOINT_INDEX);
+	}
+
+	public MinionCombatPolicy getCombatPolicy() {
+		return MinionCombatPolicy.fromId(this.dataTracker.get(COMBAT_POLICY_ID));
+	}
+
+	public void setCombatPolicy(MinionCombatPolicy policy) {
+		this.dataTracker.set(COMBAT_POLICY_ID, policy != null ? policy.getId() : MinionCombatPolicy.GLOBAL.getId());
+		if (policy == MinionCombatPolicy.PASSIVE) {
+			this.setTarget(null);
+		} else if (this.getTarget() != null && !this.isTargetAllowed(this.getTarget().getType())) {
+			this.setTarget(null);
+		}
+	}
+
+	@Override
+	public void setTarget(@org.jetbrains.annotations.Nullable LivingEntity target) {
+		if (target != null && this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
+			super.setTarget(null);
+			return;
+		}
+		super.setTarget(target);
+	}
+
+	@Override
+	public void onTrackedDataSet(TrackedData<?> data) {
+		super.onTrackedDataSet(data);
+		if (INDIVIDUAL_DISABLED_TARGETS.equals(data)) {
+			try {
+				String tracked = this.dataTracker.get(INDIVIDUAL_DISABLED_TARGETS);
+				this.individualDisabledTargets.clear();
+				if (tracked != null && !tracked.isEmpty()) {
+					for (String part : tracked.split(",")) {
+						if (!part.isBlank()) {
+							Identifier id = Identifier.tryParse(part.trim());
+							if (id != null) {
+								this.individualDisabledTargets.add(id);
+							}
+						}
+					}
+				}
+			} catch (Throwable ignored) {}
+		}
+	}
+
+	public Set<Identifier> getIndividualDisabledTargets() {
+		try {
+			if (this.dataTracker != null) {
+				String tracked = this.dataTracker.get(INDIVIDUAL_DISABLED_TARGETS);
+				if (tracked != null && !tracked.isEmpty()) {
+					Set<Identifier> set = new LinkedHashSet<>();
+					for (String part : tracked.split(",")) {
+						if (!part.isBlank()) {
+							Identifier id = Identifier.tryParse(part.trim());
+							if (id != null) {
+								set.add(id);
+							}
+						}
+					}
+					return Collections.unmodifiableSet(set);
+				}
+			}
+		} catch (Throwable ignored) {}
+		return Collections.unmodifiableSet(new LinkedHashSet<>(this.individualDisabledTargets));
+	}
+
+	public void setIndividualDisabledTargets(Collection<Identifier> disabled) {
+		this.individualDisabledTargets.clear();
+		if (disabled != null) {
+			this.individualDisabledTargets.addAll(disabled);
+		}
+		try {
+			if (this.dataTracker != null) {
+				String joined = this.individualDisabledTargets.stream()
+					.map(Identifier::toString)
+					.collect(java.util.stream.Collectors.joining(","));
+				this.dataTracker.set(INDIVIDUAL_DISABLED_TARGETS, joined);
+			}
+		} catch (Throwable ignored) {}
+		if (this.getTarget() != null && !this.isTargetAllowed(this.getTarget().getType())) {
+			this.setTarget(null);
+		}
+	}
+
+	/**
+	 * Determines whether a candidate entity type may be engaged by this minion,
+	 * taking into account its individual combat policy and target filter rules.
+	 *
+	 * @param type Hostile mob entity type.
+	 * @return True if permitted to attack.
+	 */
+	public boolean isTargetAllowed(EntityType<?> type) {
+		if (type == null) {
+			return false;
+		}
+		MinionCombatPolicy policy = getCombatPolicy();
+		return switch (policy) {
+			case PASSIVE -> false;
+			case DEFENSIVE -> false;
+			case CUSTOM -> {
+				try {
+					Identifier id = Registries.ENTITY_TYPE.getId(type);
+					yield id == null || !this.individualDisabledTargets.contains(id);
+				} catch (Throwable ignored) {
+					yield true;
+				}
+			}
+			case GLOBAL -> com.example.targeting.MinionTargetFilterManager.getInstance().isAllowed(getOwnerUuid(), type);
+		};
 	}
 
 	public void setCurrentWaypointIndex(int index) {
@@ -569,13 +690,20 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		this.noClip = false;
 		this.dataTracker.set(PHASING_BLOCKS, false);
 
-		// Check if minion ended up inside solid blocks — if so, nudge to exit vector
+		// Check if minion ended up inside solid blocks — if so, guarantee safe relocation out of walls
 		BlockPos footPos = this.getBlockPos();
 		BlockState footState = serverWorld.getBlockState(footPos);
 		BlockState headState = serverWorld.getBlockState(footPos.up());
 		if (footState.isSolidBlock(serverWorld, footPos) || headState.isSolidBlock(serverWorld, footPos.up())) {
 			if (this.structureExitVec != null) {
-				this.requestTeleport(this.structureExitVec.x, this.structureExitVec.y, this.structureExitVec.z);
+				BlockPos exitPos = BlockPos.ofFloored(this.structureExitVec);
+				if (isSafeStandingPosition(serverWorld, exitPos)) {
+					this.requestTeleport(this.structureExitVec.x, this.structureExitVec.y, this.structureExitVec.z);
+				} else {
+					unstuckIfInSolidWall(serverWorld);
+				}
+			} else {
+				unstuckIfInSolidWall(serverWorld);
 			}
 		}
 
@@ -663,21 +791,227 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		}
 
 		for (BlockPos cand : candidates) {
-			for (int dy = 3; dy >= -3; dy--) {
-				BlockPos checkPos = cand.add(0, dy, 0);
-				BlockPos ground = checkPos.down();
-				if (world.getBlockState(ground).isSolidBlock(world, ground)
-						&& !world.getBlockState(checkPos).isSolidBlock(world, checkPos)
-						&& !world.getBlockState(checkPos.up()).isSolidBlock(world, checkPos.up())) {
+			int scanMaxY = Math.max(box.getMaxY() + 4, cand.getY() + 6);
+			int scanMinY = Math.max(world.getBottomY() + 1, minY - 6);
+			for (int y = scanMaxY; y >= scanMinY; y--) {
+				BlockPos checkPos = new BlockPos(cand.getX(), y, cand.getZ());
+				if (isSafeStandingPosition(world, checkPos)) {
+					return Vec3d.ofBottomCenter(checkPos);
+				}
+			}
+		}
+
+		// If distance 2 was obstructed by cliff/terrain, probe outward at distance 4
+		for (BlockPos cand : candidates) {
+			int dx = Integer.compare(cand.getX() - (minX + maxX) / 2, 0) * 2;
+			int dz = Integer.compare(cand.getZ() - (minZ + maxZ) / 2, 0) * 2;
+			BlockPos wider = cand.add(dx, 0, dz);
+			int scanMaxY = Math.max(box.getMaxY() + 4, wider.getY() + 6);
+			int scanMinY = Math.max(world.getBottomY() + 1, minY - 6);
+			for (int y = scanMaxY; y >= scanMinY; y--) {
+				BlockPos checkPos = new BlockPos(wider.getX(), y, wider.getZ());
+				if (isSafeStandingPosition(world, checkPos)) {
 					return Vec3d.ofBottomCenter(checkPos);
 				}
 			}
 		}
 
 		if (anchorPos != null) {
+			BlockPos safeAnchor = findNearestSafeStandingPosition(world, anchorPos, 6);
+			if (safeAnchor != null) {
+				return Vec3d.ofBottomCenter(safeAnchor);
+			}
 			return Vec3d.ofBottomCenter(anchorPos.add(0, 0, 2));
 		}
+		BlockPos safeFallback = findNearestSafeStandingPosition(world, new BlockPos(maxX + 2, groundY, maxZ + 2), 6);
+		if (safeFallback != null) {
+			return Vec3d.ofBottomCenter(safeFallback);
+		}
 		return Vec3d.ofBottomCenter(new BlockPos(maxX + 2, groundY, maxZ + 2));
+	}
+
+	/**
+	 * Determines whether the specified block position offers safe footing and clear headroom for a minion:
+	 * 1. Within world Y boundaries.
+	 * 2. Ground block beneath (pos.down()) is solid and non-hazardous (not lava, fire, cactus, magma, campfire).
+	 * 3. Foot block (pos) has no solid collision or harmful fluid.
+	 * 4. Head block (pos.up()) has no solid collision or harmful fluid.
+	 *
+	 * @param world The world.
+	 * @param pos   The position where the minion's feet would stand.
+	 * @return true if the position is safe to stand on.
+	 */
+	public static boolean isSafeStandingPosition(World world, BlockPos pos) {
+		if (world == null || pos == null) {
+			return false;
+		}
+		int y = pos.getY();
+		if (y <= world.getBottomY() || y >= world.getTopY()) {
+			return false;
+		}
+
+		BlockPos ground = pos.down();
+		BlockState groundState = world.getBlockState(ground);
+		BlockState feetState = world.getBlockState(pos);
+		BlockState headState = world.getBlockState(pos.up());
+
+		if (groundState == null || feetState == null || headState == null) {
+			return false;
+		}
+
+		// 1. Ground beneath must be solid or sturdy, or scaffolding
+		boolean groundSolid = groundState.isSolidBlock(world, ground)
+				|| groundState.isOf(Blocks.SCAFFOLDING)
+				|| groundState.isSideSolidFullSquare(world, ground, Direction.UP);
+		if (!groundSolid) {
+			return false;
+		}
+
+		// Hazardous ground check
+		if (groundState.isOf(Blocks.LAVA)
+				|| groundState.isOf(Blocks.MAGMA_BLOCK)
+				|| groundState.isOf(Blocks.CACTUS)
+				|| groundState.isOf(Blocks.SWEET_BERRY_BUSH)
+				|| groundState.isIn(BlockTags.FIRE)
+				|| groundState.isIn(BlockTags.CAMPFIRES)) {
+			return false;
+		}
+
+		// 2. Foot space: must have no solid collision shape, must not be suffocating solid block
+		if (feetState.isSolidBlock(world, pos) || !feetState.getCollisionShape(world, pos).isEmpty()) {
+			if (!feetState.isOf(Blocks.SCAFFOLDING)) {
+				return false;
+			}
+		}
+
+		// 3. Head space: must have no solid collision shape, must not be suffocating solid block
+		if (headState.isSolidBlock(world, pos.up()) || !headState.getCollisionShape(world, pos.up()).isEmpty()) {
+			if (!headState.isOf(Blocks.SCAFFOLDING)) {
+				return false;
+			}
+		}
+
+		// 4. Fluid checks: no lava or hazardous fluids
+		FluidState feetFluid = world.getFluidState(pos);
+		FluidState headFluid = world.getFluidState(pos.up());
+		if (feetFluid != null && !feetFluid.isEmpty() && feetFluid.isIn(FluidTags.LAVA)) {
+			return false;
+		}
+		if (headFluid != null && !headFluid.isEmpty() && headFluid.isIn(FluidTags.LAVA)) {
+			return false;
+		}
+
+		// Powder snow trap check
+		if (feetState.isOf(Blocks.POWDER_SNOW) || headState.isOf(Blocks.POWDER_SNOW)) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Searches around the given center location for the closest safe standing position.
+	 *
+	 * @param world     The world.
+	 * @param center    The origin position.
+	 * @param maxRadius Maximum search radius.
+	 * @return The closest verified safe standing BlockPos, or null if none found.
+	 */
+	public static BlockPos findNearestSafeStandingPosition(World world, BlockPos center, int maxRadius) {
+		if (world == null || center == null) {
+			return null;
+		}
+		if (isSafeStandingPosition(world, center)) {
+			return center;
+		}
+
+		BlockPos bestPos = null;
+		double bestDistSq = Double.MAX_VALUE;
+
+		for (int r = 1; r <= maxRadius; r++) {
+			for (int dx = -r; dx <= r; dx++) {
+				for (int dz = -r; dz <= r; dz++) {
+					if (Math.abs(dx) != r && Math.abs(dz) != r) {
+						continue; // Check perimeter shell for closest-first priority
+					}
+					for (int dy = 2; dy >= -4; dy--) {
+						BlockPos candidate = center.add(dx, dy, dz);
+						if (isSafeStandingPosition(world, candidate)) {
+							double distSq = candidate.getSquaredDistance(center);
+							if (distSq < bestDistSq) {
+								bestDistSq = distSq;
+								bestPos = candidate;
+							}
+						}
+					}
+				}
+			}
+			if (bestPos != null) {
+				return bestPos;
+			}
+		}
+
+		// Vertical surface search upward if buried deep
+		for (int dy = 3; dy <= 24; dy++) {
+			BlockPos candidate = center.up(dy);
+			if (isSafeStandingPosition(world, candidate)) {
+				return candidate;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Emergency anti-suffocation and anti-entombment safeguard.
+	 * If the minion is embedded inside a solid block or wall and not phasing,
+	 * smoothly teleports them to the nearest safe open ground with particle effects.
+	 *
+	 * @param serverWorld The server world.
+	 * @return true if an unstuck teleport occurred.
+	 */
+	public boolean unstuckIfInSolidWall(ServerWorld serverWorld) {
+		if (!this.isAlive() || this.isPhasingBlocks()) {
+			return false;
+		}
+		BlockPos feet = this.getBlockPos();
+		BlockState feetState = serverWorld.getBlockState(feet);
+		BlockState headState = serverWorld.getBlockState(feet.up());
+
+		boolean footSolid = feetState.isSolidBlock(serverWorld, feet) || !feetState.getCollisionShape(serverWorld, feet).isEmpty();
+		boolean headSolid = headState.isSolidBlock(serverWorld, feet.up()) || !headState.getCollisionShape(serverWorld, feet.up()).isEmpty();
+
+		// Minions in scaffolding are climbing normally
+		if (feetState.isOf(Blocks.SCAFFOLDING) || headState.isOf(Blocks.SCAFFOLDING)) {
+			return false;
+		}
+
+		if (!footSolid && !headSolid) {
+			return false;
+		}
+
+		// Minion is embedded inside solid block or wall!
+		BlockPos safePos = findNearestSafeStandingPosition(serverWorld, feet, 8);
+		if (safePos != null) {
+			double destX = safePos.getX() + 0.5D;
+			double destY = safePos.getY();
+			double destZ = safePos.getZ() + 0.5D;
+
+			serverWorld.spawnParticles(ParticleTypes.PORTAL, this.getX(), this.getY() + 0.5D, this.getZ(), 10, 0.2D, 0.2D, 0.2D, 0.05D);
+			this.requestTeleport(destX, destY, destZ);
+			this.setVelocity(0.0D, 0.0D, 0.0D);
+			this.velocityModified = true;
+			this.fallDistance = 0.0F;
+			if (this.isSitting()) {
+				this.setGuardAnchorPos(safePos);
+			}
+
+			serverWorld.spawnParticles(ParticleTypes.PORTAL, destX, destY + 0.5D, destZ, 15, 0.25D, 0.3D, 0.25D, 0.05D);
+			serverWorld.spawnParticles(ParticleTypes.HAPPY_VILLAGER, destX, destY + 0.8D, destZ, 4, 0.15D, 0.15D, 0.15D, 0.02D);
+			serverWorld.playSound(null, destX, destY, destZ, SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.NEUTRAL, 0.5F, 1.2F);
+			return true;
+		}
+		return false;
 	}
 
 	/**
@@ -1046,6 +1380,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		this.targetSelector.add(1, new TrackOwnerAttackerGoal(this) {
 			@Override
 			public boolean canStart() {
+				if (MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
+					return false;
+				}
 				if (MinionEntity.this.hasLeader() || MinionEntity.this.isActivelyBuilding()
 						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this)) {
 					return false;
@@ -1060,6 +1397,10 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		this.targetSelector.add(2, new AttackWithOwnerGoal(this) {
 			@Override
 			public boolean canStart() {
+				if (MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE
+						|| MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.DEFENSIVE) {
+					return false;
+				}
 				if (MinionEntity.this.hasLeader() || MinionEntity.this.isActivelyBuilding()
 						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this)) {
 					return false;
@@ -1067,12 +1408,19 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 				if (MinionEntity.this.matchesRole(MinionRole.SENTINEL) && MinionEntity.this.hasNearbyAlliesNeedingHealing()) {
 					return false;
 				}
-				return super.canStart();
+				if (!super.canStart()) {
+					return false;
+				}
+				LivingEntity ownerAttacking = MinionEntity.this.getOwner() != null ? MinionEntity.this.getOwner().getAttacking() : null;
+				return ownerAttacking == null || MinionEntity.this.isTargetAllowed(ownerAttacking.getType());
 			}
 		});
 		this.targetSelector.add(3, new RevengeGoal(this) {
 			@Override
 			public boolean canStart() {
+				if (MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
+					return false;
+				}
 				if (MinionEntity.this.isActivelyBuilding()
 						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this)) {
 					return false;
@@ -1112,6 +1460,12 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			if (this.getWorld() instanceof ServerWorld serverWorld) {
 				// Unified door auto-opening for all minions in motion or navigating
 				this.autoOpenNearbyDoors(serverWorld);
+
+				// Anti-suffocation & anti-entombment safeguard: if minion is embedded in solid blocks/walls,
+				// immediately nudge or teleport them to the nearest safe open ground
+				if (this.isAlive() && !this.isPhasingBlocks()) {
+					this.unstuckIfInSolidWall(serverWorld);
+				}
 			}
 
 			// Post-construction structure egress phasing
@@ -2527,6 +2881,12 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			nbt.putUuid("LeaderMinionUuid", leader);
 		}
 		nbt.putInt("AdaptiveRoleId", this.getAdaptiveRole().getId());
+		nbt.putInt("CombatPolicy", this.getCombatPolicy().getId());
+		net.minecraft.nbt.NbtList customTargets = new net.minecraft.nbt.NbtList();
+		for (Identifier id : this.individualDisabledTargets) {
+			customTargets.add(net.minecraft.nbt.NbtString.of(id.toString()));
+		}
+		nbt.put("IndividualDisabledTargets", customTargets);
 		if (this.guardAnchorPos != null) {
 			nbt.putLong("GuardAnchorPos", this.guardAnchorPos.asLong());
 		}
@@ -2552,6 +2912,19 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		}
 		if (nbt.contains("AdaptiveRoleId", NbtElement.INT_TYPE)) {
 			this.setAdaptiveRole(MinionRole.fromId(nbt.getInt("AdaptiveRoleId")));
+		}
+		if (nbt.contains("CombatPolicy", NbtElement.INT_TYPE)) {
+			this.setCombatPolicy(MinionCombatPolicy.fromId(nbt.getInt("CombatPolicy")));
+		}
+		if (nbt.contains("IndividualDisabledTargets", NbtElement.LIST_TYPE)) {
+			net.minecraft.nbt.NbtList targetsList = nbt.getList("IndividualDisabledTargets", NbtElement.STRING_TYPE);
+			this.individualDisabledTargets.clear();
+			for (int i = 0; i < targetsList.size(); i++) {
+				Identifier id = Identifier.tryParse(targetsList.getString(i));
+				if (id != null) {
+					this.individualDisabledTargets.add(id);
+				}
+			}
 		}
 		if (nbt.contains("MinionRoleId", NbtElement.INT_TYPE)) {
 			this.setRole(MinionRole.fromId(nbt.getInt("MinionRoleId")));
@@ -2878,21 +3251,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 * Validates whether the candidate block position is a safe landing site for minion teleportation.
 	 */
 	private boolean isSafeTeleportTarget(ServerWorld world, BlockPos pos) {
-		BlockPos below = pos.down();
-		BlockState belowState = world.getBlockState(below);
-
-		if (!belowState.isSolidBlock(world, below) && !belowState.isOf(Blocks.SCAFFOLDING)) {
-			return false;
-		}
-
-		BlockState feetState = world.getBlockState(pos);
-		BlockState headState = world.getBlockState(pos.up());
-
-		boolean feetClear = feetState.isAir() || feetState.isOf(Blocks.SCAFFOLDING) || feetState.canPathfindThrough(NavigationType.LAND);
-		boolean headClear = headState.isAir() || headState.isOf(Blocks.SCAFFOLDING) || headState.canPathfindThrough(NavigationType.LAND);
-		boolean hazard = feetState.isOf(Blocks.LAVA) || feetState.isOf(Blocks.FIRE) || feetState.isOf(Blocks.SWEET_BERRY_BUSH);
-
-		return feetClear && headClear && !hazard;
+		return isSafeStandingPosition(world, pos);
 	}
 
 	@Override

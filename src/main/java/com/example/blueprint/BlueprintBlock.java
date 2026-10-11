@@ -41,9 +41,12 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 		}
 	};
 
+	public BlueprintBlock(BlockPos offset) {
+		this(offset, null);
+	}
+
 	public BlueprintBlock {
 		Objects.requireNonNull(offset, "offset cannot be null");
-		Objects.requireNonNull(state, "state cannot be null");
 	}
 
 	/**
@@ -62,7 +65,7 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 	 * @return The Item associated with this block state, or Items.AIR if not obtainable.
 	 */
 	public Item getRequiredItem() {
-		return this.state.getBlock().asItem();
+		return this.state != null ? this.state.getBlock().asItem() : net.minecraft.item.Items.AIR;
 	}
 
 	/**

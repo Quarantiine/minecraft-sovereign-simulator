@@ -418,6 +418,14 @@ Opened via **Shift + Right-Click** with the scepter or pressing the **`V`** key.
 - **Shift-to-Close Architecture**: Tap Shift to dismiss the GUI immediately once opened. Latching open-state guard prevents accidental closing when opened via sneak-right-click.
 - **`[ ⚔ Targets ]` Minion Target Filter Button**: Always-visible button in the first free slot beneath the Command Mode grid. Opens the **Minion Target Filter modal** (`MinionTargetFilterModalScreen`):
   - **Mob Grid**: Scrollable 3-column grid of every hostile (monster spawn group) mob type registered in the game, each showing its **spawn egg icon** (mob-head fallback for eggless mobs such as the Ender Dragon, Wither, and Giant), **name**, and a **checkbox**. Mouse-wheel and draggable scrollbar supported; hover shows the registry id and current state.
+  - **Real-Time Mob Search Bar**: Interactive text field (`Search mobs...`) positioned along the top header. Dynamically filters candidate cards in real time matching localized mob name or registry path, with automatic scroll clamping.
+  - **Named Presets**: One-click cycling and application via the **`[ 📋 Preset: <Name> ]`** button (Shift-Click to cycle backwards):
+    - `All Hostiles`: Enables all hostiles.
+    - `Creeper Safe`: Unchecks Creepers so minions never provoke catastrophic point-blank explosions near your fortress.
+    - `Undead Only`: Targets Zombies, Skeletons, Phantoms, Drowned, Husks, Strays, Withers, and Zombified Piglins.
+    - `Raiders`: Targets Pillagers, Vindicators, Evokers, Ravagers, and Witches.
+    - `None (Passive)`: Disables all on-sight aggression.
+  - **Player Custom Presets & JSON Persistence**: Enter any title in the preset title input and click **`[ 💾 Save Preset ]`** to save your customized configuration. Custom presets persist to `config/sovereign-sim/target_filter_presets.json` and appear immediately in the preset cycling button. Built-in presets are protected, while custom presets can be removed via **`[ 🗑 Delete ]`**.
   - **Semantics**: Checked = `AUTO`, `SENTINEL`, and `WARRIOR` minions may attack the mob **on sight**. Unchecked = the mob is ignored by proactive target acquisition (`MinionActiveTargetGoal`). Retaliation (`RevengeGoal`), owner/leader assist goals, and explicit scepter pings are never filtered. `AUTO` minions also disregard unchecked mobs when evaluating whether to morph into `WARRIOR`.
   - **Actions**: `[ ✔ Select All ]`, `[ ✖ Clear All ]`, `[ ✔ Submit ]` (`Enter`) and `[ ✖ Cancel ]` (`Esc`). Cancel discards all pending checkbox changes.
   - **Persistence & Sync**: Submit sends `UpdateTargetFilterPayload` (C2S) containing the **unchecked** mob ids. The server sanitizes the ids (registered hostile types only), stores them per owner UUID in `MinionTargetFilterManager` / `MinionTargetFilterPersistentState` (`data/minion_target_filter.dat`), and echoes the accepted filter back through `SyncTargetFilterPayload` (S2C). The filter is also synced on world join and cached client-side in `ClientTargetFilterTracker`.
@@ -427,7 +435,14 @@ Opened via **Shift + Right-Click** with the scepter or pressing the **`V`** key.
 
 Opened via **Sneak + Right-Click** directly on an owned minion. Features an expanded 248px modal:
 
-- **Header Plate**: Displays custom minion name/title, squad division color banner, and interactive Role / Squad cycle buttons.
+- **Header Plate & Tactical Badge Bar**:
+  - Displays custom minion name/title and squad division color banner.
+  - Interactive Role and Squad cycle buttons.
+  - **Combat Policy Cycling Badge (`MinionCombatPolicy`)**: Positioned in the upper header badge row (`badgeY = this.y - 22`), allowing commanders to customize rules of engagement per minion:
+    - `GLOBAL` (`§b🌐 Global` / Default): Adheres strictly to the master global target filter configured in the Command Hub.
+    - `PASSIVE` (`§a🕊 Passive`): Complete pacifist mode. Never targets hostiles on sight, never retaliates when hurt, and suppresses combat AI goals.
+    - `DEFENSIVE` (`§6🛡 Defensive`): Retaliates only when the minion or its leader/commander is directly attacked, ignoring unprovoked hostiles.
+    - `CUSTOM` (`§d🎯 Custom`): Overrides the global filter with a dedicated per-minion target list! Activates a **`[ 🎯 Targets ]`** button in the bottom action panel to open the target filter modal for this individual minion.
 - **Labels**: Clean, prominent bolded `"Inventory"` ($x = 116, y = 5$) header above the 9-slot backpack (redundant Equipment text removed for streamlined visual clarity).
 - **6 Dedicated Equipment Slots**: Head, Chest, Legs, Feet, Mainhand, and Offhand with ghost item sprites.
 - **9-Slot Backpack Grid**: Internal storage matrix for minion resources and scavenged blocks.
@@ -436,7 +451,7 @@ Opened via **Sneak + Right-Click** directly on an owned minion. Features an expa
   - **Prominent Hearts Health Plate**: Positioned directly beneath the 3D entity preview ($y = \text{previewBottom} - 12$ to $\text{previewBottom} - 1$) with a squad-colored border and translucent dark backdrop (`0xDD101520`), rendering the live hearts display (`getHealthDisplay`) centered with auto-width scaling (`healthScale`).
 - **Dual-Row Action Buttons**:
   - **Row 1**: `✦ Teleport to Me` (168px full-width button).
-  - **Row 2**: `§c✖ Destroy` on the left (82px) and `Cancel` on the right (82px) for safe exit.
+  - **Row 2**: `§c✖ Destroy` on the left (82px) and `Cancel` on the right (82px) for safe exit (or `[ 🎯 Targets ]` when in `CUSTOM` combat policy).
 - **Smart Shift-to-Close (`SmartCloseHandler`)**: Clicking inventory slots while holding Shift transfers items (`quickMove`) without closing the modal; clean Shift taps close immediately.
 
 ### 5.3 Clean & Crisp In-Game GUI Overlays (Universal Background Blur Removal)
@@ -499,7 +514,12 @@ Builder minions construct every block type with 100% state, property, and orient
 Server-authoritative engine orchestrating automated multiblock building and demolition:
 
 - **Task Queue & Topological Ordering**: Breaks blueprints into discrete block placement tasks sorted bottom-up.
-- **Task Leasing**: Minions claim leases on available tasks. If a builder runs out of materials or stalls, the lease releases for other workers.
+- **Task Leasing, Collaborative Building & Peer Handoff**:
+  - Minions claim leases on available tasks. If a builder runs out of materials or stalls, the lease releases for other workers.
+  - **Dynamic Absentee Task Stealing**: When multiple builders work together, tasks claimed by absent or delayed workers (>24 blocks away, missing from the server, or stalled past grace thresholds `STEAL_GRACE_TICKS = 60L` / `STALLED_LEASE_TICKS = 200L`) are automatically stolen and reassigned to active nearby builders.
+  - **Instant Peer Handoff & Memory Reset**: Each minion verifies lease ownership. If another minion completes or claims its task, the original worker invokes `forgetLostTask`—instantly forgetting the block without stalling—and claims the next available construction task.
+  - **Pre-Completion World State Validation**: `ConstructionSession.claimNextTask()` checks if the target block already matches the blueprint state in the world, marking it completed immediately to prevent duplicate placement.
+  - **Lease-Safe Releases**: `ConstructionTask.releaseIfOwnedBy(UUID)` ensures former claimants cannot inadvertently unclaim leases currently held by peer workers.
 - **Dual Economics**:
   - **Creative Mode (Zero-Drop Guarantee)**: Zero-cost instant block placement. Automatically pre-clears any existing blocks (grass, flowers, snow, dirt, double plants, beds, doors) with zero dropped items, eliminating all clutter. In Creative mode, builders never craft or deploy chests—they discard unneeded blocks from their 9-slot inventory immediately, keeping backpacks clean and free for any materials. Any loose item entities spawned during building or upon session completion are automatically purged within the bounding box.
   - **Survival Mode Multi-Stage Logistics (Direct Chest Storage)**:
@@ -1107,6 +1127,23 @@ The commander's active game mode dynamically dictates minion logistics, resource
 - **Stationed Guard Posture**: Upon arriving at their perimeter stations, minions enter a defensive stationed stance (`guardAnchorPos` assigned, `isSitting() = true`, `isSelected() = false`), standing guard at attention with golden beacon beams (`END_ROD` + `GLOW`) and chime audio (`BLOCK_AMETHYST_BLOCK_CHIME`).
 - **Autonomous Mobilization**: When a new blueprint is anchored within 112 blocks horizontally and vertically, stationed builders automatically wake up (`setSitting(false)`, `setGuardAnchorPos(null)`) and mobilize to build immediately without requiring manual re-selection, providing comprehensive coverage for mega structures.
 
+### Anti-Suffocation, Anti-Entombment & Safe Evacuation Subsystem (`MinionEntity`, `ConstructionManager`)
+
+- **Strict Safe Standing Verification (`MinionEntity.isSafeStandingPosition`)**:
+  - Evaluates both foot and head blocks, requiring an empty collision shape and non-suffocating space (zero solid blocks, zero lava, zero powder snow).
+  - Validates the floor beneath the feet: requires a sturdy, solid, or scaffolding block while strictly rejecting hazardous blocks (fire, lava, magma blocks, campfires, cacti, sweet berry bushes).
+- **Dynamic Full-Column Surface Scanning (`findSafePerimeterGround`)**:
+  - Replaces rigid short-range downward scans with a vertical ray from the highest world surface (`world.getTopY`) down to foundation depth, probing outward if the perimeter is obstructed.
+- **Continuous In-Wall Auto-Unstuck Safeguard (`MinionEntity.unstuckIfInSolidWall`)**:
+  - Embedded directly into `MinionEntity.tick()`, `finishBuildingEgress()`, and `MinionBuildGoal.tick()`.
+  - If a minion's foot or head collision box ever overlaps solid blocks while not phasing (due to block placement, entity pushing, or falling gravel), the server immediately executes an emergency extraction:
+    - Finds the nearest safe standing space using expanding radial and vertical search (`findNearestSafeStandingPosition`).
+    - Teleports the minion cleanly to open air with purple ender portal particles and chime audio cues.
+- **Surface Quarry vs. Subterranean Excavation Evacuation**:
+  - In `ConstructionManager.completeSession()`, dismantle sessions distinguish between open surface quarries and underground rooms:
+    - **Surface Quarries (`isSurfaceQuarry`)**: Evacuates minions to the perimeter rim surrounding the pit under open sky (`world.getTopY`).
+    - **Subterranean Excavations (`!isSurfaceQuarry`)**: Safely stations minions onto the cleared interior floor (`box.getMinY()`) or entrance anchor, completely preventing units from being teleported into unmined perimeter rock walls.
+
 ---
 
 ## 16. Free Survival Build Flight & Water Flight Cancellation Safeguard
@@ -1120,15 +1157,19 @@ The commander's active game mode dynamically dictates minion logistics, resource
 - **Elimination of Velocity Clamping**: Rigid hover altitude locking and vertical velocity zeroing have been eliminated, allowing the commander to survey, position, and inspect blueprints at any angle or altitude.
 - **Graceful Descent & Zero Fall Damage**: Switching scepter modes, stowing the scepter, or touching down gently restores normal ground physics with complete fall damage immunity enforced server-side (`ACTIVE_SERVER_BUILD_FLIERS`).
 
-### Water Flight Cancellation Safeguard (`CommandScepterItem`, `BuildFlightManager`, `ConstructionManager`)
+### Shallow Water 2-Block Flight Tolerance vs. Deep Water Cancellation Safeguard (`CommandScepterItem`, `BuildFlightManager`, `ConstructionManager`)
 
-- **Vertical Column Water Scanning**: `CommandScepterItem.isPlayerOverWater` continuously scans the vertical column beneath the player down to terrain or liquid level.
-- **Immediate Cancellation on Water Entry**: If a player enters water or flies over water while in `BUILD` mode:
-  1. **Construction Cancellation**: Automatically cancels all active construction sessions belonging to the player via `ConstructionManager.cancelActiveSessionsForOwner`.
-  2. **Mode Reversion**: Switches the scepter's operating mode to **`FOLLOW`** (`CommandMode.FOLLOW`).
-  3. **Flight Revocation**: Revokes flight abilities (`allowFlying = false`, `flying = false`) and clears `ACTIVE_SERVER_BUILD_FLIERS`.
-  4. **Audiovisual Feedback**: Plays an extinguishing sizzle sound effect (`SoundEvents.BLOCK_FIRE_EXTINGUISH`) and spawns water splash particles (`ParticleTypes.SPLASH`).
-  5. **Commander Alert**: Displays an immediate warning message on the actionbar: `§c⚠ Construction cancelled: Flying over water is prohibited in BUILD mode!§r`.
+- **Vertical Column Depth Scanning**: `CommandScepterItem.isPlayerOverWater` measures the vertical column height of water beneath the player down to solid ground.
+- **Shallow Water Flight Allowance ($\le 2$ Blocks High)**:
+  - If the water body beneath the player is **two blocks high or less** ($\le 2$ blocks deep of water above solid ground, such as creeks, ponds, marshes, shallow moats, or puddles), the player is fully permitted to fly over it freely without interruption!
+  - Builders can smoothly survey and construct structures near shorelines, bridges over creeks, or buildings adjacent to shallow water bodies.
+- **Deep Water Cancellation ($> 2$ Blocks Deep)**:
+  - If a player enters water or flies over deep water (> 2 blocks deep, such as oceans or deep rivers) while in `BUILD` mode:
+    1. **Construction Cancellation**: Automatically cancels all active construction sessions belonging to the player via `ConstructionManager.cancelActiveSessionsForOwner`.
+    2. **Mode Reversion**: Switches the scepter's operating mode to **`FOLLOW`** (`CommandMode.FOLLOW`).
+    3. **Flight Revocation**: Revokes flight abilities (`allowFlying = false`, `flying = false`) and clears `ACTIVE_SERVER_BUILD_FLIERS`.
+    4. **Audiovisual Feedback**: Plays an extinguishing sizzle sound effect (`SoundEvents.BLOCK_FIRE_EXTINGUISH`) and spawns water splash particles (`ParticleTypes.SPLASH`).
+    5. **Commander Alert**: Displays an immediate warning message on the actionbar: `§c⚠ Construction cancelled: Flying over water is prohibited in BUILD mode!§r`.
 
 ---
 

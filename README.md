@@ -4,7 +4,7 @@
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-537%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-600%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -78,9 +78,9 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 3. **🔨 Builder (`MinionRole.BUILDER`)**:
    - **Master Architect & Demolition Specialist**: Autonomously constructs captured blueprints, deconstructs designated volumes, and quarries stone top-to-bottom.
-   - **Builder Block Phasing (`noClip`)**: Seamlessly passes through blocks while building or evacuating structures, preventing entombment and wall-trapping.
+   - **Builder Block Phasing & Anti-Entombment**: Seamlessly passes through blocks (`noClip = true`) while actively building or evacuating completed structures. Continuous server-side anti-suffocation safeguards guarantee minions are never trapped inside solid blocks or stranded underground.
    - **Logistics Autonomy**: Agro-forestry timber harvesting (using bone meal for instant sapling maturation), tool self-crafting, supply depot chest drops, and peer-to-peer wireless block transfers.
-   - **Perimeter Stationing**: Automatically circles finished structures across all 4 flanks, deploying defensive waypoints with fanfare beams and chimes.
+   - **Intelligent Post-Work Evacuation & Perimeter Stationing**: Automatically evacuates to the surface rim on surface quarries, cleared interior room floors on underground mines, and exterior safe ground around buildings, deploying defensive hold-position waypoints with beacon beams and fanfare chimes.
 
 4. **⚙ Auto (`MinionRole.AUTO`)**:
    - **The Default Dynamic Archetype**: Newly summoned or recruited minions start in `AUTO` mode, evaluating their tactical environment every second:
@@ -92,6 +92,22 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 ### Core Strategic Systems
 
+- **Free Survival Arcane Build Flight & Shallow Water Tolerance**:
+  - Enjoy unconstrained 3D creative-style flight in Survival mode while holding the Scepter in **`BUILD`** mode (Space to ascend, Shift to descend, full WASD navigation).
+  - Shallow water $\le 2$ blocks high/deep from solid ground (creeks, ponds, moats, puddles) is fully permitted for flight without interruption. Only deep water bodies ($> 2$ blocks deep) cancel flight and active construction.
+- **Anti-Suffocation, Anti-Entombment & Safe Evacuation**:
+  - Minions safely phase through blocks while building (`noClip = true`), with automatic server-side anti-suffocation safeguards (`unstuckIfInSolidWall`) ensuring units are never stuck in walls or underground rock.
+  - Mining sessions evacuate minions intelligently: surface quarries evacuate workers to the open-sky rim overlooking the pit, while underground room excavations station workers onto the cleared interior floor (`box.getMinY()`), never clipping into solid perimeter rock.
+- **Collaborative Multi-Minion Building & Dynamic Task Stealing**:
+  - Multiple builders seamlessly collaborate on the same blueprint. When a minion is distant, offline, or stalled past lease grace thresholds, peers automatically take over its claimed block task.
+  - The moment another minion completes or steals a task, the original claimant immediately forgets the task and acquires the next available block, eliminating idle loops and build deadlocks.
+  - Scepter blueprint placement persistence ensures repeated stamping of blueprints never auto-cycles the catalog.
+- **Global Target Filtering, Instant Search & Named Presets**:
+  - Press `[ 🎯 Targets ]` in the Command Hub GUI (`V`) to customize rules of engagement for all hostile mobs.
+  - Features an instant search bar to find mobs by name or ID path, plus title-only saved presets (`All Hostiles`, `Creeper Safe`, `Undead Only`, `Raiders`, `None (Passive)`, and player custom presets saved to JSON).
+- **Individual Minion Combat Policies**:
+  - Customize engagement for individual minions via `MinionScreen`'s top badge bar (`GLOBAL`, `PASSIVE`, `DEFENSIVE`, `CUSTOM`).
+  - Set logistics or builder minions to `PASSIVE` so they never attack or provoke enemies, or assign dedicated assault units custom target lists.
 - **The Sovereign Command Scepter**:
   - Handheld tactical conduit supporting 64-block raycast targeting.
   - Left-Click to select/deselect individual units or hold for 90° cone mass sweeps.
@@ -114,6 +130,7 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - **Sovereign Command Scepter**: Crafted with 2 Gold Ingots, 1 Amethyst Shard, and 2 Blaze Rods (or Sticks) in a crafting table.
   - **Minion Spawn Egg**: Crafted shapelessly with 1 Egg, 1 Amethyst Shard, 1 Emerald, and 1 Gold Ingot.
   - **Tactical Ordnance**: Craft TNT Sticks (TNT + Stick) and cryogenic Frost Grenades (Ice / Snowball + Stick).
+  - **Vanilla Recipe Book Integration**: Native recipe advancements automatically unlock these blueprints in your crafting table recipe book the moment you pick up their constituent ingredients (Amethyst Shards, Gold Ingots, Emeralds, Gunpowder, or Snowballs).
   - **Enthrallment in Survival**: Alternatively, switch the scepter to `RECRUIT` mode and right-click living vanilla mobs (zombies, skeletons, villagers, etc.) to transfigure them into minion thralls!
 
 ---
@@ -126,6 +143,7 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 | **`R` Key**            | Scepter in Hand    | **Squad Retreat**: Recalls selected active squad minions within 64m.                                |
 | **`Shift + R`**        | Scepter in Hand    | **Citadel Call**: Army-wide emergency alarm (128m) recalling all units and unbinding patrols.       |
 | **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                 |
+| **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 2$ blocks high permitted.       |
 | **`Ctrl` + Scroll**    | `DESIGN` / `MINE`  | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).          |
 | **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault.      |
 | **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.    |

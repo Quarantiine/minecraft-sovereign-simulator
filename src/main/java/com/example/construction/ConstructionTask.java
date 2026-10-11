@@ -106,6 +106,46 @@ public class ConstructionTask {
 	}
 
 	/**
+	 * Releases this task only if it is still claimed by the given minion. Prevents a minion whose
+	 * task was reassigned (stolen by an on-site peer) from un-claiming the new owner's lease.
+	 *
+	 * @param minionUuid The minion attempting to release.
+	 * @return True if the task was released.
+	 */
+	public synchronized boolean releaseIfOwnedBy(UUID minionUuid) {
+		if (this.status == Status.CLAIMED && Objects.equals(this.claimedBy, minionUuid)) {
+			release();
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Reassigns a claimed task from an absent claimant to an on-site peer minion.
+	 * The original claimant detects the lost lease on its next tick and forgets the task.
+	 *
+	 * @param newClaimant UUID of the minion taking over.
+	 * @param currentTick Current world tick (resets the lease timer).
+	 * @return True if the lease was transferred.
+	 */
+	public synchronized boolean reassign(UUID newClaimant, long currentTick) {
+		if (this.status != Status.CLAIMED || newClaimant == null || Objects.equals(this.claimedBy, newClaimant)) {
+			return false;
+		}
+		this.claimedBy = newClaimant;
+		this.claimTick = currentTick;
+		return true;
+	}
+
+	/**
+	 * @param minionUuid Minion to check.
+	 * @return True if the task is currently claimed by the given minion.
+	 */
+	public boolean isClaimedBy(UUID minionUuid) {
+		return this.status == Status.CLAIMED && Objects.equals(this.claimedBy, minionUuid);
+	}
+
+	/**
 	 * Marks this task as permanently completed.
 	 */
 	public synchronized void complete() {
@@ -118,7 +158,7 @@ public class ConstructionTask {
 	public String toString() {
 		return "ConstructionTask{" +
 			"id=" + id +
-			", block=" + blueprintBlock.state().getBlock().getName().getString() +
+			", block=" + (blueprintBlock.state() != null && blueprintBlock.state().getBlock() != null ? blueprintBlock.state().getBlock().getName().getString() : "block") +
 			", pos=" + worldPos.toShortString() +
 			", status=" + status +
 			(claimedBy != null ? ", claimedBy=" + claimedBy : "") +

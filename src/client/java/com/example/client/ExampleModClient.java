@@ -232,21 +232,10 @@ public class ExampleModClient implements ClientModInitializer {
 					if (client.world != null) {
 						client.world.playSound(player, hit.getBlockPos(), SoundEvents.BLOCK_STONE_PLACE, SoundCategory.BLOCKS, 1.0F, 1.0F);
 					}
-					return TypedActionResult.success(stack);
-				} else if (mode == CommandMode.BUILD) {
-					// Aiming at sky in BUILD mode: quick-tap cycles blueprint
-					CommandScepterItem.cycleBlueprint(stack, player, world);
-					player.getItemCooldownManager().set(stack.getItem(), 4);
-					ModClientNetworking.sendUpdateScepter(
-						mode,
-						CommandScepterItem.getBlueprintId(stack),
-						CommandScepterItem.getTargetSquad(stack),
-						CommandScepterItem.getRotationIndex(stack),
-						Optional.empty(),
-						false
-					);
-					player.swingHand(hand);
-					return TypedActionResult.success(stack);
+				}
+				// In BUILD mode when aiming at sky/air, retain active blueprint without accidental cycling
+				if (mode == CommandMode.BUILD) {
+					return TypedActionResult.pass(stack);
 				}
 			}
 

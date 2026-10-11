@@ -3,12 +3,22 @@
   "category": "equipment",
   "key": {
     "I": [
-      "minecraft:packed_ice",
-      "minecraft:blue_ice",
-      "minecraft:ice",
-      "minecraft:snowball"
+      {
+        "item": "minecraft:packed_ice"
+      },
+      {
+        "item": "minecraft:blue_ice"
+      },
+      {
+        "item": "minecraft:ice"
+      },
+      {
+        "item": "minecraft:snowball"
+      }
     ],
-    "#": "minecraft:stick"
+    "#": {
+      "item": "minecraft:stick"
+    }
   },
   "pattern": [
     "I",

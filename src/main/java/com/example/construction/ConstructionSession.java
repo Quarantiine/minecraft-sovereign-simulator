@@ -386,6 +386,22 @@ public class ConstructionSession {
 					}
 				}
 
+				// BUILD mode: if the block is already in place (placed by a peer minion, the player, or a
+				// stolen task finished elsewhere), mark it done so nobody walks over to re-place it.
+				if (this.mode == SessionMode.BUILD && world != null
+						&& world.getBlockState(task.getWorldPos()).equals(task.getBlueprintBlock().state())) {
+					task.complete();
+					this.completedCount++;
+					if (this.completedCount >= this.tasks.size()) {
+						this.status = SessionStatus.COMPLETED;
+						if (world instanceof ServerWorld serverWorld) {
+							ConstructionManager.getInstance().completeSession(this, serverWorld);
+						}
+						return null;
+					}
+					continue;
+				}
+
 				if (isTaskReady(task, world)) {
 					if (task.claim(minionUuid, currentTick)) {
 						this.lastActivityTick = currentTick;
@@ -396,7 +412,66 @@ public class ConstructionSession {
 			}
 		}
 
+		// No free task: take over a ready task whose claimant is absent, stalled, or far away.
+		// The original claimant forgets the task on its next tick as if it had completed it.
+		if (world instanceof ServerWorld serverWorld) {
+			net.minecraft.entity.Entity requester = serverWorld.getEntity(minionUuid);
+			if (requester != null) {
+				for (ConstructionTask task : this.tasks) {
+					if (task.isClaimed() && !task.isClaimedBy(minionUuid)
+							&& isClaimantAbsent(serverWorld, task, requester, currentTick)
+							&& isTaskReady(task, world)
+							&& task.reassign(minionUuid, currentTick)) {
+						this.lastActivityTick = currentTick;
+						this.participatingMinions.add(minionUuid);
+						return task;
+					}
+				}
+			}
+		}
+
 		return null;
+	}
+
+	/** Minimum lease age before a task may be taken over (prevents claim thrashing). */
+	public static final long STEAL_GRACE_TICKS = 60L;
+	/** Lease age after which a closer peer may take over even if the claimant is still working. */
+	public static final long STALLED_LEASE_TICKS = 200L;
+	/** Claimants farther than this from their task are considered away from the job site. */
+	public static final double ABSENT_DISTANCE = 24.0D;
+
+	/**
+	 * Decides whether a task's current claimant is effectively absent so an on-site peer may finish it.
+	 * A claimant is absent when it is unloaded/dead, no longer building (sitting, fighting, recalled),
+	 * stranded far from the task, or has held the lease too long while the requester is closer.
+	 */
+	public static boolean isClaimantAbsent(ServerWorld world, ConstructionTask task, net.minecraft.entity.Entity requester, long currentTick) {
+		long age = currentTick - task.getClaimTick();
+		if (age < STEAL_GRACE_TICKS) {
+			return false;
+		}
+		UUID claimantId = task.getClaimedBy();
+		if (claimantId == null) {
+			return true;
+		}
+		net.minecraft.entity.Entity claimantEntity = world.getEntity(claimantId);
+		if (!(claimantEntity instanceof MinionEntity claimant) || !claimant.isAlive()) {
+			return true;
+		}
+		if (claimant.isSitting() || !claimant.isActivelyBuilding()) {
+			return true;
+		}
+		// 1. If stalled for over STALLED_LEASE_TICKS (10 seconds), an active peer may take over immediately
+		if (age > STALLED_LEASE_TICKS) {
+			return true;
+		}
+		net.minecraft.util.math.Vec3d center = task.getWorldPos().toCenterPos();
+		double claimantDistSq = claimant.squaredDistanceTo(center);
+		double requesterDistSq = requester.squaredDistanceTo(center);
+		if (requesterDistSq >= claimantDistSq) {
+			return false;
+		}
+		return claimantDistSq > ABSENT_DISTANCE * ABSENT_DISTANCE;
 	}
 
 	/**
@@ -422,6 +497,9 @@ public class ConstructionSession {
 	 * @return True if the block can be physically placed now.
 	 */
 	public boolean isBuildTaskReady(ConstructionTask task, World world) {
+		if (world == null) {
+			return true;
+		}
 		BlueprintBlock bpBlock = task.getBlueprintBlock();
 		BlockPos targetPos = task.getWorldPos();
 
@@ -622,6 +700,18 @@ public class ConstructionSession {
 	public synchronized void releaseTask(ConstructionTask task) {
 		if (task != null && this.tasks.contains(task)) {
 			task.release();
+		}
+	}
+
+	/**
+	 * Releases a task only if the given minion still holds its lease (a peer may have taken it over).
+	 *
+	 * @param task       The task to release.
+	 * @param minionUuid The minion releasing it.
+	 */
+	public synchronized void releaseTask(ConstructionTask task, UUID minionUuid) {
+		if (task != null && this.tasks.contains(task)) {
+			task.releaseIfOwnedBy(minionUuid);
 		}
 	}
 

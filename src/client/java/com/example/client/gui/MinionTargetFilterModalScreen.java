@@ -3,15 +3,20 @@ package com.example.client.gui;
 import com.example.client.network.ModClientNetworking;
 import com.example.client.targeting.ClientTargetFilterTracker;
 import com.example.targeting.MinionTargetFilterManager;
+import com.example.targeting.TargetFilterPreset;
+import com.example.targeting.TargetFilterPresetManager;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.entity.EntityType;
 import net.minecraft.item.Item;
@@ -29,10 +34,12 @@ import org.lwjgl.glfw.GLFW;
  * and WARRIOR minions are allowed to attack on sight.
  *
  * Features:
- * - Scrollable grid of every hostile mob type, each with its spawn egg icon, name, and a checkbox.
+ * - Real-time mob search filter (`[ 🔍 Search mobs... ]`) supporting entity display names and IDs.
+ * - Named Preset management (`[ 📋 Presets ]`, `[ 💾 Save ]`, `[ ✖ Delete ]`) persisted across game restarts.
+ * - Scrollable grid of candidate hostile mob types, each with its spawn egg icon, name, and a checkbox.
  * - Checked = minions may attack the mob on sight; unchecked = minions leave it alone.
  * - Quick [Select All] / [Clear All] controls and a live allowed counter.
- * - Actions: [Submit] sends an {@link com.example.network.UpdateTargetFilterPayload}; [Cancel] discards changes.
+ * - Actions: [Submit] applies to global or custom minion callback; [Cancel] discards changes.
  * - Background blur suppression to preserve battlefield tactical visibility.
  */
 public class MinionTargetFilterModalScreen extends Screen {
@@ -43,13 +50,25 @@ public class MinionTargetFilterModalScreen extends Screen {
 	private static final int CELL_HEIGHT = 24;
 	private static final int SCROLLBAR_WIDTH = 6;
 
-	private record Entry(Identifier id, Text name, ItemStack icon) {}
+	public record Entry(Identifier id, Text name, ItemStack icon) {}
 
 	private final Screen parentScreen;
 	private final List<Identifier> candidateIds;
 	private final Set<Identifier> allowedIds = new LinkedHashSet<>();
+	private final Consumer<List<Identifier>> onSubmitCallback;
 
-	private final List<Entry> entries = new ArrayList<>();
+	private final List<Entry> allEntries = new ArrayList<>();
+	private final List<Entry> filteredEntries = new ArrayList<>();
+
+	private List<TargetFilterPreset> availablePresets = new ArrayList<>();
+	private int selectedPresetIndex = 0;
+
+	private TextFieldWidget searchField;
+	private String searchQuery = "";
+
+	private ButtonWidget presetCycleButton;
+	private ButtonWidget savePresetButton;
+	private ButtonWidget deletePresetButton;
 
 	private ButtonWidget selectAllButton;
 	private ButtonWidget clearAllButton;
@@ -76,27 +95,68 @@ public class MinionTargetFilterModalScreen extends Screen {
 	 * @param parentScreen Screen to return to on submit/cancel (nullable).
 	 */
 	public MinionTargetFilterModalScreen(Screen parentScreen) {
-		this(parentScreen, MinionTargetFilterManager.getCandidateIds(), ClientTargetFilterTracker.getDisabled());
+		this(parentScreen, MinionTargetFilterManager.getCandidateIds(), ClientTargetFilterTracker.getDisabled(), null);
 	}
 
 	/**
-	 * @param parentScreen  Screen to return to on submit/cancel (nullable).
-	 * @param candidateIds  All selectable hostile mob type ids.
-	 * @param disabledIds   Mob type ids currently forbidden (shown unchecked).
+	 * @param parentScreen Screen to return to on submit/cancel (nullable).
+	 * @param candidateIds All selectable hostile mob type ids.
+	 * @param disabledIds  Mob type ids currently forbidden (shown unchecked).
 	 */
 	public MinionTargetFilterModalScreen(Screen parentScreen, List<Identifier> candidateIds, Set<Identifier> disabledIds) {
+		this(parentScreen, candidateIds, disabledIds, null);
+	}
+
+	/**
+	 * @param parentScreen     Screen to return to on submit/cancel (nullable).
+	 * @param candidateIds     All selectable hostile mob type ids.
+	 * @param disabledIds      Mob type ids currently forbidden (shown unchecked).
+	 * @param onSubmitCallback Optional consumer invoked with disabled mob IDs on submit.
+	 */
+	public MinionTargetFilterModalScreen(
+		Screen parentScreen,
+		List<Identifier> candidateIds,
+		Set<Identifier> disabledIds,
+		Consumer<List<Identifier>> onSubmitCallback
+	) {
 		super(Text.translatable("gui.modid-mmcli-agent-modding.target_filter_modal.title"));
 		this.parentScreen = parentScreen;
-		this.candidateIds = new ArrayList<>(candidateIds);
+		this.candidateIds = new ArrayList<>(candidateIds != null ? candidateIds : List.of());
+		this.onSubmitCallback = onSubmitCallback;
 		Set<Identifier> disabled = disabledIds != null ? disabledIds : Set.of();
 		for (Identifier id : this.candidateIds) {
 			if (!disabled.contains(id)) {
 				this.allowedIds.add(id);
 			}
 		}
+		updateAvailablePresets();
 	}
 
-	// ---- Selection logic (pure, unit-testable) ----
+	private void ensureEntriesInitialized() {
+		if (!this.allEntries.isEmpty()) {
+			return;
+		}
+		for (Identifier id : this.candidateIds) {
+			Text name = null;
+			ItemStack icon = null;
+			try {
+				icon = ItemStack.EMPTY;
+				EntityType<?> type = Registries.ENTITY_TYPE.get(id);
+				if (type != null) {
+					name = type.getName();
+					icon = iconFor(id, type);
+				}
+			} catch (Throwable ignored) {}
+			if (name == null) {
+				name = Text.literal(id.getPath());
+			}
+			this.allEntries.add(new Entry(id, name, icon));
+		}
+		this.allEntries.sort(Comparator.comparing(e -> e.name().getString().toLowerCase()));
+		filterEntries();
+	}
+
+	// ---- Selection & Filtering logic (pure, unit-testable) ----
 
 	public boolean isAllowed(Identifier id) {
 		return this.allowedIds.contains(id);
@@ -128,6 +188,166 @@ public class MinionTargetFilterModalScreen extends Screen {
 		return this.candidateIds.size();
 	}
 
+	public String getSearchQuery() {
+		return this.searchQuery;
+	}
+
+	public void setSearchQuery(String query) {
+		this.searchQuery = query != null ? query.trim() : "";
+		ensureEntriesInitialized();
+		filterEntries();
+	}
+
+	public List<Entry> getFilteredEntries() {
+		ensureEntriesInitialized();
+		return Collections.unmodifiableList(this.filteredEntries);
+	}
+
+	public int getFilteredEntriesCount() {
+		ensureEntriesInitialized();
+		return this.filteredEntries.size();
+	}
+
+	private void filterEntries() {
+		this.filteredEntries.clear();
+		if (this.searchQuery.isEmpty()) {
+			this.filteredEntries.addAll(this.allEntries);
+		} else {
+			String q = this.searchQuery.toLowerCase();
+			for (Entry entry : this.allEntries) {
+				String nameStr = entry.name().getString().toLowerCase();
+				String pathStr = entry.id().getPath().toLowerCase();
+				if (nameStr.contains(q) || pathStr.contains(q)) {
+					this.filteredEntries.add(entry);
+				}
+			}
+		}
+		this.scrollOffset = 0.0D;
+		clampScroll();
+	}
+
+	// ---- Preset operations (pure, unit-testable) ----
+
+	public void updateAvailablePresets() {
+		this.availablePresets = new ArrayList<>(TargetFilterPresetManager.getInstance().getAllPresets(this.candidateIds));
+		if (this.selectedPresetIndex >= this.availablePresets.size()) {
+			this.selectedPresetIndex = 0;
+		}
+		updatePresetWidgets();
+	}
+
+	public List<TargetFilterPreset> getAllPresets() {
+		if (this.availablePresets.isEmpty()) {
+			updateAvailablePresets();
+		}
+		return Collections.unmodifiableList(this.availablePresets);
+	}
+
+	public String getSelectedPresetTitle() {
+		if (this.availablePresets.isEmpty()) {
+			updateAvailablePresets();
+		}
+		if (this.availablePresets.isEmpty()) {
+			return "None";
+		}
+		int idx = Math.max(0, Math.min(this.selectedPresetIndex, this.availablePresets.size() - 1));
+		return this.availablePresets.get(idx).title();
+	}
+
+	public boolean isCurrentPresetUserSaved() {
+		if (this.availablePresets.isEmpty()) return false;
+		String title = getSelectedPresetTitle();
+		return TargetFilterPresetManager.getInstance().getUserPreset(title).isPresent();
+	}
+
+	public void cyclePreset(boolean backwards) {
+		if (this.availablePresets.isEmpty()) {
+			updateAvailablePresets();
+		}
+		if (this.availablePresets.isEmpty()) return;
+		int size = this.availablePresets.size();
+		if (backwards) {
+			this.selectedPresetIndex = (this.selectedPresetIndex - 1 + size) % size;
+		} else {
+			this.selectedPresetIndex = (this.selectedPresetIndex + 1) % size;
+		}
+		TargetFilterPreset preset = this.availablePresets.get(this.selectedPresetIndex);
+		applyPreset(preset);
+		updatePresetWidgets();
+	}
+
+	public void applyPreset(TargetFilterPreset preset) {
+		if (preset == null) return;
+		this.allowedIds.clear();
+		for (Identifier id : preset.allowedIds()) {
+			if (this.candidateIds.contains(id)) {
+				this.allowedIds.add(id);
+			}
+		}
+	}
+
+	public void applyPreset(String title) {
+		if (title == null) return;
+		if (this.availablePresets.isEmpty()) {
+			updateAvailablePresets();
+		}
+		for (int i = 0; i < this.availablePresets.size(); i++) {
+			if (this.availablePresets.get(i).title().equalsIgnoreCase(title.trim())) {
+				this.selectedPresetIndex = i;
+				applyPreset(this.availablePresets.get(i));
+				updatePresetWidgets();
+				return;
+			}
+		}
+	}
+
+	public void saveCurrentAsPreset(String title) {
+		String cleanTitle = (title != null && !title.trim().isEmpty())
+			? title.trim()
+			: (!this.searchQuery.isEmpty() ? this.searchQuery : "Preset " + (TargetFilterPresetManager.getInstance().getUserPresets().size() + 1));
+		TargetFilterPreset preset = TargetFilterPresetManager.getInstance().savePreset(cleanTitle, this.allowedIds);
+		updateAvailablePresets();
+		for (int i = 0; i < this.availablePresets.size(); i++) {
+			if (this.availablePresets.get(i).title().equals(preset.title())) {
+				this.selectedPresetIndex = i;
+				break;
+			}
+		}
+		if (this.searchField != null && !this.searchField.getText().isEmpty()) {
+			this.searchField.setText("");
+			setSearchQuery("");
+		}
+		updatePresetWidgets();
+	}
+
+	public boolean deleteCurrentPreset() {
+		if (!isCurrentPresetUserSaved()) return false;
+		String title = getSelectedPresetTitle();
+		boolean deleted = TargetFilterPresetManager.getInstance().deletePreset(title);
+		if (deleted) {
+			updateAvailablePresets();
+		}
+		return deleted;
+	}
+
+	private void updatePresetWidgets() {
+		if (this.presetCycleButton != null) {
+			String title = getSelectedPresetTitle();
+			this.presetCycleButton.setMessage(Text.literal("§6📋 " + truncate(title, 14)));
+			this.presetCycleButton.setTooltip(Tooltip.of(Text.literal("§6Preset: §f" + title + "\n§eClick to cycle & apply preset\n§7Shift-Click to cycle backwards")));
+		}
+		if (this.deletePresetButton != null) {
+			boolean isUser = isCurrentPresetUserSaved();
+			this.deletePresetButton.active = isUser;
+			this.deletePresetButton.setTooltip(Tooltip.of(Text.literal(isUser ? "§cDelete custom preset: " + getSelectedPresetTitle() : "§8Built-in presets cannot be deleted")));
+		}
+	}
+
+	private static String truncate(String text, int maxLength) {
+		if (text == null) return "";
+		return text.length() <= maxLength ? text : text.substring(0, maxLength - 1) + "…";
+	}
+
 	/**
 	 * @return The mob type ids that are currently unchecked (minions must NOT attack these on sight).
 	 */
@@ -142,15 +362,19 @@ public class MinionTargetFilterModalScreen extends Screen {
 	}
 
 	/**
-	 * Sends the filter to the server, updates the local cache optimistically, and closes the modal.
+	 * Sends the filter to the server or callback, updates local cache, and closes the modal.
 	 */
 	public void submit() {
 		List<Identifier> disabled = computeDisabled();
 		this.submitted = true;
-		try {
-			ModClientNetworking.sendUpdateTargetFilter(disabled);
-		} catch (Throwable ignored) {}
-		ClientTargetFilterTracker.setDisabled(disabled);
+		if (this.onSubmitCallback != null) {
+			this.onSubmitCallback.accept(disabled);
+		} else {
+			try {
+				ModClientNetworking.sendUpdateTargetFilter(disabled);
+			} catch (Throwable ignored) {}
+			ClientTargetFilterTracker.setDisabled(disabled);
+		}
 		this.close();
 	}
 
@@ -167,25 +391,78 @@ public class MinionTargetFilterModalScreen extends Screen {
 	protected void init() {
 		super.init();
 
-		this.entries.clear();
-		for (Identifier id : this.candidateIds) {
-			EntityType<?> type = Registries.ENTITY_TYPE.get(id);
-			this.entries.add(new Entry(id, type.getName(), iconFor(id, type)));
-		}
-		this.entries.sort(Comparator.comparing(e -> e.name().getString().toLowerCase()));
+		ensureEntriesInitialized();
+		filterEntries();
+		updateAvailablePresets();
 
 		this.winH = Math.min(WINDOW_HEIGHT, this.height - 16);
 		this.winX = (this.width - WINDOW_WIDTH) / 2;
 		this.winY = (this.height - this.winH) / 2;
 
+		int controlsY = this.winY + 30;
+
+		// 1. Search text field
+		this.searchField = new TextFieldWidget(this.textRenderer, this.winX + 12, controlsY, 110, 18, Text.literal("Search"));
+		this.searchField.setPlaceholder(Text.literal("§8🔍 Search mobs..."));
+		this.searchField.setText(this.searchQuery);
+		this.searchField.setChangedListener(this::setSearchQuery);
+		this.addDrawableChild(this.searchField);
+
+		// 2. Preset cycler button
+		this.presetCycleButton = ButtonWidget.builder(
+			Text.literal("§6📋 " + truncate(getSelectedPresetTitle(), 14)),
+			b -> {
+				cyclePreset(Screen.hasShiftDown());
+				if (this.client != null) {
+					this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.1F));
+				}
+			}
+		)
+		.dimensions(this.winX + 126, controlsY, 140, 18)
+		.build();
+		this.addDrawableChild(this.presetCycleButton);
+
+		// 3. Save current preset button
+		this.savePresetButton = ButtonWidget.builder(
+			Text.literal("§a💾 Save"),
+			b -> {
+				saveCurrentAsPreset(this.searchField != null ? this.searchField.getText() : null);
+				if (this.client != null) {
+					this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.BLOCK_NOTE_BLOCK_CHIME.value(), 1.4F));
+				}
+			}
+		)
+		.dimensions(this.winX + 270, controlsY, 50, 18)
+		.tooltip(Tooltip.of(Text.literal("§aSave current selection as a preset\n§7Uses search box as title if typed")))
+		.build();
+		this.addDrawableChild(this.savePresetButton);
+
+		// 4. Delete custom preset button
+		this.deletePresetButton = ButtonWidget.builder(
+			Text.literal("§c✖"),
+			b -> {
+				if (deleteCurrentPreset() && this.client != null) {
+					this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 0.8F));
+				}
+			}
+		)
+		.dimensions(this.winX + 324, controlsY, 24, 18)
+		.tooltip(Tooltip.of(Text.literal("§cDelete custom preset")))
+		.build();
+		this.addDrawableChild(this.deletePresetButton);
+
+		updatePresetWidgets();
+
+		// 5. Scrollable grid bounds
 		this.listX = this.winX + 12;
-		this.listY = this.winY + 62;
+		this.listY = this.winY + 68;
 		this.listW = WINDOW_WIDTH - 24 - SCROLLBAR_WIDTH - 2;
-		this.listH = this.winH - 62 - 42;
+		this.listH = this.winH - 68 - 36;
 		this.cellW = this.listW / COLUMNS;
 		clampScroll();
 
-		int btnY = this.winY + this.winH - 30;
+		// 6. Action buttons along bottom
+		int btnY = this.winY + this.winH - 28;
 		this.selectAllButton = ButtonWidget.builder(Text.literal("§a✔ Select All"), b -> selectAll())
 			.dimensions(this.winX + 12, btnY, 78, 20)
 			.tooltip(Tooltip.of(Text.literal("§aAllow minions to attack every listed mob on sight")))
@@ -196,7 +473,7 @@ public class MinionTargetFilterModalScreen extends Screen {
 			.build();
 		this.submitButton = ButtonWidget.builder(Text.literal("§a✔ Submit"), b -> submit())
 			.dimensions(this.winX + WINDOW_WIDTH - 12 - 70 - 6 - 84, btnY, 84, 20)
-			.tooltip(Tooltip.of(Text.literal("§aSave this target filter for all your minions")))
+			.tooltip(Tooltip.of(Text.literal("§aSave target filter for minions")))
 			.build();
 		this.cancelButton = ButtonWidget.builder(Text.literal("§c✖ Cancel"), b -> cancel())
 			.dimensions(this.winX + WINDOW_WIDTH - 12 - 70, btnY, 70, 20)
@@ -210,9 +487,11 @@ public class MinionTargetFilterModalScreen extends Screen {
 	}
 
 	private static ItemStack iconFor(Identifier id, EntityType<?> type) {
-		SpawnEggItem egg = SpawnEggItem.forEntity(type);
-		if (egg != null) {
-			return new ItemStack(egg);
+		if (type != null) {
+			SpawnEggItem egg = SpawnEggItem.forEntity(type);
+			if (egg != null) {
+				return new ItemStack(egg);
+			}
 		}
 		Item fallback = switch (id.getPath()) {
 			case "ender_dragon" -> Items.DRAGON_HEAD;
@@ -226,7 +505,7 @@ public class MinionTargetFilterModalScreen extends Screen {
 	// ---- Scrolling / hit testing ----
 
 	private int rowCount() {
-		return (this.entries.size() + COLUMNS - 1) / COLUMNS;
+		return (this.filteredEntries.size() + COLUMNS - 1) / COLUMNS;
 	}
 
 	private int contentHeight() {
@@ -256,7 +535,7 @@ public class MinionTargetFilterModalScreen extends Screen {
 			return -1;
 		}
 		int index = row * COLUMNS + col;
-		return index < this.entries.size() ? index : -1;
+		return index < this.filteredEntries.size() ? index : -1;
 	}
 
 	private boolean isOverScrollbar(double mouseX, double mouseY) {
@@ -283,7 +562,7 @@ public class MinionTargetFilterModalScreen extends Screen {
 			}
 			int index = entryIndexAt(mouseX, mouseY);
 			if (index >= 0) {
-				toggle(this.entries.get(index).id());
+				toggle(this.filteredEntries.get(index).id());
 				if (this.client != null) {
 					this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
 				}
@@ -318,8 +597,13 @@ public class MinionTargetFilterModalScreen extends Screen {
 	// ---- Rendering ----
 
 	@Override
+	public boolean shouldPause() {
+		return false;
+	}
+
+	@Override
 	protected void applyBlur(float delta) {
-		// Disable background world blur post-processing shader while keeping screen darkening and UI elements crisp
+		// Suppress background world blur shader to preserve tactical visibility
 	}
 
 	@Override
@@ -336,13 +620,15 @@ public class MinionTargetFilterModalScreen extends Screen {
 		Text escText = Text.literal("§e[Esc] §7Cancel");
 		context.drawTextWithShadow(this.textRenderer, escText, this.winX + WINDOW_WIDTH - this.textRenderer.getWidth(escText) - 10, this.winY + 8, 0xE0E0E0);
 
-		// Description + live counter
-		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Checked mobs are attacked on sight by §eAuto§7, §aSentinel §7& §cWarrior §7minions."), this.winX + 12, this.winY + 32, 0xAAAAAA);
+		// Live counts & active search status
 		int allowed = getAllowedCount();
 		int total = getTotalCount();
-		context.drawTextWithShadow(this.textRenderer,
-			Text.literal("§6Allowed: " + (allowed > 0 ? "§a" : "§c") + allowed + "§7/§f" + total + " §8| §7Retaliation & scepter pings are never blocked."),
-			this.winX + 12, this.winY + 46, 0xFFD700);
+		int shown = getFilteredEntriesCount();
+		String countText = "§6Allowed: " + (allowed > 0 ? "§a" : "§c") + allowed + "§7/§f" + total;
+		if (shown < total) {
+			countText += " §8| §eShowing: §f" + shown;
+		}
+		context.drawTextWithShadow(this.textRenderer, Text.literal(countText), this.winX + 12, this.winY + 54, 0xFFD700);
 
 		// List viewport
 		context.fill(this.listX - 1, this.listY - 1, this.listX + this.listW + 1, this.listY + this.listH + 1, 0xFF0B1118);
@@ -353,10 +639,10 @@ public class MinionTargetFilterModalScreen extends Screen {
 		for (int row = firstRow; row <= lastRow; row++) {
 			for (int col = 0; col < COLUMNS; col++) {
 				int index = row * COLUMNS + col;
-				if (index >= this.entries.size()) {
+				if (index >= this.filteredEntries.size()) {
 					break;
 				}
-				renderEntry(context, this.entries.get(index), index == hoveredIndex,
+				renderEntry(context, this.filteredEntries.get(index), index == hoveredIndex,
 					this.listX + col * this.cellW, this.listY + row * CELL_HEIGHT - (int) this.scrollOffset);
 			}
 		}
@@ -366,8 +652,8 @@ public class MinionTargetFilterModalScreen extends Screen {
 
 		super.render(context, mouseX, mouseY, delta);
 
-		if (hoveredIndex >= 0) {
-			Entry hovered = this.entries.get(hoveredIndex);
+		if (hoveredIndex >= 0 && hoveredIndex < this.filteredEntries.size()) {
+			Entry hovered = this.filteredEntries.get(hoveredIndex);
 			List<Text> tooltip = new ArrayList<>();
 			tooltip.add(hovered.name());
 			tooltip.add(Text.literal("§8" + hovered.id()));
@@ -395,9 +681,13 @@ public class MinionTargetFilterModalScreen extends Screen {
 		}
 
 		// Mob icon & name
-		context.drawItem(entry.icon(), x + 18, y + 4);
-		String name = this.textRenderer.trimToWidth(entry.name().getString(), this.cellW - 42);
-		context.drawTextWithShadow(this.textRenderer, Text.literal((allowed ? "§f" : "§7") + name), x + 38, y + 8, 0xFFFFFF);
+		if (entry.icon() != null) {
+			context.drawItem(entry.icon(), x + 18, y + 4);
+		}
+		String name = this.textRenderer != null ? this.textRenderer.trimToWidth(entry.name().getString(), this.cellW - 42) : entry.name().getString();
+		if (this.textRenderer != null) {
+			context.drawTextWithShadow(this.textRenderer, Text.literal((allowed ? "§f" : "§7") + name), x + 38, y + 8, 0xFFFFFF);
+		}
 	}
 
 	private void renderScrollbar(DrawContext context) {
@@ -463,8 +753,19 @@ public class MinionTargetFilterModalScreen extends Screen {
 		return this.cancelButton;
 	}
 
-	@Override
-	public boolean shouldPause() {
-		return false;
+	public TextFieldWidget getSearchField() {
+		return this.searchField;
+	}
+
+	public ButtonWidget getPresetCycleButton() {
+		return this.presetCycleButton;
+	}
+
+	public ButtonWidget getSavePresetButton() {
+		return this.savePresetButton;
+	}
+
+	public ButtonWidget getDeletePresetButton() {
+		return this.deletePresetButton;
 	}
 }

@@ -6,6 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.0.1] - 2026-10-10
+
+### 🎯 Tactical Target Filtering, Presets & Autonomous Multi-Minion Construction
+
+### Added
+
+#### 🧱 Anti-Suffocation, Anti-Entombment & Safe Evacuation System
+- **Surface Quarry vs. Subterranean Excavation Evacuation**: In `ConstructionManager.completeSession()`, mining (dismantle) sessions distinguish between open surface quarries (with sky access) and underground excavations. Open pit quarries evacuate minions to the surface rim surrounding the pit under open sky. Underground excavations safely station minions onto the cleared interior floor (`box.getMinY()`) or entrance anchor, completely preventing minions from being teleported into unmined perimeter rock walls.
+- **Full-Column Safe Perimeter Scanning**: Replaced rigid -3..+2 downward-only scans in `findSafePerimeterGround()` with dynamic surface-level scanning (`world.getTopY`) down to foundation depth, evaluating candidate positions with strict `isSafeStandingPosition()` checks. Guaranteed safe footing with 2 vertical blocks of clear headroom, solid non-hazardous ground, and zero lava/fire hazards.
+- **Continuous In-Wall Detection & Emergency Auto-Unstuck**: Added server-side `unstuckIfInSolidWall()` into `MinionEntity.tick()`. If a minion ever ends up with its head or feet inside solid blocks while not phasing (e.g. from physics nudges, falling gravel, block placements, or edge-case teleports), it immediately detects collision, finds the nearest safe 2-block open space within 8 blocks, and teleports them out with portal VFX and audio cues.
+- **Egress & Landing Safety Verification**: `findExteriorExitPosition()` and `finishBuildingEgress()` validate exit vectors with `isSafeStandingPosition()` before settling minions, and `MinionBuildGoal` triggers `unstuckIfInSolidWall()` on touchdown upon deactivating arcane levitation.
+- **Automated Safety Test Suite**: Added `MinionWallAndUndergroundSafetyTest.java` verifying safe standing position constraints, in-wall extraction simulations, hazardous floor rejection, and underground vs. surface stationing invariants.
+
+#### 🏗️ Multi-Minion Task Stealing & Peer Handoff
+- **Dynamic Absentee Task Stealing**: When multiple minions build a structure together, tasks claimed by absent or delayed workers are automatically detected. If a claimant is farther than 24 blocks away, missing from the server, or stalled past grace thresholds (`STEAL_GRACE_TICKS = 60L`, `STALLED_LEASE_TICKS = 200L`), nearby active builders steal the task without deadlocks.
+- **Instant Peer Handoff & Memory Reset**: In `MinionBuildGoal`, each minion continuously monitors its task lease. The instant another minion completes or claims the task, the original claimant immediately forgets the task (`forgetLostTask`) as if completed and acquires the next available block task without idling or stalling.
+- **World State Pre-Completion**: `ConstructionSession.claimNextTask()` checks if the target block already matches the blueprint state in the world, marking it completed immediately.
+- **Lease-Safe Releases**: `ConstructionTask.releaseIfOwnedBy(UUID)` ensures former claimants cannot inadvertently release tasks currently reassigned to peer workers.
+
+#### 🎯 Global Minion Target Filter Search & Named Presets
+- **Real-Time Search Bar**: Added an interactive search box to `MinionTargetFilterModalScreen` allowing players to quickly filter candidates by mob name or ID path.
+- **Named Presets**: Added `TargetFilterPresetManager` featuring 5 standard built-in presets:
+  - `All Hostiles`: All hostiles enabled.
+  - `Creeper Safe`: Disables Creepers to safeguard bases.
+  - `Undead Only`: Targets Zombies, Skeletons, Phantoms, Drowned, Husks, Strays, Withers, and Zombified Piglins.
+  - `Raiders`: Targets Pillagers, Vindicators, Evokers, Ravagers, and Witches.
+  - `None (Passive)`: Disables on-sight aggression for all mobs.
+- **Custom Preset Saving & JSON Persistence**: Commanders can save their current selection as a custom preset by title only, persisting to `config/sovereign-sim/target_filter_presets.json`. Custom presets can be cycled with one click or deleted safely.
+
+#### 🛡️ Individual Minion Combat Policies
+- **Per-Minion Combat Policy (`MinionCombatPolicy`)**: Added 4 distinct engagement policies configured per minion:
+  - `GLOBAL`: Follows the master global target filter set in the Command Hub.
+  - `PASSIVE`: Pacifist mode; never targets hostiles and never retaliates when harmed.
+  - `DEFENSIVE`: Retaliates only when the minion or its leader/commander is directly attacked.
+  - `CUSTOM`: Follows an individual per-minion target filter overriding the global list.
+- **Minion Screen GUI Controls**: Added a combat policy toggle badge in `MinionScreen`'s header row, plus a `[ 🎯 Targets ]` button in the action panel to configure individual disabled targets when set to `CUSTOM`.
+- **C2S Payload & NBT Persistence**: Registered `UpdateMinionCombatPolicyPayload` and serialized policies and individual disabled target lists to minion NBT.
+
+#### 📖 Vanilla Recipe Book Integration & Advancements
+- **Dynamic Recipe Book Blueprint Unlocking**: Native recipe advancements automatically unlock blueprints in the player's crafting table recipe book upon acquiring constituent ingredients in Survival mode (Amethyst Shards, Gold Ingots, Emeralds, Gunpowder, or Snowballs).
+- **Dual Datapack Compatibility**: Populated both `advancement/` (Minecraft 1.21+ standard) and `advancements/` (legacy loader fallback) paths across `recipes/equipment/` and `recipes/misc/`.
+- **Automated Validation Test Suite**: Added `RecipeAdvancementJsonValidationTest.java` verifying advancement syntax, root parent references, criteria, and reward IDs.
+
+### Fixed
+
+#### 🏗️ Blueprint Placement & Selection Persistence
+- **Persistent Blueprint Selection in BUILD Mode**: Fixed an issue where placing down a blueprint or right-clicking into the air automatically cycled to the next blueprint in the catalog. Blueprint selection now stays firmly locked on the commander's chosen blueprint across repeated placements, quick taps, and cooldowns. Blueprints only change when explicitly selected in the Command Hub GUI (`V` key / Shift + Right-Click).
+
+#### 📜 Minecraft 1.21 Recipe Ingredient Format
+- **Strict Object Ingredients**: Fixed `Parsing error loading recipe` errors where Minecraft 1.21 DataFixerUpper/Codec rejected raw string identifiers in recipe `key` maps and `ingredients` arrays. Updated all recipe files (`command_scepter`, `frost_grenade_stick`, `tnt_stick`, `minion_spawn_egg`) across both `recipe/` and `recipes/` to use strict `{ "item": ... }` objects.
+- **Automated Recipe Codec Test**: Expanded `RecipeAdvancementJsonValidationTest` to validate all recipe files and enforce 1.21 object ingredient standards.
+
+#### 🌊 Shallow Water Build Flight Tolerance
+- **Water 2 Blocks High Flight Allowance**: Updated `CommandScepterItem.isPlayerOverWater()` to measure the vertical column depth of water bodies beneath the player. If the water column is two blocks high or less ($\le 2$ blocks deep of water above solid ground, such as creeks, shallow ponds, or puddles), the player is permitted to fly over it freely in `BUILD` mode without triggering build cancellation or losing flight. Only deep water bodies ($> 2$ blocks deep) trigger the water cancellation safeguard.
+
+---
+
 ## [1.0.0] - 2026-10-08
 
 ### ⚔️ Initial Release: Sovereign Simulator: Arcane Strategy & Engineering
@@ -29,9 +86,6 @@ Initial public release of **Sovereign Simulator: Arcane Strategy & Engineering**
   - Link in-world ground waypoints with the scepter to establish repeating patrol routes.
   - Visual hologram renderer projects directional particle beams along patrol nodes.
   - Dedicated **Patrol Route Edit Modal (`PatrolRouteEditModalScreen`)** for route configuration and squad assignment.
-- **Rules of Engagement & Target Filter System**:
-  - **Minion Target Filter Modal (`MinionTargetFilterModalScreen`)** allows commanders to customize hostile mob targeting priorities (e.g., creepers, skeletons, zombies, or neutral exclusion).
-  - Target rules sync across clients via `UpdateTargetFilterPayload`.
 
 #### 🤖 Autonomous Minion Thralls & Archetype System
 - **Minion Thralls (`MinionEntity`) & Spawn Egg**: Recruitable autonomous humanoid units with custom equipment slots, 9-slot backpacks, and overhead status badges.
@@ -95,6 +149,9 @@ Initial public release of **Sovereign Simulator: Arcane Strategy & Engineering**
   - Real-time inventory delta calculating player inventory and all minion backpacks within 64 meters.
   - Category pill badges (🪨 Stone, 🪵 Timber, 🪟 Glass, 🌿 Organic).
   - Readiness meter with dynamic color coding and smart tags: `✔ Ready`, `⚒ Auto` (harvestable/craftable by minions), and `✕ Need` (manual gathering needed).
+- **Survival Crafting Progression**:
+  - Complete data-driven crafting recipes for the Sovereign Command Scepter, Minion Spawn Egg, TNT Stick, and Frost Grenade Stick.
+  - Dual directory compatibility across `recipe/` (1.21+ standard) and `recipes/` (legacy loader fallback) namespaces.
 
 #### 💣 Tactical Ordnance & Special Items
 - **Frost Grenade Projectile Stick (`frost_grenade_stick`)**: Throwable cryogenic stick freezing water to ice, lava to obsidian, and solid ground into snow blocks/powder snow while inflicting Slowness III and freezing ticks.

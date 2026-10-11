@@ -231,7 +231,7 @@ public class MinionBuildGoal extends Goal {
 	@Override
 	public void stop() {
 		if (this.currentTask != null && !this.currentTask.isCompleted() && this.currentSession != null) {
-			this.currentSession.releaseTask(this.currentTask);
+			this.currentSession.releaseTask(this.currentTask, this.minion.getUuid());
 		}
 
 		BlockBox sessionBox = this.currentSession != null ? this.currentSession.getWorldBoundingBox() : null;
@@ -327,9 +327,17 @@ public class MinionBuildGoal extends Goal {
 					this.minion.setNoGravity(false);
 					this.minion.setVelocity(0.0D, 0.0D, 0.0D);
 					this.minion.velocityModified = true;
+					this.minion.unstuckIfInSolidWall(serverWorld);
 				}
 				this.minion.tickGentleDescent(serverWorld);
 			}
+			return;
+		}
+
+		// Peer handoff: if another minion finished this block or took over our lease while we were
+		// away, forget the task as if we completed it and immediately pick up fresh work.
+		if (!this.currentTask.isClaimedBy(this.minion.getUuid())) {
+			forgetLostTask(serverWorld);
 			return;
 		}
 
@@ -927,7 +935,7 @@ public class MinionBuildGoal extends Goal {
 
 		// Release the task so other minions or later retries can pick it up
 		if (this.currentTask != null) {
-			this.currentSession.releaseTask(this.currentTask);
+			this.currentSession.releaseTask(this.currentTask, this.minion.getUuid());
 			this.currentTask = null;
 		}
 
@@ -1300,7 +1308,7 @@ public class MinionBuildGoal extends Goal {
 
 	private void handleNavigationTimeout(ServerWorld serverWorld) {
 		if (this.currentTask != null && this.currentSession != null) {
-			this.currentSession.releaseTask(this.currentTask);
+			this.currentSession.releaseTask(this.currentTask, this.minion.getUuid());
 		}
 		this.currentTask = null;
 		this.pendingNextTask = null;
@@ -1810,6 +1818,22 @@ public class MinionBuildGoal extends Goal {
 	 * @param serverWorld The server world instance.
 	 * @return True if a task was claimed from the current or a newly chained session.
 	 */
+	/**
+	 * Drops a task that was completed or reassigned by a peer minion, resetting work state and
+	 * claiming the next available task (or staying committed to the session if none is ready).
+	 */
+	private void forgetLostTask(ServerWorld serverWorld) {
+		this.currentTask = null;
+		this.pendingNextTask = null;
+		this.workTicks = 0;
+		this.ticksNavigating = 0;
+		this.stallCollisionTicks = 0;
+		this.groundNavigationForced = false;
+		this.hoverStationVec = null;
+		this.minion.getNavigation().stop();
+		tryClaimTaskOrChainNextSession(serverWorld);
+	}
+
 	private boolean tryClaimTaskOrChainNextSession(ServerWorld serverWorld) {
 		// 1. Try to claim the next task from the current session if still active
 		if (this.currentSession != null && this.currentSession.isActive()) {

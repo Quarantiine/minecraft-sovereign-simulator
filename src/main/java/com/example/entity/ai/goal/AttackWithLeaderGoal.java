@@ -25,6 +25,10 @@ public class AttackWithLeaderGoal extends TrackTargetGoal {
 
 	@Override
 	public boolean canStart() {
+		if (this.minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE
+				|| this.minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.DEFENSIVE) {
+			return false;
+		}
 		if (!this.minion.hasLeader() || !this.minion.isTamed() || this.minion.isSitting()) {
 			return false;
 		}
@@ -35,6 +39,9 @@ public class AttackWithLeaderGoal extends TrackTargetGoal {
 		this.attacking = leader.getAttacking();
 		int i = leader.getLastAttackTime();
 		if (i == this.lastAttackTime || !this.canTrack(this.attacking, TargetPredicate.DEFAULT)) {
+			return false;
+		}
+		if (this.attacking != null && !this.minion.isTargetAllowed(this.attacking.getType())) {
 			return false;
 		}
 		// Combat leash check: only attack with leader if within 16 blocks (256.0D sq) of leader and target

@@ -39,12 +39,16 @@ public class MinionActiveTargetGoal extends ActiveTargetGoal<LivingEntity> {
 		if (target == null || target instanceof MinionEntity || !(target instanceof Monster)) {
 			return false;
 		}
-		return MinionTargetFilterManager.getInstance().isAllowed(minion.getOwnerUuid(), target.getType());
+		return minion.isTargetAllowed(target.getType());
 	}
 
 	@Override
 	public boolean canStart() {
 		if (!this.minion.isAlive() || !this.minion.isTamed() || this.minion.isSitting()) {
+			return false;
+		}
+		if (this.minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE
+				|| this.minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.DEFENSIVE) {
 			return false;
 		}
 		// Warriors actively scan and engage hostiles across the tactical zone.

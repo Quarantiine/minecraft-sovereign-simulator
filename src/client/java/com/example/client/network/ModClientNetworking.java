@@ -10,6 +10,7 @@ import com.example.network.DismissMinionPayload;
 import com.example.network.TeleportMinionPayload;
 import com.example.network.UpdateMinionConfigPayload;
 import com.example.network.UpdateScepterPayload;
+import java.util.List;
 import java.util.Optional;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 
@@ -171,6 +172,22 @@ public class ModClientNetworking {
 	 */
 	public static void sendUpdateMinionConfig(int minionId, MinionRole role, SquadGroup squad) {
 		UpdateMinionConfigPayload payload = new UpdateMinionConfigPayload(minionId, role, squad);
+		ClientPlayNetworking.send(payload);
+	}
+
+	/**
+	 * Dispatches an {@link UpdateMinionCombatPolicyPayload} to update combat policy and custom target filter of a minion.
+	 *
+	 * @param minionId        The entity ID of the target minion.
+	 * @param policy          The assigned {@link com.example.entity.custom.MinionCombatPolicy}.
+	 * @param disabledTargets Custom disabled mob type IDs for this minion.
+	 */
+	public static void sendUpdateMinionCombatPolicy(int minionId, com.example.entity.custom.MinionCombatPolicy policy, List<net.minecraft.util.Identifier> disabledTargets) {
+		com.example.network.UpdateMinionCombatPolicyPayload payload = new com.example.network.UpdateMinionCombatPolicyPayload(
+			minionId,
+			policy,
+			disabledTargets != null ? disabledTargets : List.of()
+		);
 		ClientPlayNetworking.send(payload);
 	}
 

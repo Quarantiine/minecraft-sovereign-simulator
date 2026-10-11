@@ -2,8 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "equipment",
   "key": {
-    "T": "minecraft:tnt",
-    "#": "minecraft:stick"
+    "T": {
+      "item": "minecraft:tnt"
+    },
+    "#": {
+      "item": "minecraft:stick"
+    }
   },
   "pattern": [
     "T",

@@ -25,6 +25,9 @@ public class TrackLeaderAttackerGoal extends TrackTargetGoal {
 
 	@Override
 	public boolean canStart() {
+		if (this.minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE) {
+			return false;
+		}
 		if (!this.minion.hasLeader() || !this.minion.isTamed() || this.minion.isSitting()) {
 			return false;
 		}

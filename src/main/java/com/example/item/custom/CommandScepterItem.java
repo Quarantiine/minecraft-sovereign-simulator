@@ -1640,7 +1640,8 @@ public class CommandScepterItem extends Item {
 			}
 
 			if (mode == CommandMode.BUILD) {
-				cycleBlueprint(stack, player, world);
+				// Retain selected blueprint without cycling on quick tap or placement release.
+				// Blueprints only change when explicitly chosen in the Command Hub GUI.
 				return;
 			}
 
@@ -1859,6 +1860,7 @@ public class CommandScepterItem extends Item {
 						);
 					}
 				}
+				attackMinions.removeIf(m -> m.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE);
 
 				// Sort hostiles by proximity to player (frontline to backline)
 				enclosedHostiles.sort(Comparator.comparingDouble(h -> h.squaredDistanceTo(player)));
@@ -1946,33 +1948,74 @@ public class CommandScepterItem extends Item {
 	// -----------------------------------------------------------------------------------------
 
 	/**
-	 * Checks if the player is currently touching water or flying directly above water.
+	 * Checks if the player is currently touching deep water or flying directly above deep water.
+	 * If the water column is two blocks high or less (shallow water <= 2 blocks deep), the player
+	 * is permitted to fly over it in BUILD mode.
 	 *
 	 * @param world  The world instance.
 	 * @param player The player entity.
-	 * @return true if player is touching water or the terrain/fluid surface directly below is water.
+	 * @return true if player is over deep water (> 2 blocks high); false if on land or shallow water (<= 2 blocks high).
 	 */
 	public static boolean isPlayerOverWater(World world, PlayerEntity player) {
 		if (player == null || world == null) {
 			return false;
 		}
-		if (player.isTouchingWater() || player.isSubmergedInWater()) {
-			return true;
-		}
-		// Scan vertical column beneath player down to the highest terrain surface
-		BlockPos.Mutable mut = player.getBlockPos().mutableCopy();
+
+		BlockPos feetPos = player.getBlockPos();
 		int bottomY = world.getBottomY();
+
+		// Check if player is currently inside water (feet or head in water)
+		BlockState feetState = world.getBlockState(feetPos);
+		boolean inWater = feetState.getFluidState().isIn(FluidTags.WATER) || feetState.isOf(Blocks.WATER)
+				|| player.isTouchingWater() || player.isSubmergedInWater();
+
+		// Find the top of the water column
+		BlockPos.Mutable mut = feetPos.mutableCopy();
+		if (inWater) {
+			// Scan upward to locate the top surface of this water body
+			while (mut.getY() < world.getTopY()) {
+				BlockPos above = mut.up();
+				BlockState aboveState = world.getBlockState(above);
+				if (aboveState.getFluidState().isIn(FluidTags.WATER) || aboveState.isOf(Blocks.WATER)) {
+					mut.move(0, 1, 0);
+				} else {
+					break;
+				}
+			}
+		} else {
+			// Player is airborne / above: scan downwards to find the top surface of water or solid ground
+			while (mut.getY() > bottomY) {
+				BlockState state = world.getBlockState(mut);
+				if (state.getFluidState().isIn(FluidTags.WATER) || state.isOf(Blocks.WATER)) {
+					break; // Found water surface
+				}
+				if (state.isSolidBlock(world, mut)) {
+					return false; // Solid ground with no water above it
+				}
+				mut.move(0, -1, 0);
+			}
+			if (mut.getY() <= bottomY) {
+				return false; // Scanned all the way to void/bottom without hitting water
+			}
+		}
+
+		// Now mut is at the topmost water block of the water column directly beneath or containing the player.
+		// Measure the vertical height (depth) of this water column down to solid ground.
+		int waterHeight = 0;
 		while (mut.getY() > bottomY) {
 			BlockState state = world.getBlockState(mut);
 			if (state.getFluidState().isIn(FluidTags.WATER) || state.isOf(Blocks.WATER)) {
-				return true;
+				waterHeight++;
+				mut.move(0, -1, 0);
+			} else {
+				// Reached solid ground / non-water floor beneath the water column
+				break;
 			}
-			if (state.isSolidBlock(world, mut)) {
-				return false;
-			}
-			mut.move(0, -1, 0);
 		}
-		return false;
+
+		// If the water is two blocks high or less (<= 2 blocks deep), allow flying over it in BUILD mode.
+		// Deep water (> 2 blocks high) prohibits flight.
+		return waterHeight > 2;
 	}
 
 	private static final java.util.Set<java.util.UUID> ACTIVE_SERVER_BUILD_FLIERS = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -3176,6 +3219,7 @@ public class CommandScepterItem extends Item {
 					m -> m.isAlive() && m.isOwner(player) && !m.isSitting() && m.getPatrolRouteId() < 0 && filterSquad.matches(m.getSquad())
 				);
 			}
+			minions.removeIf(m -> m.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE);
 
 			for (MinionEntity minion : minions) {
 				minion.setSitting(false);
@@ -3627,8 +3671,7 @@ public class CommandScepterItem extends Item {
 		tooltip.add(Text.literal("§8• DESIGN: Left-Click for Pos1 then Pos2, Right-Click to Capture Blueprint"));
 		tooltip.add(Text.literal("§8• PATHWAY: Right-Click block to add waypoint, Sneak + Right-Click to remove"));
 		tooltip.add(Text.literal("§8• PATHWAY: Right-Click minion to assign to route, Right-Click air to cycle route"));
-		tooltip.add(Text.literal("§8• Right-Click Air (Build): Cycle Blueprint"));
-		tooltip.add(Text.literal("§8• Right-Click Ground (Build): Anchor Construction"));
+		tooltip.add(Text.literal("§8• Right-Click Ground (Build): Anchor Construction (Retains Blueprint)"));
 		tooltip.add(Text.literal("§8• Right-Click Mob (Recruit): Enthrall into Minion"));
 	}
 }

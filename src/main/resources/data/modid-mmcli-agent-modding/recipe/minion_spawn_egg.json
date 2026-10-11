@@ -2,10 +2,18 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:egg",
-    "minecraft:amethyst_shard",
-    "minecraft:emerald",
-    "minecraft:gold_ingot"
+    {
+      "item": "minecraft:egg"
+    },
+    {
+      "item": "minecraft:amethyst_shard"
+    },
+    {
+      "item": "minecraft:emerald"
+    },
+    {
+      "item": "minecraft:gold_ingot"
+    }
   ],
   "result": {
     "count": 1,

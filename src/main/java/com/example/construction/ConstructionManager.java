@@ -480,25 +480,82 @@ public class ConstructionManager {
 		int maxX = box.getMaxX();
 		int minZ = box.getMinZ();
 		int maxZ = box.getMaxZ();
-		// For mining (dismantle) sessions, the perimeter rim of the quarry pit is at the top of the box (maxY + 1),
-		// whereas for building sessions, the ground perimeter is at the foundation level (minY).
-		int baseY = session.isDismantle() ? (box.getMaxY() + 1) : box.getMinY();
 
-		// 1. South perimeter (Front / maxZ + 2): West to East
-		for (int x = minX; x <= maxX; x++) {
-			perimeterWaypoints.add(findSafePerimeterGround(world, new BlockPos(x, baseY, maxZ + 2), box.getMinY(), new BlockPos(x, box.getMinY(), maxZ)));
+		boolean isDismantle = session.isDismantle();
+		boolean isSurfaceQuarry = isDismantle && (
+			world.isSkyVisible(new BlockPos(anchor.getX(), Math.min(world.getTopY() - 1, box.getMaxY() + 1), anchor.getZ()))
+			|| world.isSkyVisible(new BlockPos((minX + maxX) / 2, Math.min(world.getTopY() - 1, box.getMaxY() + 1), (minZ + maxZ) / 2))
+		);
+
+		if (isDismantle && !isSurfaceQuarry) {
+			// Deep underground excavation (cavern, room, or tunnel).
+			// The outer perimeter is un-excavated solid rock!
+			// Station minions safely onto the CLEARED interior floor of the excavated room or near anchor.
+			int floorY = box.getMinY();
+			int stepX = Math.max(1, (maxX - minX) / 4);
+			int stepZ = Math.max(1, (maxZ - minZ) / 4);
+			for (int x = minX; x <= maxX; x += stepX) {
+				for (int z = minZ; z <= maxZ; z += stepZ) {
+					BlockPos candidate = new BlockPos(x, floorY, z);
+					if (com.example.entity.custom.MinionEntity.isSafeStandingPosition(world, candidate)) {
+						if (!perimeterWaypoints.contains(candidate)) {
+							perimeterWaypoints.add(candidate);
+						}
+					} else {
+						BlockPos safeNear = com.example.entity.custom.MinionEntity.findNearestSafeStandingPosition(world, candidate, 3);
+						if (safeNear != null && !perimeterWaypoints.contains(safeNear)) {
+							perimeterWaypoints.add(safeNear);
+						}
+					}
+				}
+			}
+			if (perimeterWaypoints.isEmpty() && anchor != null) {
+				BlockPos safeAnchor = com.example.entity.custom.MinionEntity.findNearestSafeStandingPosition(world, anchor, 6);
+				if (safeAnchor != null) {
+					perimeterWaypoints.add(safeAnchor);
+				}
+			}
+		} else {
+			// Surface Quarry or Building Construction
+			// For surface quarry sessions, the perimeter rim of the quarry pit is at the top of the box (maxY + 1);
+			// for building sessions, the ground perimeter is at the foundation level (minY).
+			int baseY = session.isDismantle() ? (box.getMaxY() + 1) : box.getMinY();
+
+			// 1. South perimeter (Front / maxZ + 2): West to East
+			for (int x = minX; x <= maxX; x++) {
+				BlockPos wp = findSafePerimeterGround(world, new BlockPos(x, baseY, maxZ + 2), box.getMinY(), new BlockPos(x, box.getMinY(), maxZ));
+				if (wp != null && !perimeterWaypoints.contains(wp)) {
+					perimeterWaypoints.add(wp);
+				}
+			}
+			// 2. East flank (maxX + 2): South to North
+			for (int z = maxZ + 1; z >= minZ - 1; z--) {
+				BlockPos wp = findSafePerimeterGround(world, new BlockPos(maxX + 2, baseY, z), box.getMinY(), new BlockPos(maxX, box.getMinY(), z));
+				if (wp != null && !perimeterWaypoints.contains(wp)) {
+					perimeterWaypoints.add(wp);
+				}
+			}
+			// 3. North perimeter (Back / minZ - 2): East to West
+			for (int x = maxX; x >= minX; x--) {
+				BlockPos wp = findSafePerimeterGround(world, new BlockPos(x, baseY, minZ - 2), box.getMinY(), new BlockPos(x, box.getMinY(), minZ));
+				if (wp != null && !perimeterWaypoints.contains(wp)) {
+					perimeterWaypoints.add(wp);
+				}
+			}
+			// 4. West flank (minX - 2): North to South
+			for (int z = minZ - 1; z <= maxZ + 1; z++) {
+				BlockPos wp = findSafePerimeterGround(world, new BlockPos(minX - 2, baseY, z), box.getMinY(), new BlockPos(minX, box.getMinY(), z));
+				if (wp != null && !perimeterWaypoints.contains(wp)) {
+					perimeterWaypoints.add(wp);
+				}
+			}
 		}
-		// 2. East flank (maxX + 2): South to North
-		for (int z = maxZ + 1; z >= minZ - 1; z--) {
-			perimeterWaypoints.add(findSafePerimeterGround(world, new BlockPos(maxX + 2, baseY, z), box.getMinY(), new BlockPos(maxX, box.getMinY(), z)));
-		}
-		// 3. North perimeter (Back / minZ - 2): East to West
-		for (int x = maxX; x >= minX; x--) {
-			perimeterWaypoints.add(findSafePerimeterGround(world, new BlockPos(x, baseY, minZ - 2), box.getMinY(), new BlockPos(x, box.getMinY(), minZ)));
-		}
-		// 4. West flank (minX - 2): North to South
-		for (int z = minZ - 1; z <= maxZ + 1; z++) {
-			perimeterWaypoints.add(findSafePerimeterGround(world, new BlockPos(minX - 2, baseY, z), box.getMinY(), new BlockPos(minX, box.getMinY(), z)));
+
+		if (perimeterWaypoints.isEmpty() && anchor != null) {
+			BlockPos safeAnchor = com.example.entity.custom.MinionEntity.findNearestSafeStandingPosition(world, anchor, 8);
+			if (safeAnchor != null) {
+				perimeterWaypoints.add(safeAnchor);
+			}
 		}
 
 		int startIdx = 0;
@@ -576,14 +633,21 @@ public class ConstructionManager {
 				minion.clearAssaultTargets();
 				minion.getNavigation().stop();
 				minion.setTarget(null);
-				if (!session.isDismantle()) {
-					minion.startEgressFromStructure(box, anchor, Vec3d.ofBottomCenter(waypoint));
-				}
+				minion.startEgressFromStructure(box, anchor, Vec3d.ofBottomCenter(waypoint));
 				minion.finishBuildingEgress(world);
 			} else {
+				BlockPos safeFallback = com.example.entity.custom.MinionEntity.findNearestSafeStandingPosition(world, minion.getBlockPos(), 8);
+				if (safeFallback == null && anchor != null) {
+					safeFallback = com.example.entity.custom.MinionEntity.findNearestSafeStandingPosition(world, anchor, 8);
+				}
+				if (safeFallback != null) {
+					minion.requestTeleport(safeFallback.getX() + 0.5D, safeFallback.getY(), safeFallback.getZ() + 0.5D);
+					minion.setGuardAnchorPos(safeFallback);
+				} else {
+					minion.setGuardAnchorPos(minion.getBlockPos());
+				}
 				minion.setSelected(false);
 				minion.setSitting(true);
-				minion.setGuardAnchorPos(minion.getBlockPos());
 				minion.clearAssaultTargets();
 				minion.getNavigation().stop();
 				minion.setTarget(null);
@@ -595,6 +659,7 @@ public class ConstructionManager {
 					}
 					minion.getNavigation().stop();
 				}
+				minion.finishBuildingEgress(world);
 			}
 		}
 
@@ -685,31 +750,56 @@ public class ConstructionManager {
 	}
 
 	private BlockPos findSafePerimeterGround(ServerWorld world, BlockPos pos, int minY, BlockPos fallbackPos) {
-		int startY = pos.getY();
-		int lowestY = Math.max(world.getBottomY() + 1, minY - 3);
-		for (int y = startY + 2; y >= lowestY; y--) {
+		if (world == null || pos == null) {
+			return null;
+		}
+
+		// Determine top of scan: if open to surface, start from surface; otherwise start pos.getY() + 8
+		int highestY;
+		if (!world.getDimension().hasCeiling()) {
+			int topY = world.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, pos.getX(), pos.getZ());
+			highestY = Math.min(Math.max(topY + 1, pos.getY() + 8), world.getTopY() - 2);
+		} else {
+			highestY = Math.min(pos.getY() + 8, world.getTopY() - 2);
+		}
+		int lowestY = Math.max(world.getBottomY() + 1, minY - 6);
+
+		for (int y = highestY; y >= lowestY; y--) {
 			BlockPos check = new BlockPos(pos.getX(), y, pos.getZ());
-			BlockPos ground = check.down();
-			if (world.getBlockState(ground).isSolidBlock(world, ground)
-					&& !world.getBlockState(check).isSolidBlock(world, check)
-					&& !world.getBlockState(check.up()).isSolidBlock(world, check.up())
-					&& world.getFluidState(check).isEmpty()) {
+			if (com.example.entity.custom.MinionEntity.isSafeStandingPosition(world, check)) {
 				return check;
 			}
 		}
+
 		if (fallbackPos != null) {
-			for (int y = fallbackPos.getY() + 2; y >= lowestY; y--) {
+			int fallbackHighestY;
+			if (!world.getDimension().hasCeiling()) {
+				int topY = world.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, fallbackPos.getX(), fallbackPos.getZ());
+				fallbackHighestY = Math.min(Math.max(topY + 1, fallbackPos.getY() + 8), world.getTopY() - 2);
+			} else {
+				fallbackHighestY = Math.min(fallbackPos.getY() + 8, world.getTopY() - 2);
+			}
+			for (int y = fallbackHighestY; y >= lowestY; y--) {
 				BlockPos check = new BlockPos(fallbackPos.getX(), y, fallbackPos.getZ());
-				BlockPos ground = check.down();
-				if (world.getBlockState(ground).isSolidBlock(world, ground)
-						&& !world.getBlockState(check).isSolidBlock(world, check)
-						&& !world.getBlockState(check.up()).isSolidBlock(world, check.up())
-						&& world.getFluidState(check).isEmpty()) {
+				if (com.example.entity.custom.MinionEntity.isSafeStandingPosition(world, check)) {
 					return check;
 				}
 			}
 		}
-		return pos;
+
+		// Horizontal probe outward 1-2 blocks if immediate column was obstructed
+		BlockPos nearbySafe = com.example.entity.custom.MinionEntity.findNearestSafeStandingPosition(world, pos, 4);
+		if (nearbySafe != null) {
+			return nearbySafe;
+		}
+		if (fallbackPos != null) {
+			nearbySafe = com.example.entity.custom.MinionEntity.findNearestSafeStandingPosition(world, fallbackPos, 4);
+			if (nearbySafe != null) {
+				return nearbySafe;
+			}
+		}
+
+		return null;
 	}
 
 	/**
