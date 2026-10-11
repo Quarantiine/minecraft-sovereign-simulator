@@ -1,4 +1,4 @@
-# 📜 Sovereign Simulator: Arcane Strategy & Engineering — Command & Tactics Guide
+# 📜 Sovereign Simulator: Strategy & Engineering — Command & Tactics Guide
 
 A comprehensive, quick-reference manual for all minion commands, controls, squad directives, and scepter abilities in **Sovereign Simulator: Arcane Strategy & Engineering**.
 

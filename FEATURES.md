@@ -1,4 +1,4 @@
-# Sovereign Simulator: Arcane Strategy & Engineering — Feature Showcase & Technical Specifications
+# Sovereign Simulator: Strategy & Engineering — Feature Showcase & Technical Specifications
 
 This document provides a comprehensive technical breakdown of all gameplay features, items, entities, blocks, AI behaviors, construction mechanics, client rendering pipelines, GUIs, pathfinding engines, and networking protocols implemented in **Sovereign Simulator: Arcane Strategy & Engineering** (`modid-mmcli-agent-modding`).
 
