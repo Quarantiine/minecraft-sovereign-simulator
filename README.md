@@ -1,4 +1,4 @@
-# ⚔️ Sovereign Simulator: Arcane Strategy & Engineering
+# ⚔️ Sovereign Simulator: Strategy & Engineering
 
 [![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.x-brightgreen.svg)](https://www.minecraft.net/)
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
