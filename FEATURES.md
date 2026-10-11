@@ -35,6 +35,7 @@ This document provides a comprehensive technical breakdown of all gameplay featu
 24. [Cross-Version Compatibility Architecture (Minecraft 1.21.x Family)](#24-cross-version-compatibility-architecture-minecraft-121x-family)
 25. [Smart Builder Transformations, Workstation Tool Blocks & Multi-Tier Supply Chains](#25-smart-builder-transformations-workstation-tool-blocks--multi-tier-supply-chains)
 26. [Material Bill of Materials (BOM) & Resource Estimator GUI](#26-material-bill-of-materials-bom--resource-estimator-gui)
+27. [3D Architectural Blueprint Explorer & Clarity Viewport Engine](#27-3d-architectural-blueprint-explorer--clarity-viewport-engine)
 
 ---
 
@@ -1157,19 +1158,22 @@ The commander's active game mode dynamically dictates minion logistics, resource
 - **Elimination of Velocity Clamping**: Rigid hover altitude locking and vertical velocity zeroing have been eliminated, allowing the commander to survey, position, and inspect blueprints at any angle or altitude.
 - **Graceful Descent & Zero Fall Damage**: Switching scepter modes, stowing the scepter, or touching down gently restores normal ground physics with complete fall damage immunity enforced server-side (`ACTIVE_SERVER_BUILD_FLIERS`).
 
-### Shallow Water 2-Block Flight Tolerance vs. Deep Water Cancellation Safeguard (`CommandScepterItem`, `BuildFlightManager`, `ConstructionManager`)
+### Shallow Water 5-Block Flight Tolerance vs. Deep Water Cancellation Safeguard (`CommandScepterItem`, `BuildFlightManager`, `ConstructionManager`)
 
 - **Vertical Column Depth Scanning**: `CommandScepterItem.isPlayerOverWater` measures the vertical column height of water beneath the player down to solid ground.
-- **Shallow Water Flight Allowance ($\le 2$ Blocks High)**:
-  - If the water body beneath the player is **two blocks high or less** ($\le 2$ blocks deep of water above solid ground, such as creeks, ponds, marshes, shallow moats, or puddles), the player is fully permitted to fly over it freely without interruption!
+- **Architectural Collision Exemption (Bridges, Glass Walkways, Slabs)**:
+  - Downward raycasts verify non-empty collision shapes (`!state.getCollisionShape().isEmpty()`), ensuring players flying over bridges, slabs, stairs, or glass platforms constructed over oceans/rivers are treated as standing above solid architecture and are not cancelled. Lily pads on open water are bypassed to accurately inspect fluid depth below.
+  - Multi-point fluid contact evaluates player head (`getEyePos()`), feet, and sub-feet positions, ensuring exact depth tracking when wading, swimming, or dipping into water.
+- **Shallow Water Flight Allowance ($\le 5$ Blocks High)**:
+  - If the water body beneath the player is **5 blocks high or less** ($\le 5$ blocks deep of water above solid ground, such as creeks, ponds, marshes, shallow moats, canals, or puddles), the player is fully permitted to fly over it freely without interruption!
   - Builders can smoothly survey and construct structures near shorelines, bridges over creeks, or buildings adjacent to shallow water bodies.
-- **Deep Water Cancellation ($> 2$ Blocks Deep)**:
-  - If a player enters water or flies over deep water (> 2 blocks deep, such as oceans or deep rivers) while in `BUILD` mode:
-    1. **Construction Cancellation**: Automatically cancels all active construction sessions belonging to the player via `ConstructionManager.cancelActiveSessionsForOwner`.
+- **Deep Water Cancellation ($> 5$ Blocks Deep)**:
+  - If a player enters water or flies over deep water (> 5 blocks deep, such as oceans, deep lakes, or deep rivers) while in `BUILD` mode:
+    1. **Minions Continue Building**: Active minion construction sessions remain completely uninterrupted—builder minions continue placing blocks, quarrying, and completing the blueprint.
     2. **Mode Reversion**: Switches the scepter's operating mode to **`FOLLOW`** (`CommandMode.FOLLOW`).
-    3. **Flight Revocation**: Revokes flight abilities (`allowFlying = false`, `flying = false`) and clears `ACTIVE_SERVER_BUILD_FLIERS`.
+    3. **Safe Descent & Fall Damage Immunity**: Revokes flight abilities (`allowFlying = false`, `flying = false`) while retaining server fall damage protection (`fallDistance = 0.0F`) until the commander touches ground or splashes into water (`isOnGround() || isTouchingWater()`).
     4. **Audiovisual Feedback**: Plays an extinguishing sizzle sound effect (`SoundEvents.BLOCK_FIRE_EXTINGUISH`) and spawns water splash particles (`ParticleTypes.SPLASH`).
-    5. **Commander Alert**: Displays an immediate warning message on the actionbar: `§c⚠ Construction cancelled: Flying over water is prohibited in BUILD mode!§r`.
+    5. **Commander Alert**: Displays an immediate warning message on the actionbar: `§c⚠ Build mode cancelled: Flying over deep water is prohibited! (Minions will continue building)§r`.
 
 ---
 
@@ -1785,3 +1789,107 @@ Deficient items (`delta < 0`) are dynamically tagged using `MinionHarvestingHelp
 - **Background Blur Suppression**: Overrides `applyBlur` in `BlueprintResourceEstimatorModalScreen` and `CommandScepterScreen`, disabling the world blur post-processing shader. Players maintain full peripheral vision of surrounding minions, moving hostile mobs, and base defenses.
 - **Survival Placement Actionbar Delta**: When right-clicking to anchor a blueprint in Survival mode, the server calculates real-time availability across bags and minions, sending an instant actionbar update (`§6📋 BOM Delta: §a✔ 100% Ready` or `§eX% Ready (Y/Z blocks in bags & N minions)`).
 - **Catalog Live Readiness Badges**: Blueprint catalog buttons in the Command Hub display live readiness percentages (`§a✔100%`, `§6X%`, `§c0%`) and rich tooltips detailing block counts, readiness status, and nearby minion contributions.
+
+---
+
+## 27. 3D Architectural Blueprint Explorer & Clarity Viewport Engine
+
+```
+                         [Command Scepter: BUILD Mode]
+                                      │
+                       [ 🔍 3D View / Explorer Button ]
+                                      ▼
+                        ┌───────────────────────────┐
+                        │ BlueprintExplorerScreen   │
+                        │ (424 x 262px Centered)    │
+                        └─────────────┬─────────────┘
+                                      │
+          ┌───────────────────────────┴───────────────────────────┐
+          ▼                                                       ▼
+[Left Pane: Live Search & Cards]                   [Right Pane: Interactive 3D Viewport]
+• Substring Search: ID, Name, Description          • True 3D Rotated Quad Projection (Tessellated)
+• 5 Paginated Cards per page with [C]/[B] badges   • 6-Directional Interior Occlusion Culling
+• Subtitle: Dimensions & Non-Air Block Counts      • Directional Sunlight Shading (N · L)
+• Zero Text Cut-off Trimming & Tooltips            • Mouse Drag Orbit (Left) & 2D Pan (Right)
+• [◀] / [▶] Page Controls                          • Mouse Scroll Zoom (0.25x to 8.0x)
+                                                   • Auto-Spin Toggle [⏸/▶] & [↻] Angle Reset
+                                                   • Maximize Mode [⛶/🗗] (404x194 Viewport Canvas)
+                                                   • Architectural Floor Slicer [▲] / [▼]
+                                                   • Ground Foundation Pedestal & Compass HUD
+                                                   • Specs & Auto-Wrapped Description Card
+                                                   • [✔ Select] | [📋 BOM] | [🗑 Del]
+```
+
+### 27.1 Dedicated 3D Blueprint Explorer Screen (`BlueprintExplorerScreen`)
+
+- **Centered Modal Architecture**: 424x262 modal frame with golden trim (`#E2B007`) and dark arcane styling (`#111822`). World blur is suppressed via `applyBlur` override to keep UI text and rendered 3D voxel geometry razor-sharp.
+- **Real-Time Live Search Engine**: An integrated `TextFieldWidget` allows instant filtering across blueprint display names, unique IDs, and descriptions. Catalog cards update in real time as characters are typed.
+- **Hardware-Accelerated 3D Voxel Engine**:
+  - **Dynamic Isometric Projection**: Transforms all non-air blocks into 3D voxel coordinates, rotating across yaw and pitch angles.
+  - **Auto-Spin & Manual Orbital Controls**: Gently auto-spins when idle; clicking and dragging inside the viewport provides fluid manual orbital camera rotation with pitch clamping.
+  - **Smooth Scroll Zoom**: Mouse scroll wheel dynamically adjusts zoom scale from 0.25x to 8.0x.
+  - **Scissor Clipping**: Hardware scissor clipping (`context.enableScissor`) ensures complex or large structures never bleed outside the viewport frame.
+- **Zero Text Cut-Off Architecture**:
+  - Blueprint card titles are cleanly trimmed with ellipsis (`textRenderer.trimToWidth`) with full titles displayed on hover tooltips.
+  - Multi-line descriptions are dynamically wrapped (`textRenderer.wrapLines`) ensuring zero text clipping across any Minecraft GUI scale (Normal, Large, Auto).
+- **Direct Lifecycle Actions**:
+  - `[ ✔ Select ]`: Immediately arms the active blueprint on the held Command Scepter, updates server state, and closes the explorer.
+  - `[ 📋 BOM ]`: Directly launches the Material Bill of Materials modal screen for the active blueprint.
+  - `[ 🗑 Del ]`: Deletes custom player-captured blueprints permanently with a safety confirmation modal.
+
+### 27.2 3D Blueprint Clarity Overhaul & Architectural Viewport Engine
+
+- **True 3D Rotated Quad Projection**:
+  - Replaces flat 2D voxel stamps with authentic 3D rotated quads.
+  - For each visible block face, all 4 spatial corners are projected onto the screen based on camera yaw and pitch, rendering foreshortened, perspective-accurate 3D quads via hardware vertex buffer shaders (`RenderLayer.getGui()`).
+- **6-Directional Interior Block Occlusion Culling**:
+  - Implements neighbor occlusion culling (`isOpaque(BlockState)`).
+  - Internal faces and completely enclosed blocks inside solid masonry, floors, and thick walls are culled before rendering, eliminating thousands of overlapping interior lines, black borders, and visual clutter while preserving transparent blocks (glass, doors, stairs, slabs, iron bars).
+- **Directional Sunlight Shading ($N \cdot L$)**:
+  - Real-time directional illumination from sun vector `(0.355, 0.862, -0.355)` normalized.
+  - Top horizontal surfaces catch full overhead light ($1.18\times$), East/South faces catch angled sunlight ($0.8\times - 0.95\times$), North/West faces show architectural relief shadowing ($0.65\times - 0.75\times$), and bottom soffits sit in ambient occlusion ($0.45\times$).
+- **Fullscreen / Maximize Viewport Mode (`[ ⛶ ]` / `[ 🗗 ]`)**:
+  - Toggled via UI button or hotkeys (`Tab` or `F`).
+  - Expands viewing canvas from $238 \times 138$ to $404 \times 194$ px (nearly $3\times$ viewing area) for panoramic inspection of grand castles and mega-structures, while maintaining a non-intrusive floating HUD overlay.
+  - Pressing `Escape` while maximized exits back to split-pane view before closing the screen.
+- **Architectural Floor Slicer / Cutaway Stepper (`[ ▾ ]`, `[ 🏢 All / L: X/Y ]`, `[ ▴ ]`)**:
+  - Step through floors vertically layer-by-layer to peel back roofs and inspect interior room layouts, furniture, and stairs (`stepLayer`, `resetLayerSlice`).
+  - Automatically resets to full building view when switching blueprint selections to prevent out-of-bounds cutaways.
+- **2D Camera Panning & Expanded Zoom**:
+  - Right-click mouse drag camera panning (`panX`, `panY`), expanded mouse-wheel zoom range ($0.25\times$ to $8.0\times$), middle-click / `[ ↻ ]` view reset, and auto-spin toggle `[ ⏸ / ▶ ]` (or `Space` bar).
+- **Ground Pedestal Grid & Real-Time Cardinal Compass**:
+  - Isometric ground grid pedestal for spatial scale grounding, alongside a floating HUD featuring a real-time rotating cardinal compass (`🧭 North / South / East / West`).
+  - Angle normalization ensures `yaw` remains strictly bounded within $[0, 2\pi]$ across long viewing sessions, preventing compass jitter or float precision degradation.
+- **Mouse Click Priority & Widget Event Delegation**:
+  - `BlueprintExplorerScreen.mouseClicked()` invokes `if (super.mouseClicked(mouseX, mouseY, button)) return true;` before checking 3D viewport drag/pan coordinates.
+  - Ensures all toolbar buttons (`[ ⛶ / 🗗 ]` Maximize, `[ ⏸ / ▶ ]` Spin, `[ ↻ ]` Reset, `[ ▾ ]` Slice Down, `[ 🏢 All ]` Slice Reset, `[ ▴ ]` Slice Up) cleanly receive and process direct mouse clicks, matching the functionality of their keyboard shortcuts.
+- **Botanical & Architectural Geometry Bounds (`getBlockBounds`)**:
+  - Replaces uniform $1 \times 1 \times 1$ cubes with custom bounding boxes for slender flora and thin architectural blocks:
+    - Flowers, saplings, mushrooms, and crops: Slender center profile (`[-0.28, 0.28]` width/depth, `[-0.5, 0.35]` height).
+    - Torches, candles, and end rods: Slender vertical column (`[-0.15, 0.15]` width/depth, `[-0.5, 0.4]` height).
+    - Slabs: Bottom half-block (`[-0.5, 0.0]` Y).
+    - Carpets: Thin floor layer (`[-0.5, -0.375]` Y).
+    - Glass Panes: Thin vertical pane (`[-0.1, 0.1]` depth).
+- **Multi-Face Palette & Authentic Botanical Textures (`getBlockColor(state, face)`)**:
+  - Distinctive face-specific coloring eliminates flat stone gray fallbacks across the palette:
+    - **Botanical Flora**: Poppy scarlet (`#E52521`), Dandelion gold (`#FFD600`), Blue Orchid cyan (`#29B6F6`), Allium magenta (`#BA68C8`), Oxeye Daisy / Azure Bluet white (`#FFFFFF`), Tulips (orange `#FF6D00`, pink `#F48FB1`), Cornflower blue (`#3D5AFE`), Wither Rose obsidian (`#2B2B2B`), and Lilac petals (`#CE93D8`) on top, with lush stem greens on side and bottom faces.
+    - **Agricultural Crops & Botanicals**: Golden wheat (`#D4AF37`), Carrot orange (`#FF6F00`), Potato gold (`#E0A93B`), Beetroot crimson (`#880E4F`), Melon green stripes, Carved Pumpkin glowing amber front face (`#FF8F00`), Cactus thorny green (`#2E7D32`), and Sugar Cane reeds (`#7CB342`).
+    - **Tree Species & Multi-Face Bark/Rings**: Cut annual rings on top/bottom faces vs. authentic species bark on side faces for Oak, Birch (white bark `#EBEBEB`), Spruce, Jungle, Acacia, Dark Oak, Mangrove, Cherry, Bamboo, Crimson, and Warped stems.
+    - **Crafting & Utility Workstations**: Bookshelves with colorful book spines on sides, Crafting Table grid top, Furnaces with glowing fire grates, and TNT with red dynamite casing and white primer top/bottom.
+    - **Full 16-Color Dye Palette**: Authentic dye colors for wool, concrete, terracotta, carpets, beds, shulker boxes, and candles.
+    - **Non-Opaque Culling Safety**: Slender botanical voxels and partial blocks never cull adjacent solid blocks in `isOpaque(BlockState)`.
+- **Input Ungrabbing & Typographic Routing**:
+  - Clicking inside the 3D viewport automatically unfocuses the search text box, ensuring orbital hotkeys (`Space`, `Tab`, `F`) execute immediately without accidental character input.
+  - Explicit `charTyped` handler forwards typing directly to the search field for seamless text filtering.
+
+### 27.3 Newest-First Custom Blueprint Ordering (Slide 1 Slot 1 Default)
+
+- **Immediate Slide 1 Access**: When a player saves a custom blueprint via `DESIGN` mode or the capture modal, it is placed at index 0 (Slot 1 on Slide 1 / Page 0) in `BlueprintRegistry`, `CustomBlueprintManager`, and world persistent state (`CustomBlueprintPersistentState`).
+- **Elimination of Paging Friction**: Commanders immediately see their freshly captured creation on Slot 1 without clicking through multiple slides of existing blueprints.
+- **Server-Client Handshake Sync**: When `SyncCustomBlueprintsPayload` is sent to clients, newest-first order is preserved across client catalogs, and held scepter stacks are automatically armed with the new blueprint ID on both client and server upon saving.
+
+### 27.4 Minion Waypoint Navigation Anti-Teleport & Pathing Jitter Resolution
+
+- **Slab, Stair, Carpet, Snow & Path Block Exemption**: Refined `unstuckIfInSolidWall()` in `MinionEntity` to evaluate torso (`getY() + 0.6D`) and head (`getEyeY()`) blocks using `shouldSuffocate()` and `isFullCube()`. Minions traversing uneven walkable floors (slabs, stairs, carpets, snow layers, path blocks) are never falsely flagged as embedded in solid walls.
+- **20-Tick Unstuck Safety Cooldown**: Emergency extractions impose a 20-tick cooldown (`unstuckCooldownTicks`), permanently eliminating stutter, teleport particles, and velocity zeroing while moving towards tactical waypoints.
+- **Arcane Levitation Traversal Landing Stability**: Obstacle-climbing maneuvers maintain at least 4 ticks of lift before touchdown can occur, eliminating flutter and chatter on ground surfaces.

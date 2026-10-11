@@ -409,8 +409,8 @@ public class BuilderBlockPhasingAndEgressTest {
 			"CommandScepterItem must define isPlayerOverWater helper");
 		Assertions.assertTrue(scepterContent.contains("if (isPlayerOverWater(world, serverPlayer))"),
 			"CommandScepterItem must check isPlayerOverWater in inventoryTick");
-		Assertions.assertTrue(scepterContent.contains("cancelActiveSessionsForOwner(uuid, serverPlayer.getServerWorld());"),
-			"CommandScepterItem must cancel active construction sessions when flying over water");
+		Assertions.assertFalse(scepterContent.contains("cancelActiveSessionsForOwner(uuid, serverPlayer.getServerWorld());"),
+			"CommandScepterItem must NOT cancel active minion construction sessions when flying over water (minions continue building)");
 		Assertions.assertTrue(scepterContent.contains("setMode(stack, CommandMode.FOLLOW);"),
 			"CommandScepterItem must switch mode out of BUILD to FOLLOW when flying over water");
 

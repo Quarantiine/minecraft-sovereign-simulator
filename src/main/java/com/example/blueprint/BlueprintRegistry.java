@@ -44,16 +44,51 @@ public class BlueprintRegistry {
 
 	/**
 	 * Dynamically registers a custom player-created blueprint.
+	 * Preserves insertion order by appending to the end of the custom catalog.
 	 *
 	 * @param blueprint The custom structure blueprint to register.
 	 * @return The registered blueprint.
 	 */
 	public static synchronized StructureBlueprint registerCustomBlueprint(StructureBlueprint blueprint) {
+		return registerCustomBlueprint(blueprint, false);
+	}
+
+	/**
+	 * Dynamically registers a custom player-created blueprint with control over catalog placement.
+	 *
+	 * @param blueprint The custom structure blueprint to register.
+	 * @param prepend   If true, places the blueprint at index 0 (front of slide 1); if false, appends to the end.
+	 * @return The registered blueprint.
+	 */
+	public static synchronized StructureBlueprint registerCustomBlueprint(StructureBlueprint blueprint, boolean prepend) {
 		if (blueprint == null) return null;
 		String cleanId = blueprint.getId().toLowerCase().trim();
-		CUSTOM_REGISTRY.put(cleanId, blueprint);
+		if (prepend) {
+			Map<String, StructureBlueprint> newMap = new LinkedHashMap<>();
+			newMap.put(cleanId, blueprint);
+			for (Map.Entry<String, StructureBlueprint> entry : CUSTOM_REGISTRY.entrySet()) {
+				if (!entry.getKey().equalsIgnoreCase(cleanId)) {
+					newMap.put(entry.getKey(), entry.getValue());
+				}
+			}
+			CUSTOM_REGISTRY.clear();
+			CUSTOM_REGISTRY.putAll(newMap);
+		} else {
+			CUSTOM_REGISTRY.put(cleanId, blueprint);
+		}
 		REGISTRY.put(cleanId, blueprint);
 		return blueprint;
+	}
+
+	/**
+	 * Dynamically registers a newly saved custom blueprint at the very front of the catalog
+	 * (index 0 / Slide 1 Slot 1) so users immediately have it selected without clicking through slides.
+	 *
+	 * @param blueprint The custom structure blueprint to register.
+	 * @return The registered blueprint.
+	 */
+	public static synchronized StructureBlueprint registerCustomBlueprintFirst(StructureBlueprint blueprint) {
+		return registerCustomBlueprint(blueprint, true);
 	}
 
 	/**

@@ -788,6 +788,16 @@ public class ModNetworking {
 		com.example.blueprint.StructureBlueprint blueprint = payload.toStructureBlueprint();
 		com.example.blueprint.CustomBlueprintManager.getInstance().saveBlueprint(player.getServer(), blueprint);
 
+		net.minecraft.item.ItemStack mainHand = player.getMainHandStack();
+		if (mainHand.getItem() instanceof com.example.item.custom.CommandScepterItem) {
+			com.example.item.custom.CommandScepterItem.setBlueprintId(mainHand, blueprint.getId());
+		} else {
+			net.minecraft.item.ItemStack offHand = player.getOffHandStack();
+			if (offHand.getItem() instanceof com.example.item.custom.CommandScepterItem) {
+				com.example.item.custom.CommandScepterItem.setBlueprintId(offHand, blueprint.getId());
+			}
+		}
+
 		worldSoundAndMessage(player, blueprint);
 	}
 
@@ -850,6 +860,16 @@ public class ModNetworking {
 					payload.name(),
 					payload.description()
 				);
+
+			net.minecraft.item.ItemStack mainHand = player.getMainHandStack();
+			if (mainHand.getItem() instanceof com.example.item.custom.CommandScepterItem) {
+				com.example.item.custom.CommandScepterItem.setBlueprintId(mainHand, blueprint.getId());
+			} else {
+				net.minecraft.item.ItemStack offHand = player.getOffHandStack();
+				if (offHand.getItem() instanceof com.example.item.custom.CommandScepterItem) {
+					com.example.item.custom.CommandScepterItem.setBlueprintId(offHand, blueprint.getId());
+				}
+			}
 
 			worldSoundAndMessage(player, blueprint);
 		} catch (Exception e) {

@@ -94,7 +94,7 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 - **Free Survival Arcane Build Flight & Shallow Water Tolerance**:
   - Enjoy unconstrained 3D creative-style flight in Survival mode while holding the Scepter in **`BUILD`** mode (Space to ascend, Shift to descend, full WASD navigation).
-  - Shallow water $\le 2$ blocks high/deep from solid ground (creeks, ponds, moats, puddles) is fully permitted for flight without interruption. Only deep water bodies ($> 2$ blocks deep) cancel flight and active construction.
+  - Shallow water $\le 5$ blocks high/deep from solid ground (creeks, ponds, moats, canals, puddles) is fully permitted for flight without interruption. Only deep water bodies ($> 5$ blocks deep) cancel flight and `BUILD` mode; minions continue building uninterrupted.
 - **Anti-Suffocation, Anti-Entombment & Safe Evacuation**:
   - Minions safely phase through blocks while building (`noClip = true`), with automatic server-side anti-suffocation safeguards (`unstuckIfInSolidWall`) ensuring units are never stuck in walls or underground rock.
   - Mining sessions evacuate minions intelligently: surface quarries evacuate workers to the open-sky rim overlooking the pit, while underground room excavations station workers onto the cleared interior floor (`box.getMinY()`), never clipping into solid perimeter rock.
@@ -120,6 +120,8 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - Select two corners with left-clicks to enclose any building in a 3D holographic ghost prism.
   - Adjust height in real time with `Ctrl` + Scroll.
   - Name and save the structure directly to world data without destroying the original building. Minion builders can then replicate it anywhere with 100% exact block fidelity!
+  - **Newest-First Catalog Ordering**: Newly captured blueprints immediately appear at Slot 1 on Slide 1 by default, automatically armed on your held Scepter.
+  - **3D Blueprint Explorer & Clarity Viewport GUI**: Click `[ 🔍 3D View ]` in the Command Hub to open `BlueprintExplorerScreen`, featuring true 3D rotated quad rendering, 6-directional interior occlusion culling, authentic botanical flora and multi-face textures (flowers, crops, tree bark/rings, workstations, 16-color dyes), directional sunlight ($N \cdot L$), Fullscreen/Maximize mode (`[ ⛶ ]` / `Tab` / `F`), an Architectural Floor Slicer (`▲` / `▼`), full mouse-click and keybind toolbar controls, 2D camera panning, $0.25\times$ to $8.0\times$ zoom, ground pedestal, real-time cardinal compass, and zero text cut-off across all resolutions.
 - **Visual Pathway Patrols**:
   - Script custom patrol loops or ping-pong routes with glowing checkpoint badges (`[ 1 ]`, `[ 2 ]`) and luminous laser vector tethers.
   - Customize routes with 5 built-in channels or 24-bit RGB hex colors via the interactive modal GUI.
@@ -143,11 +145,14 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 | **`R` Key**            | Scepter in Hand    | **Squad Retreat**: Recalls selected active squad minions within 64m.                                |
 | **`Shift + R`**        | Scepter in Hand    | **Citadel Call**: Army-wide emergency alarm (128m) recalling all units and unbinding patrols.       |
 | **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                 |
-| **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 2$ blocks high permitted.       |
+| **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 5$ blocks high permitted.       |
 | **`Ctrl` + Scroll**    | `DESIGN` / `MINE`  | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).          |
 | **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault.      |
 | **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.    |
 | **Sneak + Left-Click** | `DESIGN` / `MINE`  | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.              |
+| **`Tab` / `F` Key**    | In 3D Explorer     | **Maximize Viewport**: Toggles full-width $404 \times 194$ px 3D inspection view.                    |
+| **Right-Click Drag**   | In 3D Explorer     | **Camera Pan**: Translates 3D model horizontally and vertically.                                    |
+| **`▲` / `▼` Slicer**   | In 3D Explorer     | **Architectural Floor Slicer**: Steps through floors to inspect interior room layouts.              |
 
 > 📖 For the exhaustive controls manual, see [**COMMANDS.md**](COMMANDS.md).
 

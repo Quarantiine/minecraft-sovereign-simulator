@@ -156,6 +156,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	private boolean traversalManeuverActive = false;
 	private double traversalClearanceAltitude = 0.0D;
 	private int traversalCrestTicks = 0;
+	private int unstuckCooldownTicks = 0;
 
 	private UUID procurementRequesterUuid = null;
 	private Item procurementItem = null;
@@ -218,6 +219,13 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		if (selected) {
 			this.clearLeader();
 			this.setPatrolRouteId(-1);
+			// Following the commander supersedes any stale stationed state (prevents lingering [HOLD] label)
+			if (this.getGuardAnchorPos() != null) {
+				this.setGuardAnchorPos(null);
+			}
+			if (this.isSitting()) {
+				this.setSitting(false);
+			}
 		}
 	}
 
@@ -230,8 +238,13 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 	/**
 	 * @return true if this minion is currently holding position (either sitting or standing guard).
+	 *         Minions that are actively following (selected by the commander, escorting a leader, or
+	 *         patrolling a route) are never considered holding, even if stale sit/guard state lingers.
 	 */
 	public boolean isHoldingPosition() {
+		if (this.isSelected() || this.hasLeader() || this.getPatrolRouteId() >= 0) {
+			return false;
+		}
 		return this.isSitting() || this.isGuarding();
 	}
 
@@ -971,28 +984,45 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 * @return true if an unstuck teleport occurred.
 	 */
 	public boolean unstuckIfInSolidWall(ServerWorld serverWorld) {
-		if (!this.isAlive() || this.isPhasingBlocks()) {
+		if (!this.isAlive() || this.isPhasingBlocks() || this.hasVehicle()) {
 			return false;
 		}
-		BlockPos feet = this.getBlockPos();
-		BlockState feetState = serverWorld.getBlockState(feet);
-		BlockState headState = serverWorld.getBlockState(feet.up());
-
-		boolean footSolid = feetState.isSolidBlock(serverWorld, feet) || !feetState.getCollisionShape(serverWorld, feet).isEmpty();
-		boolean headSolid = headState.isSolidBlock(serverWorld, feet.up()) || !headState.getCollisionShape(serverWorld, feet.up()).isEmpty();
-
-		// Minions in scaffolding are climbing normally
-		if (feetState.isOf(Blocks.SCAFFOLDING) || headState.isOf(Blocks.SCAFFOLDING)) {
+		if (this.unstuckCooldownTicks > 0) {
 			return false;
 		}
 
-		if (!footSolid && !headSolid) {
+		BlockPos torsoPos = BlockPos.ofFloored(this.getX(), this.getY() + 0.6D, this.getZ());
+		BlockPos headPos = BlockPos.ofFloored(this.getX(), this.getEyeY(), this.getZ());
+		BlockPos feetPos = BlockPos.ofFloored(this.getX(), this.getY() + 0.1D, this.getZ());
+
+		BlockState torsoState = serverWorld.getBlockState(torsoPos);
+		BlockState headState = serverWorld.getBlockState(headPos);
+		BlockState feetState = serverWorld.getBlockState(feetPos);
+
+		// Minions in scaffolding or ladders are climbing normally
+		if (torsoState.isOf(Blocks.SCAFFOLDING) || headState.isOf(Blocks.SCAFFOLDING) || feetState.isOf(Blocks.SCAFFOLDING)) {
+			return false;
+		}
+
+		boolean torsoStuck = (torsoState.shouldSuffocate(serverWorld, torsoPos) || torsoState.isFullCube(serverWorld, torsoPos))
+				&& !torsoState.getCollisionShape(serverWorld, torsoPos).isEmpty();
+		boolean headStuck = (headState.shouldSuffocate(serverWorld, headPos) || headState.isFullCube(serverWorld, headPos))
+				&& !headState.getCollisionShape(serverWorld, headPos).isEmpty();
+		boolean feetStuck = (feetState.shouldSuffocate(serverWorld, feetPos) || feetState.isFullCube(serverWorld, feetPos))
+				&& !feetState.getCollisionShape(serverWorld, feetPos).isEmpty();
+
+		// A minion is stuck only if embedded in a wall/ceiling (torso or head suffocating)
+		// OR deeply buried underground (both feet AND torso suffocating).
+		// Walking on slabs, stairs, snow, carpets, or path blocks under feet NEVER triggers unstuck!
+		boolean isStuck = torsoStuck || headStuck || (feetStuck && torsoStuck);
+		if (!isStuck) {
 			return false;
 		}
 
 		// Minion is embedded inside solid block or wall!
-		BlockPos safePos = findNearestSafeStandingPosition(serverWorld, feet, 8);
-		if (safePos != null) {
+		BlockPos searchCenter = torsoStuck ? torsoPos : headPos;
+		BlockPos safePos = findNearestSafeStandingPosition(serverWorld, searchCenter, 8);
+		if (safePos != null && !safePos.equals(this.getBlockPos())) {
 			double destX = safePos.getX() + 0.5D;
 			double destY = safePos.getY();
 			double destZ = safePos.getZ() + 0.5D;
@@ -1002,6 +1032,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			this.setVelocity(0.0D, 0.0D, 0.0D);
 			this.velocityModified = true;
 			this.fallDistance = 0.0F;
+			this.unstuckCooldownTicks = 20;
 			if (this.isSitting()) {
 				this.setGuardAnchorPos(safePos);
 			}
@@ -1437,6 +1468,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 		if (this.levitationCooldown > 0) {
 			this.levitationCooldown--;
+		}
+		if (this.unstuckCooldownTicks > 0) {
+			this.unstuckCooldownTicks--;
 		}
 
 		// Builder block phasing: allow passage through blocks only while actively building or exiting building
@@ -1922,7 +1956,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 				overSolidGround = true;
 			}
 			boolean climbingWallAhead = (obstacleTopClearanceY > this.getY() + 0.3D) && (this.horizontalCollision || this.traversalStallTicks >= 1);
-			if (this.traversalManeuverActive && (this.getY() < this.traversalClearanceAltitude - 0.1D || this.traversalCrestTicks > 0)) {
+			if (this.traversalManeuverActive && (this.getY() < this.traversalClearanceAltitude - 0.1D || this.traversalCrestTicks > 0 || this.arcaneLevitationTicks < 4)) {
 				climbingWallAhead = true;
 			}
 

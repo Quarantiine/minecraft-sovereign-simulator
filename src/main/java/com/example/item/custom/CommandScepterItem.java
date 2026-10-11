@@ -1949,12 +1949,12 @@ public class CommandScepterItem extends Item {
 
 	/**
 	 * Checks if the player is currently touching deep water or flying directly above deep water.
-	 * If the water column is two blocks high or less (shallow water <= 2 blocks deep), the player
+	 * If the water column is 5 blocks high or less (shallow water <= 5 blocks deep), the player
 	 * is permitted to fly over it in BUILD mode.
 	 *
 	 * @param world  The world instance.
 	 * @param player The player entity.
-	 * @return true if player is over deep water (> 2 blocks high); false if on land or shallow water (<= 2 blocks high).
+	 * @return true if player is over deep water (> 5 blocks high); false if on land or shallow water (<= 5 blocks high).
 	 */
 	public static boolean isPlayerOverWater(World world, PlayerEntity player) {
 		if (player == null || world == null) {
@@ -1962,16 +1962,32 @@ public class CommandScepterItem extends Item {
 		}
 
 		BlockPos feetPos = player.getBlockPos();
+		BlockPos headPos = BlockPos.ofFloored(player.getEyePos());
 		int bottomY = world.getBottomY();
 
-		// Check if player is currently inside water (feet or head in water)
 		BlockState feetState = world.getBlockState(feetPos);
+		BlockState headState = world.getBlockState(headPos);
+		BlockState belowFeetState = world.getBlockState(feetPos.down());
+
+		// Check if player is currently inside water (feet, head, or dipped into water)
 		boolean inWater = feetState.getFluidState().isIn(FluidTags.WATER) || feetState.isOf(Blocks.WATER)
+				|| headState.getFluidState().isIn(FluidTags.WATER) || headState.isOf(Blocks.WATER)
 				|| player.isTouchingWater() || player.isSubmergedInWater();
 
 		// Find the top of the water column
-		BlockPos.Mutable mut = feetPos.mutableCopy();
+		BlockPos.Mutable mut;
 		if (inWater) {
+			// Locate a valid starting water block
+			if (headState.getFluidState().isIn(FluidTags.WATER) || headState.isOf(Blocks.WATER)) {
+				mut = headPos.mutableCopy();
+			} else if (feetState.getFluidState().isIn(FluidTags.WATER) || feetState.isOf(Blocks.WATER)) {
+				mut = feetPos.mutableCopy();
+			} else if (belowFeetState.getFluidState().isIn(FluidTags.WATER) || belowFeetState.isOf(Blocks.WATER)) {
+				mut = feetPos.down().mutableCopy();
+			} else {
+				mut = feetPos.mutableCopy();
+			}
+
 			// Scan upward to locate the top surface of this water body
 			while (mut.getY() < world.getTopY()) {
 				BlockPos above = mut.up();
@@ -1983,14 +1999,17 @@ public class CommandScepterItem extends Item {
 				}
 			}
 		} else {
+			mut = feetPos.mutableCopy();
 			// Player is airborne / above: scan downwards to find the top surface of water or solid ground
 			while (mut.getY() > bottomY) {
 				BlockState state = world.getBlockState(mut);
 				if (state.getFluidState().isIn(FluidTags.WATER) || state.isOf(Blocks.WATER)) {
 					break; // Found water surface
 				}
-				if (state.isSolidBlock(world, mut)) {
-					return false; // Solid ground with no water above it
+				// Solid ground, architecture, bridge, roof, glass, slabs, stairs, etc. (ignore lily pads on water)
+				boolean hasCollision = !state.isAir() && !state.getCollisionShape(world, mut).isEmpty() && !state.isOf(Blocks.LILY_PAD);
+				if (hasCollision || state.isSolidBlock(world, mut)) {
+					return false; // Solid structure or ground between player and any water below
 				}
 				mut.move(0, -1, 0);
 			}
@@ -2013,9 +2032,9 @@ public class CommandScepterItem extends Item {
 			}
 		}
 
-		// If the water is two blocks high or less (<= 2 blocks deep), allow flying over it in BUILD mode.
-		// Deep water (> 2 blocks high) prohibits flight.
-		return waterHeight > 2;
+		// If the water is 5 blocks high or less (<= 5 blocks deep), allow flying over it in BUILD mode.
+		// Deep water (> 5 blocks high) prohibits flight and cancels construction.
+		return waterHeight > 5;
 	}
 
 	private static final java.util.Set<java.util.UUID> ACTIVE_SERVER_BUILD_FLIERS = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -2032,9 +2051,8 @@ public class CommandScepterItem extends Item {
 		if (entity instanceof net.minecraft.server.network.ServerPlayerEntity serverPlayer) {
 			java.util.UUID uuid = serverPlayer.getUuid();
 			if (isBuildMode) {
-				// Water Flight Check: If player is flying or hovering over water in BUILD mode, cancel build & exit BUILD mode
+				// Water Flight Check: If player is flying or hovering over deep water in BUILD mode, exit BUILD mode & flight only (minions continue building)
 				if (isPlayerOverWater(world, serverPlayer)) {
-					com.example.construction.ConstructionManager.getInstance().cancelActiveSessionsForOwner(uuid, serverPlayer.getServerWorld());
 					setMode(stack, CommandMode.FOLLOW);
 
 					if (!serverPlayer.isCreative() && !serverPlayer.isSpectator()) {
@@ -2042,9 +2060,10 @@ public class CommandScepterItem extends Item {
 						serverPlayer.getAbilities().allowFlying = false;
 						serverPlayer.sendAbilitiesUpdate();
 					}
-					ACTIVE_SERVER_BUILD_FLIERS.remove(uuid);
+					// Keep in ACTIVE_SERVER_BUILD_FLIERS to ensure fall distance is zeroed until touching ground/water
+					ACTIVE_SERVER_BUILD_FLIERS.add(uuid);
 
-					serverPlayer.sendMessage(Text.literal("§c⚠ Construction cancelled: Flying over water is prohibited in BUILD mode!§r"), true);
+					serverPlayer.sendMessage(Text.literal("§c⚠ Build mode cancelled: Flying over deep water is prohibited! (Minions will continue building)§r"), true);
 					serverPlayer.getServerWorld().playSound(null, serverPlayer.getBlockPos(), SoundEvents.ENTITY_GENERIC_EXTINGUISH_FIRE, SoundCategory.PLAYERS, 1.0F, 1.0F);
 					serverPlayer.getServerWorld().spawnParticles(ParticleTypes.SPLASH, serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(), 20, 0.4D, 0.2D, 0.4D, 0.1D);
 					return;
@@ -2064,7 +2083,7 @@ public class CommandScepterItem extends Item {
 					serverPlayer.sendAbilitiesUpdate();
 				}
 				serverPlayer.fallDistance = 0.0F;
-				if (serverPlayer.isOnGround()) {
+				if (serverPlayer.isOnGround() || serverPlayer.isTouchingWater()) {
 					ACTIVE_SERVER_BUILD_FLIERS.remove(uuid);
 				}
 			}

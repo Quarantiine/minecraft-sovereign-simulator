@@ -17,6 +17,7 @@ public class GuiBlurRemovalTest {
 
 	private static final Class<?>[] TARGET_SCREENS = new Class<?>[] {
 		BlueprintCaptureModalScreen.class,
+		BlueprintExplorerScreen.class,
 		CommandScepterScreen.class,
 		MinionScreen.class
 	};
@@ -24,6 +25,7 @@ public class GuiBlurRemovalTest {
 	@ParameterizedTest(name = "Screen {0} declares overridden applyBlur(float) method")
 	@ValueSource(classes = {
 		BlueprintCaptureModalScreen.class,
+		BlueprintExplorerScreen.class,
 		CommandScepterScreen.class,
 		MinionScreen.class
 	})
@@ -63,7 +65,7 @@ public class GuiBlurRemovalTest {
 	@Test
 	@DisplayName("All active GUI screens implement applyBlur override")
 	void testAllScreensCovered() {
-		Assertions.assertEquals(3, TARGET_SCREENS.length);
+		Assertions.assertEquals(4, TARGET_SCREENS.length);
 		for (Class<?> screenClass : TARGET_SCREENS) {
 			boolean found = false;
 			for (Method method : screenClass.getDeclaredMethods()) {

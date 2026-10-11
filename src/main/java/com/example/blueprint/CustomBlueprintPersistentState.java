@@ -25,7 +25,7 @@ public class CustomBlueprintPersistentState extends PersistentState {
 
 	public static final String KEY = "minion_custom_blueprints";
 
-	private final Map<String, StructureBlueprint> customBlueprints = new ConcurrentHashMap<>();
+	private final Map<String, StructureBlueprint> customBlueprints = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>());
 
 	public CustomBlueprintPersistentState() {}
 
@@ -147,7 +147,18 @@ public class CustomBlueprintPersistentState extends PersistentState {
 	 */
 	public void addBlueprint(StructureBlueprint blueprint) {
 		Objects.requireNonNull(blueprint, "blueprint cannot be null");
-		this.customBlueprints.put(blueprint.getId().toLowerCase(), blueprint);
+		String cleanId = blueprint.getId().toLowerCase().trim();
+		synchronized (this.customBlueprints) {
+			Map<String, StructureBlueprint> updated = new java.util.LinkedHashMap<>();
+			updated.put(cleanId, blueprint);
+			for (Map.Entry<String, StructureBlueprint> entry : this.customBlueprints.entrySet()) {
+				if (!entry.getKey().equalsIgnoreCase(cleanId)) {
+					updated.put(entry.getKey(), entry.getValue());
+				}
+			}
+			this.customBlueprints.clear();
+			this.customBlueprints.putAll(updated);
+		}
 		this.markDirty();
 	}
 

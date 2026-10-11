@@ -73,15 +73,14 @@ public class BuildFlightManager {
 
 		boolean overWater = CommandScepterItem.isPlayerOverWater(world, player);
 		if (overWater && shouldFly) {
-			if (flightActive) {
-				flightActive = false;
-				descending = false;
-				if (!player.isCreative() && !player.isSpectator()) {
-					player.getAbilities().flying = false;
-					player.getAbilities().allowFlying = false;
-				}
-				player.sendMessage(Text.literal("§c⚠ Construction cancelled: Flying over water is prohibited in BUILD mode!§r"), true);
+			flightActive = false;
+			descending = false;
+			if (!player.isCreative() && !player.isSpectator()) {
+				player.getAbilities().flying = false;
+				player.getAbilities().allowFlying = false;
 			}
+			CommandScepterItem.setMode(heldStack, CommandMode.FOLLOW);
+			player.sendMessage(Text.literal("§c⚠ Build mode cancelled: Flying over deep water is prohibited! (Minions will continue building)§r"), true);
 			return;
 		}
 

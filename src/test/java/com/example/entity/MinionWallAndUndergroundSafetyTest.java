@@ -251,29 +251,50 @@ public class MinionWallAndUndergroundSafetyTest {
 	}
 
 	@Test
-	@DisplayName("Source Invariant: CommandScepterItem permits build flight over water 2 blocks high or less")
+	@DisplayName("Source Invariant: CommandScepterItem permits build flight over water 5 blocks high or less")
 	void testWaterHeightFlightPermissionSourceInvariant() throws IOException {
 		Path scepterPath = Path.of("src/main/java/com/example/item/custom/CommandScepterItem.java");
 		String content = Files.readString(scepterPath);
 
-		Assertions.assertTrue(content.contains("return waterHeight > 2;"),
-			"CommandScepterItem.isPlayerOverWater must permit flight when waterHeight <= 2 (only waterHeight > 2 cancels flight)");
+		Assertions.assertTrue(content.contains("return waterHeight > 5;"),
+			"CommandScepterItem.isPlayerOverWater must permit flight when waterHeight <= 5 (only waterHeight > 5 cancels flight)");
 	}
 
 	@Test
-	@DisplayName("Simulation: Water height calculation allows flight over water 1 or 2 blocks high, rejects > 2")
+	@DisplayName("Simulation: Water height calculation allows flight over water up to 5 blocks high, rejects > 5")
 	void testWaterHeightSimulation() {
-		java.util.function.Function<Integer, Boolean> isOverWater = depth -> depth > 2;
+		java.util.function.Function<Integer, Boolean> isOverWater = depth -> depth > 5;
 
 		// 0 blocks (dry ground)
 		Assertions.assertFalse(isOverWater.apply(0), "Dry land must allow build flight");
-		// 1 block high water (shallow puddle)
+		// 1 to 5 blocks high water (shallow puddle / stream / pool)
 		Assertions.assertFalse(isOverWater.apply(1), "Water 1 block high must allow build flight");
-		// 2 blocks high water (shallow creek / pool)
 		Assertions.assertFalse(isOverWater.apply(2), "Water 2 blocks high must allow build flight");
-		// 3 blocks high water (deep river)
-		Assertions.assertTrue(isOverWater.apply(3), "Water 3 blocks high (> 2) must cancel build flight");
+		Assertions.assertFalse(isOverWater.apply(3), "Water 3 blocks high must allow build flight");
+		Assertions.assertFalse(isOverWater.apply(4), "Water 4 blocks high must allow build flight");
+		Assertions.assertFalse(isOverWater.apply(5), "Water 5 blocks high must allow build flight");
+		// 6+ blocks high water (deep river / lake)
+		Assertions.assertTrue(isOverWater.apply(6), "Water 6 blocks high (> 5) must cancel build flight");
 		// 10 blocks high water (ocean)
 		Assertions.assertTrue(isOverWater.apply(10), "Deep ocean must cancel build flight");
+	}
+
+	@Test
+	@DisplayName("Source Invariant: Water detection recognizes architectural bridges, slabs, glass, and safe descent fall immunity")
+	void testWaterEdgeCasesSourceInvariants() throws IOException {
+		Path scepterPath = Path.of("src/main/java/com/example/item/custom/CommandScepterItem.java");
+		String content = Files.readString(scepterPath);
+
+		// 1. Bridges, slabs, glass with collision are not treated as water
+		Assertions.assertTrue(content.contains("boolean hasCollision = !state.isAir() && !state.getCollisionShape(world, mut).isEmpty() && !state.isOf(Blocks.LILY_PAD);"),
+			"CommandScepterItem must check non-empty collision shapes to allow building over bridges/slabs/glass");
+
+		// 2. Head in water / feet in water / below feet checks
+		Assertions.assertTrue(content.contains("BlockPos headPos = BlockPos.ofFloored(player.getEyePos());"),
+			"CommandScepterItem must check head/eye position for submerged water detection");
+
+		// 3. Safe descent fall damage immunity preserved until landing or water touch
+		Assertions.assertTrue(content.contains("if (serverPlayer.isOnGround() || serverPlayer.isTouchingWater()) {"),
+			"CommandScepterItem must maintain fall damage immunity until player lands on ground or touches water");
 	}
 }

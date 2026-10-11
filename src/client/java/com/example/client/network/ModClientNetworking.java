@@ -49,7 +49,7 @@ public class ModClientNetworking {
 				com.example.blueprint.BlueprintRegistry.clearCustomBlueprints();
 				if (payload.blueprints() != null) {
 					for (com.example.blueprint.StructureBlueprint bp : payload.blueprints()) {
-						com.example.blueprint.BlueprintRegistry.registerCustomBlueprint(bp);
+						com.example.blueprint.BlueprintRegistry.registerCustomBlueprint(bp, false);
 					}
 				}
 				if (context.client().currentScreen instanceof com.example.client.gui.CommandScepterScreen screen) {

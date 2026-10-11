@@ -635,8 +635,16 @@ public class PatrolRouteAndHierarchyTest {
 	void testMinionEntityEscortMutualExclusivityContract() throws java.io.IOException {
 		String minionContent = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/example/entity/custom/MinionEntity.java"));
 		Assertions.assertTrue(
-			minionContent.contains("if (selected) {\n\t\t\tthis.clearLeader();\n\t\t\tthis.setPatrolRouteId(-1);\n\t\t}"),
+			minionContent.contains("if (selected) {\n\t\t\tthis.clearLeader();\n\t\t\tthis.setPatrolRouteId(-1);\n"),
 			"MinionEntity.setSelected(true) must automatically clear leader minion and patrol route so followers detach upon following player"
+		);
+		Assertions.assertTrue(
+			minionContent.contains("if (this.getGuardAnchorPos() != null) {\n\t\t\t\tthis.setGuardAnchorPos(null);\n\t\t\t}\n\t\t\tif (this.isSitting()) {\n\t\t\t\tthis.setSitting(false);"),
+			"MinionEntity.setSelected(true) must clear stale guard anchor and sitting pose so following minions never show [HOLD]"
+		);
+		Assertions.assertTrue(
+			minionContent.contains("if (this.isSelected() || this.hasLeader() || this.getPatrolRouteId() >= 0) {\n\t\t\treturn false;\n\t\t}\n\t\treturn this.isSitting() || this.isGuarding();"),
+			"isHoldingPosition() must be false for selected, escorting, or patrolling minions"
 		);
 		Assertions.assertTrue(
 			minionContent.contains("if (uuid != null) {\n\t\t\tthis.dataTracker.set(SELECTED, false);"),

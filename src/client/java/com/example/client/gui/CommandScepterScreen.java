@@ -85,6 +85,7 @@ public class CommandScepterScreen extends Screen {
 	private ButtonWidget prevPageBtn;
 	private ButtonWidget nextPageBtn;
 	private ButtonWidget targetFilterBtn;
+	private ButtonWidget explorerBtn;
 
 	public enum ConfirmationType {
 		NONE,
@@ -340,6 +341,17 @@ public class CommandScepterScreen extends Screen {
 		.build();
 		this.materialBomBtn.visible = this.selectedMode == CommandMode.BUILD;
 		this.addDrawableChild(this.materialBomBtn);
+
+		// 3D Architectural Blueprint Explorer Button (visible in BUILD mode)
+		this.explorerBtn = ButtonWidget.builder(
+			Text.literal("§6🔍 3D View"),
+			b -> openBlueprintExplorer()
+		)
+		.dimensions(startX + 260, startY + 100, 65, 15)
+		.tooltip(Tooltip.of(Text.literal("§6✦ 3D Architectural Blueprint Explorer\n§7Browse, search, rotate structures in 3D, and inspect specifications.")))
+		.build();
+		this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD;
+		this.addDrawableChild(this.explorerBtn);
 
 		// Spatial Capture Modal Button (visible in DESIGN mode)
 		this.captureModalBtn = ButtonWidget.builder(
@@ -929,6 +941,20 @@ public class CommandScepterScreen extends Screen {
 		}
 	}
 
+	public ButtonWidget getExplorerBtn() {
+		return this.explorerBtn;
+	}
+
+	public void openBlueprintExplorer() {
+		if (this.client != null) {
+			this.client.setScreen(new BlueprintExplorerScreen(this.selectedBlueprintId, this.scepterStack, this));
+		}
+	}
+
+	public void selectBlueprintFromExplorer(String blueprintId) {
+		selectBlueprint(blueprintId);
+	}
+
 	public ButtonWidget getCaptureModalButton() {
 		return this.captureModalBtn;
 	}
@@ -1147,6 +1173,10 @@ public class CommandScepterScreen extends Screen {
 		if (this.prevPageBtn != null) this.prevPageBtn.active = !isConfirming && this.blueprintPage > 0;
 		if (this.nextPageBtn != null) this.nextPageBtn.active = !isConfirming;
 		if (this.targetFilterBtn != null) this.targetFilterBtn.active = !isConfirming;
+		if (this.explorerBtn != null) {
+			this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD;
+			this.explorerBtn.active = !isConfirming;
+		}
 
 		int modalW = 240;
 		int modalH = 110;
@@ -1319,6 +1349,10 @@ public class CommandScepterScreen extends Screen {
 
 		if (!this.blueprintButtons.isEmpty()) {
 			updateBlueprintButtons();
+		}
+		if (this.explorerBtn != null) {
+			this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD;
+			this.explorerBtn.active = (this.pendingConfirmation == ConfirmationType.NONE);
 		}
 		updatePathwayButtons();
 

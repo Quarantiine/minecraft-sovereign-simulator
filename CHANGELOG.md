@@ -6,11 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
-## [1.0.1] - 2026-10-10
+## [1.0.1] - 2026-10-11
 
-### 🎯 Tactical Target Filtering, Presets & Autonomous Multi-Minion Construction
+### 🔍 3D Blueprint Clarity Overhaul, Tactical Target Filtering & Autonomous Construction
 
 ### Added
+
+#### 🔍 Interactive 3D Architectural Blueprint Explorer GUI & Clarity Overhaul
+- **Dedicated `BlueprintExplorerScreen`**: Added a dedicated GUI screen (`BlueprintExplorerScreen`) providing interactive 3D voxel structure previews, real-time catalog search, detailed spatial metrics, and single-click scepter arming.
+- **True 3D Rotated Quad Projection**: Transformed the voxel engine from flat 2D stamps into a true 3D rotated quad renderer. For each visible face, all four spatial corners are projected onto the screen based on camera yaw and pitch, rendering perspective-accurate 3D quads via hardware vertex buffer shaders.
+- **6-Directional Interior Block Occlusion Culling**: Implemented neighbor occlusion culling (`isOpaque(BlockState)`). Internal faces and completely enclosed blocks inside solid masonry, floors, and thick walls are culled before rendering, eliminating thousands of overlapping interior lines, black borders, and visual clutter while preserving transparent blocks (glass, doors, stairs, slabs, iron bars).
+- **Directional Sunlight Shading ($N \cdot L$)**: High-contrast directional illumination from vector `(0.355, 0.862, -0.355)`. Top horizontal surfaces catch full overhead light ($1.18\times$), East/South faces catch angled sunlight ($0.8\times - 0.95\times$), North/West faces show architectural relief shadowing ($0.65\times - 0.75\times$), and bottom soffits sit in ambient occlusion ($0.45\times$).
+- **Fullscreen / Maximize Viewport Mode (`[ ⛶ ]` / `[ 🗗 ]`)**: Toggle between split-pane mode and an expansive $404 \times 194$ px maximized viewport (hotkeys `Tab` or `F`), delivering nearly $3\times$ the viewing canvas for mega-structure inspection.
+- **Architectural Floor Slicer / Cutaway Stepper (`[ ▾ ]`, `[ 🏢 All / L: X/Y ]`, `[ ▴ ]`)**: Step through floors vertically layer-by-layer to peel back roofs and inspect interior room layouts, furniture, and stairs.
+- **2D Camera Panning & Expanded Zoom**: Right-click mouse drag camera panning (`panX`, `panY`), expanded mouse-wheel zoom range ($0.25\times$ to $8.0\times$), middle-click / `[ ↻ ]` view reset, and auto-spin toggle `[ ⏸ / ▶ ]` (or `Space` bar).
+- **Ground Pedestal & Cardinal Compass**: Isometric ground grid pedestal for spatial scale grounding, alongside a floating HUD featuring a real-time rotating cardinal compass (`🧭 North / South / East / West`).
+- **Botanical & Architectural Geometry Bounds (`getBlockBounds`)**: Scaled geometry bounds for slender flora and thin architectural blocks instead of rendering them as solid 1x1x1 cubes. Flowers, saplings, mushrooms, and crops render with slender profiles (`[-0.28, 0.28]` width, `[-0.5, 0.35]` height); torches, candles, and rods render slender vertical columns (`[-0.15, 0.15]`); slabs render as half-blocks (`[-0.5, 0.0]`); carpets render as thin floor layers (`[-0.5, -0.375]`); and glass panes render as thin vertical sheets.
+- **Multi-Face Palette & Authentic Botanical Textures (`getBlockColor(state, face)`)**: Replaced generic stone fallbacks with face-specific colors:
+  - **Botanical Flora**: Poppy scarlet bloom (`#E52521`), Dandelion gold bloom (`#FFD600`), Blue Orchid cyan (`#29B6F6`), Allium magenta (`#BA68C8`), Oxeye Daisy / Azure Bluet white petal (`#FFFFFF`), Tulips (orange `#FF6D00`, pink `#F48FB1`), Cornflower blue (`#3D5AFE`), Wither Rose obsidian (`#2B2B2B`), and Lilac petals (`#CE93D8`) with authentic stem greens on side and bottom faces.
+  - **Agricultural Crops & Botanicals**: Golden wheat (`#D4AF37`), Carrot orange (`#FF6F00`), Potato gold (`#E0A93B`), Beetroot crimson (`#880E4F`), Melon green stripes, Carved Pumpkin glowing amber front face (`#FF8F00`), Cactus thorny green (`#2E7D32`), and Sugar Cane reeds (`#7CB342`).
+  - **Tree Species & Multi-Face Bark/Rings**: Cut annual rings on top/bottom faces vs. authentic species bark on side faces for Oak, Birch (white bark `#EBEBEB`), Spruce, Jungle, Acacia, Dark Oak, Mangrove, Cherry, Bamboo, Crimson, and Warped stems.
+  - **Crafting & Utility Workstations**: Bookshelves with colorful book spines on sides, Crafting Table grid top, Furnaces with glowing fire grates, and TNT with red dynamite casing and white primer top/bottom.
+  - **Full 16-Color Dye Palette**: Authentic dye colors for wool, concrete, terracotta, carpets, beds, shulker boxes, and candles.
+  - **Non-Opaque Culling Safety**: Ensured flowers, crops, saplings, mushrooms, torches, and slender voxels never cull adjacent solid blocks.
+- **Real-Time Search Bar**: Interactive text field with instant substring filtering across blueprint titles, IDs, and descriptions, updating the catalog display dynamically as you type.
+- **Zero Text Cut-Off Architecture**: Automatic text wrapping and ellipsis trimming ensuring pixel-perfect layout and readability across all Minecraft GUI scales (Normal, Large, Auto).
+- **Direct Lifecycle Actions**: Integrated `[ ✔ Select ]` to arm the blueprint, `[ 📋 BOM ]` to open the Material Bill of Materials modal, and `[ 🗑 Del ]` to delete custom blueprints with safety confirmation.
+- **Command Hub Integration**: Added a prominent `[ 🔍 3D View ]` launcher button directly inside the Command Scepter Hub (`BUILD` mode) next to the blueprint catalog header.
+
+#### 🥇 Newest-First Custom Blueprint Ordering (Slide 1 Slot 1 Default)
+- **Immediate Slide 1 Availability**: When players save a new custom blueprint, it is registered at index 0 (Slot 1 on Slide 1 / Page 0) by default in both `BlueprintRegistry` and world persistent state (`CustomBlueprintPersistentState`), eliminating the need to page through older blueprints.
+- **Auto-Selection on Held Scepter**: Newly captured and saved blueprints are automatically armed on the commanding player's held Command Scepter on both client and server upon saving.
 
 #### 🧱 Anti-Suffocation, Anti-Entombment & Safe Evacuation System
 - **Surface Quarry vs. Subterranean Excavation Evacuation**: In `ConstructionManager.completeSession()`, mining (dismantle) sessions distinguish between open surface quarries (with sky access) and underground excavations. Open pit quarries evacuate minions to the surface rim surrounding the pit under open sky. Underground excavations safely station minions onto the cleared interior floor (`box.getMinY()`) or entrance anchor, completely preventing minions from being teleported into unmined perimeter rock walls.
@@ -51,6 +77,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+#### 🚶 Minion Waypoint Navigation & Pathing Anti-Jitter
+- **Slab, Stair, Carpet, Snow & Path Block Clearance**: Fixed an issue where minions walking towards tactical ground waypoints jittered in place, spawned purple portal particles, made teleport sounds, and had forward momentum zeroed out.
+- **Torso & Head Suffocation Safeguard**: Refined `unstuckIfInSolidWall()` to evaluate the minion's torso (`getY() + 0.6D`) and head (`getEyeY()`) using `shouldSuffocate()` and `isFullCube()`, excluding walkable ground surfaces beneath feet (slabs, stairs, carpets, snow layers, path blocks).
+- **Teleport Cooldown & Anti-Looping**: Added a 20-tick safety cooldown to `unstuckCooldownTicks` on successful emergency extractions, completely eliminating stutter and teleportation loops.
+- **Arcane Levitation Traversal Stability**: Ensured obstacle-climbing maneuvers maintain at least 4 ticks of lift before touchdown, preventing rapid ground chatter.
+
 #### 🏗️ Blueprint Placement & Selection Persistence
 - **Persistent Blueprint Selection in BUILD Mode**: Fixed an issue where placing down a blueprint or right-clicking into the air automatically cycled to the next blueprint in the catalog. Blueprint selection now stays firmly locked on the commander's chosen blueprint across repeated placements, quick taps, and cooldowns. Blueprints only change when explicitly selected in the Command Hub GUI (`V` key / Shift + Right-Click).
 
@@ -58,8 +90,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Strict Object Ingredients**: Fixed `Parsing error loading recipe` errors where Minecraft 1.21 DataFixerUpper/Codec rejected raw string identifiers in recipe `key` maps and `ingredients` arrays. Updated all recipe files (`command_scepter`, `frost_grenade_stick`, `tnt_stick`, `minion_spawn_egg`) across both `recipe/` and `recipes/` to use strict `{ "item": ... }` objects.
 - **Automated Recipe Codec Test**: Expanded `RecipeAdvancementJsonValidationTest` to validate all recipe files and enforce 1.21 object ingredient standards.
 
-#### 🌊 Shallow Water Build Flight Tolerance
-- **Water 2 Blocks High Flight Allowance**: Updated `CommandScepterItem.isPlayerOverWater()` to measure the vertical column depth of water bodies beneath the player. If the water column is two blocks high or less ($\le 2$ blocks deep of water above solid ground, such as creeks, shallow ponds, or puddles), the player is permitted to fly over it freely in `BUILD` mode without triggering build cancellation or losing flight. Only deep water bodies ($> 2$ blocks deep) trigger the water cancellation safeguard.
+#### 🌊 Shallow Water Build Flight Tolerance & Water Safeguards
+- **Water 5 Blocks High Flight Allowance**: Updated `CommandScepterItem.isPlayerOverWater()` to measure the vertical column depth of water bodies beneath the player. If the water column is 5 blocks high or less ($\le 5$ blocks deep of water above solid ground, such as creeks, shallow ponds, canals, or streams), the player is permitted to fly over it freely in `BUILD` mode without triggering build cancellation or losing flight. Only deep water bodies ($> 5$ blocks deep) trigger the water flight safeguard, cancelling `BUILD` mode only (reverting held scepter to `FOLLOW` and revoking flight) while allowing active minion construction sessions to continue building uninterrupted.
+- **Water Flight Edge Cases & Safe Descent Safeguard**:
+  - **Bridges, Slabs & Glass Platforms**: Downward surface scanning checks `!state.getCollisionShape().isEmpty()`, ensuring players flying over bridges, glass walkways, slabs, stairs, or docks above deep water are recognized as standing over solid architecture and are not erroneously cancelled. Lily pads on open water are gracefully traversed down to evaluate the underlying depth.
+  - **Head & Toe Dipping Water Detection**: Evaluates head (`player.getEyePos()`), feet, and sub-feet water states, guaranteeing that dipping toes or swimming through waterfalls accurately locks onto the true water column surface without depth measurement anomalies.
+  - **Descent Fall Damage Immunity**: When `BUILD` mode and flight are cancelled over water, `fallDistance = 0.0F` is maintained via `ACTIVE_SERVER_BUILD_FLIERS` until the player safely touches ground or splashes into water (`isOnGround() || isTouchingWater()`), eliminating lethal fall damage from high-altitude cancellation.
+
+#### 🖱️ 3D Blueprint Explorer Mouse-Click Button Priority & Viewport Interaction
+- **Button Click Delegation Before Viewport Drag**: Fixed an issue where clicking toolbar buttons (`[ ⛶ / 🗗 ]` Maximize, `[ ⏸ / ▶ ]` Spin, `[ ↻ ]` Reset, `[ ▾ ]` Slice Down, `[ 🏢 All ]` Slice Reset, `[ ▴ ]` Slice Up) with the mouse failed to trigger actions because `BlueprintExplorerScreen.mouseClicked()` checked viewport coordinates first and consumed left-clicks for camera dragging. Calling `super.mouseClicked(mouseX, mouseY, button)` before viewport coordinates ensures all buttons handle mouse clicks cleanly while preserving smooth orbit dragging and right-click panning.
+
+#### 🌸 Botanical Flora, Crops & Multi-Face Block Texturing
+- **Elimination of Stone Fallback on Flora**: Fixed an issue where flowers, saplings, mushrooms, and crops appeared as dull gray stone cubes in the 3D Blueprint Explorer. Implemented dedicated botanical bounds and multi-face bloom/stem palettes for all Minecraft flowers and crops, wood species cut rings vs. bark, utility workstations, and the 16-color dye palette.
+
+#### 🏷️ Stale `[HOLD]` Badge on Following Minions
+- **Following Always Overrides Hold State**: Fixed minions that were following the commander (or escorting/patrolling) still displaying the `[HOLD]` overhead label because a leftover sit pose or guard anchor lingered. `MinionEntity.isHoldingPosition()` now returns `false` whenever a minion is selected, has a leader, or is on a patrol route, and `setSelected(true)` clears any stale guard anchor and sitting pose.
 
 ---
 

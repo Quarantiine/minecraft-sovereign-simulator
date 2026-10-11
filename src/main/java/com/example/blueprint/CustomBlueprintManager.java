@@ -25,7 +25,7 @@ public class CustomBlueprintManager {
 
 	private CustomBlueprintPersistentState persistentState = null;
 	private PersistentStateManager stateManager = null;
-	private final Map<String, StructureBlueprint> customBlueprints = new ConcurrentHashMap<>();
+	private final Map<String, StructureBlueprint> customBlueprints = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>());
 
 	private CustomBlueprintManager() {}
 
@@ -64,7 +64,7 @@ public class CustomBlueprintManager {
 			for (StructureBlueprint blueprint : state.getAllBlueprints()) {
 				this.customBlueprints.put(blueprint.getId().toLowerCase(), blueprint);
 				try {
-					BlueprintRegistry.registerCustomBlueprint(blueprint);
+					BlueprintRegistry.registerCustomBlueprint(blueprint, false);
 				} catch (Throwable ignored) {}
 			}
 		}
@@ -190,9 +190,19 @@ public class CustomBlueprintManager {
 	public void saveBlueprint(MinecraftServer server, StructureBlueprint blueprint) {
 		Objects.requireNonNull(blueprint, "blueprint cannot be null");
 		String cleanId = blueprint.getId().toLowerCase().trim();
-		this.customBlueprints.put(cleanId, blueprint);
+		synchronized (this.customBlueprints) {
+			Map<String, StructureBlueprint> reordered = new java.util.LinkedHashMap<>();
+			reordered.put(cleanId, blueprint);
+			for (Map.Entry<String, StructureBlueprint> entry : this.customBlueprints.entrySet()) {
+				if (!entry.getKey().equalsIgnoreCase(cleanId)) {
+					reordered.put(entry.getKey(), entry.getValue());
+				}
+			}
+			this.customBlueprints.clear();
+			this.customBlueprints.putAll(reordered);
+		}
 		try {
-			BlueprintRegistry.registerCustomBlueprint(blueprint);
+			BlueprintRegistry.registerCustomBlueprintFirst(blueprint);
 		} catch (Throwable ignored) {}
 		if (this.persistentState != null) {
 			this.persistentState.addBlueprint(blueprint);
