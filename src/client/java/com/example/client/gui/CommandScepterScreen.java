@@ -119,7 +119,20 @@ public class CommandScepterScreen extends Screen {
 			this.selectedSquad = CommandScepterItem.getTargetSquad(scepterStack);
 			this.selectedRole = null;
 			this.selectedRotation = CommandScepterItem.getRotationIndex(scepterStack);
-			this.activePatrolRouteId = CommandScepterItem.getActivePatrolRoute(scepterStack);
+			int heldRoute = CommandScepterItem.getActivePatrolRoute(scepterStack);
+			List<com.example.patrol.PatrolRoute> existingRoutes = com.example.client.renderer.ClientPatrolRouteTracker.getAllRoutesList();
+			if (!existingRoutes.isEmpty()) {
+				boolean found = false;
+				for (com.example.patrol.PatrolRoute r : existingRoutes) {
+					if (r.routeId() == heldRoute) {
+						found = true;
+						break;
+					}
+				}
+				this.activePatrolRouteId = found ? heldRoute : existingRoutes.get(0).routeId();
+			} else {
+				this.activePatrolRouteId = heldRoute;
+			}
 		} else {
 			this.selectedMode = CommandMode.FOLLOW;
 			this.selectedMiningMode = MiningMode.AREA;
@@ -127,7 +140,8 @@ public class CommandScepterScreen extends Screen {
 			this.selectedSquad = SquadGroup.ALL;
 			this.selectedRole = null;
 			this.selectedRotation = 0;
-			this.activePatrolRouteId = 0;
+			List<com.example.patrol.PatrolRoute> existingRoutes = com.example.client.renderer.ClientPatrolRouteTracker.getAllRoutesList();
+			this.activePatrolRouteId = existingRoutes.isEmpty() ? 0 : existingRoutes.get(0).routeId();
 		}
 		this.shiftHeldOnOpen = isShiftOrSneakDown();
 	}
@@ -894,6 +908,7 @@ public class CommandScepterScreen extends Screen {
 		if (this.client != null && this.client.player != null) {
 			this.client.player.sendMessage(Text.literal("§c✦ Deleted Patrol Route: §f" + name + "§r"), true);
 		}
+		updatePathwayButtons();
 		refreshButtonLabels();
 	}
 
@@ -1271,9 +1286,21 @@ public class CommandScepterScreen extends Screen {
 	private void selectMode(CommandMode mode) {
 		this.selectedMode = mode;
 		if (mode == CommandMode.PATHWAY) {
-			this.activePatrolRouteId = 0;
+			List<com.example.patrol.PatrolRoute> routes = com.example.client.renderer.ClientPatrolRouteTracker.getAllRoutesList();
+			boolean activeExists = false;
+			for (com.example.patrol.PatrolRoute r : routes) {
+				if (r.routeId() == this.activePatrolRouteId) {
+					activeExists = true;
+					break;
+				}
+			}
+			if (!activeExists && !routes.isEmpty()) {
+				this.activePatrolRouteId = routes.get(0).routeId();
+			} else if (routes.isEmpty()) {
+				this.activePatrolRouteId = 0;
+			}
 			if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
-				CommandScepterItem.setActivePatrolRoute(this.scepterStack, 0);
+				CommandScepterItem.setActivePatrolRoute(this.scepterStack, this.activePatrolRouteId);
 			}
 		}
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
@@ -1370,9 +1397,6 @@ public class CommandScepterScreen extends Screen {
 		}
 
 		List<com.example.patrol.PatrolRoute> routes = com.example.client.renderer.ClientPatrolRouteTracker.getAllRoutesList();
-		if (routes.isEmpty()) {
-			routes = List.of(com.example.patrol.PatrolRoute.createDefault(0));
-		}
 		int totalPages = Math.max(1, (routes.size() + PATHWAY_PAGE_SIZE - 1) / PATHWAY_PAGE_SIZE);
 		if (this.pathwayPage >= totalPages) {
 			this.pathwayPage = totalPages - 1;

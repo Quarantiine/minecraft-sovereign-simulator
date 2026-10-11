@@ -379,9 +379,17 @@ public class MinionScreen extends HandledScreen<MinionScreenHandler> {
 		return Character.toUpperCase(name.charAt(0)) + name.substring(1);
 	}
 
-	private static Text getRoleTooltip(MinionRole role) {
+	/**
+	 * Constructs formatted tooltip text describing the capabilities, combat dynamics, and equipment
+	 * profiles of a specific {@link MinionRole}. For {@link MinionRole#WARRIOR}, details frontline
+	 * offensive combat attributes including the +4 Attack Damage bonus with bare fists or equipped weapons.
+	 *
+	 * @param role the tactical role archetype to generate tooltip text for
+	 * @return formatted {@link Text} containing archetype title, descriptive bullet points, and interaction hints
+	 */
+	static Text getRoleTooltip(MinionRole role) {
 		String desc = switch (role) {
-			case WARRIOR -> "§7Versatile combatant engaging in melee or ranged combat.\n§8• Swordsman or Archer based on equipped weapon\n§8• Equipment: Swords, Axes, Maces, Bows & Crossbows";
+			case WARRIOR -> "§7Versatile combatant engaging in melee or ranged combat.\n§8• Frontline combat damage boost (+4 Attack Damage) with fists or equipped weapons\n§8• Swordsman or Archer based on equipped weapon\n§8• Equipment: Swords, Axes, Maces, Bows & Crossbows";
 			case SENTINEL -> "§7Perimeter guard holding station & intercepting hostiles.\n§8• Perimeter: 8 blocks | Anchor Leash: 128 blocks\n§8• Equipment: Shields (offhand) & Melee weapons";
 			case BUILDER -> "§7Architectural constructor, miner & resource logistics specialist.\n§8• Blueprint building, vein mining & autonomous harvesting\n§8• Equipment: Blueprint blocks, Pickaxes, Axes & Shovels";
 			case AUTO -> "§7Autonomous tactical agent adapting dynamically.\n§8• Sentinel medic when allies < 70% HP\n§8• Warrior vanguard when threats near, Builder during construction";

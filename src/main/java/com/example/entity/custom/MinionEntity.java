@@ -119,6 +119,7 @@ import net.minecraft.world.World;
 public class MinionEntity extends TameableEntity implements InventoryOwner, RangedAttackMob {
 
 	public static final int INVENTORY_SIZE = 9;
+	public static final double WARRIOR_ATTACK_DAMAGE_BONUS = 4.0D;
 	private final SimpleInventory inventory = new SimpleInventory(INVENTORY_SIZE);
 
 	private static final TrackedData<Integer> ROLE_ID = DataTracker.registerData(MinionEntity.class, TrackedDataHandlerRegistry.INTEGER);
@@ -2438,9 +2439,27 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		}
 	}
 
+	@Override
+	public double getAttributeValue(net.minecraft.registry.entry.RegistryEntry<net.minecraft.entity.attribute.EntityAttribute> attribute) {
+		double value = super.getAttributeValue(attribute);
+		if (EntityAttributes.GENERIC_ATTACK_DAMAGE.equals(attribute) && this.matchesRole(MinionRole.WARRIOR)) {
+			value += WARRIOR_ATTACK_DAMAGE_BONUS;
+		}
+		return value;
+	}
+
+	@Override
+	public double getAttributeBaseValue(net.minecraft.registry.entry.RegistryEntry<net.minecraft.entity.attribute.EntityAttribute> attribute) {
+		double value = super.getAttributeBaseValue(attribute);
+		if (EntityAttributes.GENERIC_ATTACK_DAMAGE.equals(attribute) && this.matchesRole(MinionRole.WARRIOR)) {
+			value += WARRIOR_ATTACK_DAMAGE_BONUS;
+		}
+		return value;
+	}
+
 	/**
 	 * Overrides attack logic to swing the minion's main hand animation, apply weapon damage/enchantments,
-	 * and play appropriate combat weapon hit sounds.
+	 * play appropriate combat weapon/fist hit sounds, and generate visceral feedback for Warrior attacks.
 	 */
 	@Override
 	public boolean tryAttack(Entity target) {
@@ -2448,11 +2467,38 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		boolean attacked = super.tryAttack(target);
 		if (attacked) {
 			ItemStack weapon = this.getMainHandStack();
+			boolean isWarrior = this.matchesRole(MinionRole.WARRIOR);
+
 			if (!weapon.isEmpty()) {
 				if (weapon.getItem() instanceof SwordItem || weapon.getItem() instanceof AxeItem || weapon.getItem() instanceof MaceItem) {
 					this.playSound(SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, 1.0F, 1.0F);
 				} else {
 					this.playSound(SoundEvents.ENTITY_PLAYER_ATTACK_WEAK, 1.0F, 1.0F);
+				}
+			} else if (isWarrior) {
+				// Bare-handed warrior punch feedback
+				this.playSound(SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, 1.0F, 1.0F);
+			}
+
+			if (isWarrior) {
+				// Visceral knockback audio cue if armed and hasn't played knockback yet
+				if (!weapon.isEmpty()) {
+					this.playSound(SoundEvents.ENTITY_PLAYER_ATTACK_KNOCKBACK, 0.8F, 1.2F);
+				}
+
+				// Spawn visceral crit particles at the struck target on server
+				if (this.getWorld() instanceof ServerWorld serverWorld && target != null) {
+					serverWorld.spawnParticles(
+						ParticleTypes.CRIT,
+						target.getX(),
+						target.getBodyY(0.5D),
+						target.getZ(),
+						12,
+						0.25D,
+						0.25D,
+						0.25D,
+						0.1D
+					);
 				}
 			}
 		}

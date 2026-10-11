@@ -3,7 +3,8 @@ package com.example.patrol;
 import com.example.entity.custom.MinionEntity;
 import com.example.network.SyncPatrolRoutesPayload;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,7 +56,13 @@ public class PatrolRouteManager {
 		this.playerRoutes.clear();
 		if (state != null) {
 			for (Map.Entry<UUID, Map<Integer, PatrolRoute>> entry : state.getRoutes().entrySet()) {
-				this.playerRoutes.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
+				Map<Integer, PatrolRoute> playerMap = Collections.synchronizedMap(new LinkedHashMap<>());
+				synchronized (entry.getValue()) {
+					for (Map.Entry<Integer, PatrolRoute> routeEntry : entry.getValue().entrySet()) {
+						playerMap.put(routeEntry.getKey(), routeEntry.getValue());
+					}
+				}
+				this.playerRoutes.put(entry.getKey(), playerMap);
 			}
 		}
 	}
@@ -71,7 +78,11 @@ public class PatrolRouteManager {
 		if (this.persistentState != null) {
 			this.persistentState.getRoutes().clear();
 			for (Map.Entry<UUID, Map<Integer, PatrolRoute>> entry : this.playerRoutes.entrySet()) {
-				this.persistentState.getRoutes().put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
+				Map<Integer, PatrolRoute> persistentPlayerMap = Collections.synchronizedMap(new LinkedHashMap<>());
+				synchronized (entry.getValue()) {
+					persistentPlayerMap.putAll(entry.getValue());
+				}
+				this.persistentState.getRoutes().put(entry.getKey(), persistentPlayerMap);
 			}
 			this.persistentState.markDirty();
 			if (this.stateManager != null) {
@@ -85,55 +96,61 @@ public class PatrolRouteManager {
 	}
 
 	/**
-	 * Retrieves the designated patrol route for the given player and channel ID.
-	 * If no route exists yet, a default route is created and registered.
+	 * Retrieves or initializes the ordered route map for a player commander.
+	 * Initializes ONLY 1 default pathway route (Route 0 / Gold) initially.
+	 * Never creates phantom routes.
 	 *
-	 * @param playerUuid The UUID of the player commander.
-	 * @param routeId    The channel index.
-	 * @return The active PatrolRoute.
+	 * @param playerUuid The commanding player.
+	 * @return Synchronized LinkedHashMap containing the player's routes.
 	 */
-	public PatrolRoute getRoute(UUID playerUuid, int routeId) {
+	private Map<Integer, PatrolRoute> getOrCreatePlayerRoutes(UUID playerUuid) {
 		if (playerUuid == null) {
-			return PatrolRoute.createDefault(routeId);
+			Map<Integer, PatrolRoute> fallback = Collections.synchronizedMap(new LinkedHashMap<>());
+			fallback.put(0, PatrolRoute.createDefault(0));
+			return fallback;
 		}
-		Map<Integer, PatrolRoute> routes = playerRoutes.computeIfAbsent(playerUuid, u -> {
-			Map<Integer, PatrolRoute> initial = new ConcurrentHashMap<>();
-			for (int i = 0; i < PatrolRoute.CHANNEL_COUNT; i++) {
-				initial.put(i, PatrolRoute.createDefault(i));
-			}
+		return playerRoutes.computeIfAbsent(playerUuid, u -> {
+			Map<Integer, PatrolRoute> initial = Collections.synchronizedMap(new LinkedHashMap<>());
+			initial.put(0, PatrolRoute.createDefault(0));
 			return initial;
 		});
-		return routes.computeIfAbsent(routeId, PatrolRoute::createDefault);
 	}
 
 	/**
-	 * Retrieves all patrol routes for a player commander sorted by route ID.
+	 * Retrieves the designated patrol route for the given player and channel ID.
+	 * Never auto-creates phantom routes if absent; returns null if nonexistent.
 	 *
 	 * @param playerUuid The UUID of the player commander.
-	 * @return Sorted list of PatrolRoutes.
+	 * @param routeId    The channel index.
+	 * @return The active PatrolRoute, or null if nonexistent.
+	 */
+	public PatrolRoute getRoute(UUID playerUuid, int routeId) {
+		if (playerUuid == null) {
+			return routeId == 0 ? PatrolRoute.createDefault(0) : null;
+		}
+		Map<Integer, PatrolRoute> routes = getOrCreatePlayerRoutes(playerUuid);
+		return routes.get(routeId);
+	}
+
+	/**
+	 * Retrieves all patrol routes for a player commander in newest-first order.
+	 *
+	 * @param playerUuid The UUID of the player commander.
+	 * @return List of PatrolRoutes ordered with newly created routes first.
 	 */
 	public List<PatrolRoute> getAllRoutes(UUID playerUuid) {
 		if (playerUuid == null) {
-			List<PatrolRoute> list = new ArrayList<>();
-			for (int i = 0; i < PatrolRoute.CHANNEL_COUNT; i++) {
-				list.add(PatrolRoute.createDefault(i));
-			}
-			return list;
+			return List.of(PatrolRoute.createDefault(0));
 		}
-		Map<Integer, PatrolRoute> routes = playerRoutes.computeIfAbsent(playerUuid, u -> {
-			Map<Integer, PatrolRoute> initial = new ConcurrentHashMap<>();
-			for (int i = 0; i < PatrolRoute.CHANNEL_COUNT; i++) {
-				initial.put(i, PatrolRoute.createDefault(i));
-			}
-			return initial;
-		});
-		return routes.values().stream()
-			.sorted(Comparator.comparingInt(PatrolRoute::routeId))
-			.toList();
+		Map<Integer, PatrolRoute> routes = getOrCreatePlayerRoutes(playerUuid);
+		synchronized (routes) {
+			return new ArrayList<>(routes.values());
+		}
 	}
 
 	/**
 	 * Creates a new custom patrol route with the next available ID for the player.
+	 * Newly created routes are placed first in order.
 	 *
 	 * @param playerUuid The commanding player.
 	 * @param name       Custom route name.
@@ -144,14 +161,9 @@ public class PatrolRouteManager {
 		if (playerUuid == null) {
 			return PatrolRoute.createCustom(0, name, colorRgb);
 		}
-		Map<Integer, PatrolRoute> routes = playerRoutes.computeIfAbsent(playerUuid, u -> new ConcurrentHashMap<>());
-		int nextId = 0;
-		while (routes.containsKey(nextId)) {
-			nextId++;
-		}
+		int nextId = getNextAvailableRouteId(playerUuid);
 		PatrolRoute newRoute = PatrolRoute.createCustom(nextId, name, colorRgb);
-		routes.put(nextId, newRoute);
-		markDirtyAndPersist();
+		setRoute(playerUuid, newRoute);
 		return newRoute;
 	}
 
@@ -169,19 +181,23 @@ public class PatrolRouteManager {
 
 	/**
 	 * Updates the configuration (name, color, mode) of an existing patrol route while preserving its waypoints.
+	 * Preserves the relative order of the route in the dashboard.
 	 *
 	 * @param playerUuid The commanding player.
 	 * @param routeId    The channel ID to update.
 	 * @param name       New route name.
 	 * @param colorRgb   New 24-bit RGB color.
 	 * @param mode       New patrol mode (LOOP / PING_PONG).
-	 * @return The updated PatrolRoute.
+	 * @return The updated PatrolRoute, or null if the route does not exist.
 	 */
 	public PatrolRoute updateRouteConfig(UUID playerUuid, int routeId, String name, int colorRgb, PatrolRoute.PatrolMode mode) {
 		PatrolRoute current = getRoute(playerUuid, routeId);
+		if (current == null) {
+			return null;
+		}
 		PatrolRoute updated = new PatrolRoute(
 			routeId,
-			(name != null && !name.trim().isEmpty()) ? name.trim() : ("Route " + (routeId + 1)),
+			(name != null && !name.trim().isEmpty()) ? name.trim() : current.name(),
 			colorRgb & 0xFFFFFF,
 			current.waypoints(),
 			mode != null ? mode : current.patrolMode()
@@ -204,7 +220,9 @@ public class PatrolRouteManager {
 		Map<Integer, PatrolRoute> routes = playerRoutes.get(playerUuid);
 		if (routes == null || !routes.containsKey(routeId)) return false;
 
-		routes.remove(routeId);
+		synchronized (routes) {
+			routes.remove(routeId);
+		}
 		markDirtyAndPersist();
 
 		if (world != null) {
@@ -252,33 +270,57 @@ public class PatrolRouteManager {
 	 */
 	public int getNextAvailableRouteId(UUID playerUuid) {
 		if (playerUuid == null) return 0;
-		Map<Integer, PatrolRoute> routes = playerRoutes.computeIfAbsent(playerUuid, u -> new ConcurrentHashMap<>());
-		int id = 0;
-		while (routes.containsKey(id)) {
-			id++;
+		Map<Integer, PatrolRoute> routes = getOrCreatePlayerRoutes(playerUuid);
+		synchronized (routes) {
+			int id = 0;
+			while (routes.containsKey(id)) {
+				id++;
+			}
+			return id;
 		}
-		return id;
 	}
 
 	/**
 	 * Stores or updates an entire patrol route for a player commander.
+	 * Newly created routes are prepended so they appear first in order.
+	 * Existing route edits update in-place preserving their relative order.
 	 */
 	public void setRoute(UUID playerUuid, PatrolRoute route) {
 		if (playerUuid == null || route == null) return;
-		Map<Integer, PatrolRoute> routes = playerRoutes.computeIfAbsent(playerUuid, u -> new ConcurrentHashMap<>());
-		routes.put(route.routeId(), route);
+		Map<Integer, PatrolRoute> routes = getOrCreatePlayerRoutes(playerUuid);
+		synchronized (routes) {
+			if (routes.containsKey(route.routeId())) {
+				// Update in-place to preserve relative order of existing routes
+				routes.put(route.routeId(), route);
+			} else {
+				// Newly created route comes first in order (prepended via LinkedHashMap)
+				Map<Integer, PatrolRoute> updated = new LinkedHashMap<>();
+				updated.put(route.routeId(), route);
+				for (Map.Entry<Integer, PatrolRoute> entry : routes.entrySet()) {
+					if (!entry.getKey().equals(route.routeId())) {
+						updated.put(entry.getKey(), entry.getValue());
+					}
+				}
+				routes.clear();
+				routes.putAll(updated);
+			}
+		}
 		markDirtyAndPersist();
 	}
 
 	/**
 	 * Appends a waypoint block position to the specified route.
+	 * Never auto-creates routes; returns null if the route does not exist.
 	 *
 	 * @param playerUuid The commanding player.
 	 * @param routeId    The channel index.
-	 * @return The updated PatrolRoute.
+	 * @return The updated PatrolRoute, or null if the route does not exist.
 	 */
 	public PatrolRoute addWaypoint(UUID playerUuid, int routeId, BlockPos pos) {
 		PatrolRoute current = getRoute(playerUuid, routeId);
+		if (current == null) {
+			return null;
+		}
 		PatrolRoute updated = current.withAddedWaypoint(pos);
 		setRoute(playerUuid, updated);
 		return updated;
@@ -289,10 +331,13 @@ public class PatrolRouteManager {
 	 *
 	 * @param playerUuid The commanding player.
 	 * @param routeId    The channel index.
-	 * @return The updated PatrolRoute.
+	 * @return The updated PatrolRoute, or null if the route does not exist.
 	 */
 	public PatrolRoute removeWaypoint(UUID playerUuid, int routeId, BlockPos pos) {
 		PatrolRoute current = getRoute(playerUuid, routeId);
+		if (current == null) {
+			return null;
+		}
 		PatrolRoute updated = current.withRemovedWaypoint(pos);
 		setRoute(playerUuid, updated);
 		return updated;
@@ -334,6 +379,9 @@ public class PatrolRouteManager {
 	 */
 	public PatrolRoute clearRoute(UUID playerUuid, int routeId) {
 		PatrolRoute current = getRoute(playerUuid, routeId);
+		if (current == null) {
+			return null;
+		}
 		PatrolRoute updated = current.withClearedWaypoints();
 		setRoute(playerUuid, updated);
 		return updated;
@@ -344,10 +392,13 @@ public class PatrolRouteManager {
 	 *
 	 * @param playerUuid The commanding player.
 	 * @param routeId    The channel index.
-	 * @return The updated PatrolRoute.
+	 * @return The updated PatrolRoute, or null if the route does not exist.
 	 */
 	public PatrolRoute togglePatrolMode(UUID playerUuid, int routeId) {
 		PatrolRoute current = getRoute(playerUuid, routeId);
+		if (current == null) {
+			return null;
+		}
 		PatrolRoute updated = current.withPatrolMode(current.patrolMode().toggle());
 		setRoute(playerUuid, updated);
 		return updated;

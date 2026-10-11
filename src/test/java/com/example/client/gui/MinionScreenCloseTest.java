@@ -339,4 +339,17 @@ public class MinionScreenCloseTest {
 		Assertions.assertFalse(code.contains("Math.max(46, nameX), 6"),
 			"MinionScreen must not render colliding title text across the 38px gap at y=6");
 	}
+
+	@Test
+	@DisplayName("Warrior role tooltip details frontline combat damage boost (+4 Attack Damage) with fists or weapons")
+	void testWarriorRoleTooltipContainsDamageBoost() {
+		net.minecraft.text.Text tooltipText = MinionScreen.getRoleTooltip(com.example.entity.custom.MinionRole.WARRIOR);
+		String content = tooltipText.getString();
+
+		Assertions.assertTrue(content.contains("+4 Attack Damage"),
+			"Warrior role tooltip must detail +4 Attack Damage bonus");
+		Assertions.assertTrue(content.contains("fists or equipped weapons"),
+			"Warrior role tooltip must specify damage applies to fists or equipped weapons");
+	}
 }
+

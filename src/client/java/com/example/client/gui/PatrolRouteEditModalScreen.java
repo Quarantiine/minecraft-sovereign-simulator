@@ -72,7 +72,14 @@ public class PatrolRouteEditModalScreen extends Screen {
 	}
 
 	public PatrolRouteEditModalScreen(int routeId, boolean isNewRoute, Screen parentScreen) {
-		this(ClientPatrolRouteTracker.getRoute(routeId), isNewRoute, parentScreen);
+		super(Text.translatable(isNewRoute ? "gui.modid-mmcli-agent-modding.patrol_route_modal.title_create" : "gui.modid-mmcli-agent-modding.patrol_route_modal.title_edit"));
+		this.routeId = routeId;
+		this.isNewRoute = isNewRoute;
+		this.parentScreen = parentScreen;
+		PatrolRoute existing = isNewRoute ? null : ClientPatrolRouteTracker.getRoute(routeId);
+		this.initialName = existing != null ? existing.name() : ("Route " + (routeId + 1));
+		this.selectedColorRgb = existing != null ? existing.colorRgb() : 0xFFD700;
+		this.selectedMode = existing != null ? existing.patrolMode() : PatrolRoute.PatrolMode.LOOP;
 	}
 
 	public int getRouteId() {
@@ -276,7 +283,11 @@ public class PatrolRouteEditModalScreen extends Screen {
 	private void returnToParent() {
 		if (this.client != null) {
 			if (this.parentScreen instanceof CommandScepterScreen commandScepterScreen) {
-				commandScepterScreen.refreshButtonLabels();
+				if (this.isNewRoute && ClientPatrolRouteTracker.getRoute(this.routeId) != null) {
+					commandScepterScreen.selectActiveRoute(this.routeId);
+				} else {
+					commandScepterScreen.refreshButtonLabels();
+				}
 				this.client.setScreen(commandScepterScreen);
 			} else {
 				this.client.setScreen(this.parentScreen);

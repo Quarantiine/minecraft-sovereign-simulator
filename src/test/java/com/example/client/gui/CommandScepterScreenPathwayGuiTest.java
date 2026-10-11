@@ -78,14 +78,15 @@ public class CommandScepterScreenPathwayGuiTest {
 	}
 
 	@Test
-	@DisplayName("Source contract: Selecting PATHWAY mode resets activePatrolRouteId to Route 1 (0)")
+	@DisplayName("Source contract: Selecting PATHWAY mode resets activePatrolRouteId to valid available route")
 	void testSelectingPathwayModeDefaultsRoute1() throws IOException {
 		Path screenPath = Path.of("src/client/java/com/example/client/gui/CommandScepterScreen.java");
 		String screenContent = Files.readString(screenPath);
 
 		Assertions.assertTrue(
-			screenContent.contains("if (mode == CommandMode.PATHWAY) {\n\t\t\tthis.activePatrolRouteId = 0;"),
-			"selectMode must reset activePatrolRouteId to 0 when switching to PATHWAY mode"
+			screenContent.contains("if (mode == CommandMode.PATHWAY) {") &&
+			screenContent.contains("routes.get(0).routeId();"),
+			"selectMode must preserve valid active route or fall back to first route when switching to PATHWAY mode"
 		);
 	}
 

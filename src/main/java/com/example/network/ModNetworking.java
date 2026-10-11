@@ -219,8 +219,8 @@ public class ModNetworking {
 		}
 		CommandScepterItem.setRotationIndex(scepterStack, rotation);
 
-		// Apply active patrol route channel if within valid bounds [0, PatrolRoute.CHANNEL_COUNT - 1]
-		if (activePatrolRoute >= 0 && activePatrolRoute < com.example.patrol.PatrolRoute.CHANNEL_COUNT) {
+		// Apply active patrol route channel if non-negative
+		if (activePatrolRoute >= 0) {
 			CommandScepterItem.setActivePatrolRoute(scepterStack, activePatrolRoute);
 		}
 
@@ -654,15 +654,37 @@ public class ModNetworking {
 				com.example.patrol.PatrolRoute updated = com.example.patrol.PatrolRouteManager.getInstance().addWaypoint(
 					player.getUuid(), payload.routeId(), payload.pos()
 				);
-				com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(player);
-				player.sendMessage(Text.literal("§6✦ Added Waypoint §e#" + updated.waypoints().size() + " §6to " + updated.getFormattedName()), true);
+				if (updated != null) {
+					com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(player);
+					player.sendMessage(Text.literal("§6✦ Added Waypoint §e#" + updated.waypoints().size() + " §6to " + updated.getFormattedName()), true);
+				}
 			}
 			case REMOVE_WAYPOINT -> {
 				com.example.patrol.PatrolRoute updated = com.example.patrol.PatrolRouteManager.getInstance().removeWaypoint(
 					player.getUuid(), payload.routeId(), payload.pos()
 				);
-				com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(player);
-				if (updated.waypoints().isEmpty()) {
+				if (updated != null) {
+					com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(player);
+					if (updated.waypoints().isEmpty()) {
+						List<MinionEntity> routeMinions = world.getEntitiesByClass(
+							MinionEntity.class,
+							player.getBoundingBox().expand(256.0D),
+							m -> m.isAlive() && m.isOwner(player) && m.getPatrolRouteId() == payload.routeId()
+						);
+						for (MinionEntity m : routeMinions) {
+							m.setPatrolRouteId(-1);
+							m.getNavigation().stop();
+						}
+					}
+					player.sendMessage(Text.literal("§c✦ Removed Waypoint from " + updated.getFormattedName()), true);
+				}
+			}
+			case CLEAR_ROUTE -> {
+				com.example.patrol.PatrolRoute updated = com.example.patrol.PatrolRouteManager.getInstance().clearRoute(
+					player.getUuid(), payload.routeId()
+				);
+				if (updated != null) {
+					com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(player);
 					List<MinionEntity> routeMinions = world.getEntitiesByClass(
 						MinionEntity.class,
 						player.getBoundingBox().expand(256.0D),
@@ -672,24 +694,8 @@ public class ModNetworking {
 						m.setPatrolRouteId(-1);
 						m.getNavigation().stop();
 					}
+					player.sendMessage(Text.literal("§c✦ Cleared all waypoints for " + updated.getFormattedName()), true);
 				}
-				player.sendMessage(Text.literal("§c✦ Removed Waypoint from " + updated.getFormattedName()), true);
-			}
-			case CLEAR_ROUTE -> {
-				com.example.patrol.PatrolRoute updated = com.example.patrol.PatrolRouteManager.getInstance().clearRoute(
-					player.getUuid(), payload.routeId()
-				);
-				com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(player);
-				List<MinionEntity> routeMinions = world.getEntitiesByClass(
-					MinionEntity.class,
-					player.getBoundingBox().expand(256.0D),
-					m -> m.isAlive() && m.isOwner(player) && m.getPatrolRouteId() == payload.routeId()
-				);
-				for (MinionEntity m : routeMinions) {
-					m.setPatrolRouteId(-1);
-					m.getNavigation().stop();
-				}
-				player.sendMessage(Text.literal("§c✦ Cleared all waypoints for " + updated.getFormattedName()), true);
 			}
 			case ASSIGN_MINION -> {
 				Entity entity = world.getEntityById(payload.minionId());
@@ -766,8 +772,10 @@ public class ModNetworking {
 				com.example.patrol.PatrolRoute updated = com.example.patrol.PatrolRouteManager.getInstance().togglePatrolMode(
 					player.getUuid(), payload.routeId()
 				);
-				com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(player);
-				player.sendMessage(Text.literal("§6✦ Set " + updated.getFormattedName() + " to §b" + updated.patrolMode().getFormattedLabel()), true);
+				if (updated != null) {
+					com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(player);
+					player.sendMessage(Text.literal("§6✦ Set " + updated.getFormattedName() + " to §b" + updated.patrolMode().getFormattedLabel()), true);
+				}
 			}
 		}
 	}

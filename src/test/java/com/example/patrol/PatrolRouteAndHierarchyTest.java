@@ -273,16 +273,16 @@ public class PatrolRouteAndHierarchyTest {
 		PatrolRoute toggled = route.withPatrolMode(PatrolRoute.PatrolMode.PING_PONG);
 		Assertions.assertEquals(PatrolRoute.PatrolMode.PING_PONG, toggled.patrolMode());
 
-		// Test PatrolRouteManager toggle
+		// Test PatrolRouteManager toggle on default route (Route 0)
 		PatrolRouteManager manager = PatrolRouteManager.getInstance();
 		UUID player = UUID.randomUUID();
-		PatrolRoute r1 = manager.getRoute(player, 1);
+		PatrolRoute r1 = manager.getRoute(player, 0);
 		Assertions.assertEquals(PatrolRoute.PatrolMode.LOOP, r1.patrolMode());
 
-		PatrolRoute r2 = manager.togglePatrolMode(player, 1);
+		PatrolRoute r2 = manager.togglePatrolMode(player, 0);
 		Assertions.assertEquals(PatrolRoute.PatrolMode.PING_PONG, r2.patrolMode());
 
-		PatrolRoute r3 = manager.togglePatrolMode(player, 1);
+		PatrolRoute r3 = manager.togglePatrolMode(player, 0);
 		Assertions.assertEquals(PatrolRoute.PatrolMode.LOOP, r3.patrolMode());
 
 		// Ping-Pong Traversal State Machine Simulation (3 waypoints: 0 -> 1 -> 2 -> 1 -> 0 -> 1 -> 2)
@@ -461,10 +461,10 @@ public class PatrolRouteAndHierarchyTest {
 		PatrolRoutePersistentState session2State = PatrolRoutePersistentState.fromNbt(savedOnDisk, null);
 		manager.loadFromPersistentState(session2State);
 
-		// Verify that all routes and waypoints survive restart cleanly
+		// Verify that all routes and waypoints survive restart cleanly (single default route initialized)
 		List<PatrolRoute> restoredRoutes = manager.getAllRoutes(playerId);
 		Assertions.assertNotNull(restoredRoutes);
-		Assertions.assertEquals(5, restoredRoutes.size());
+		Assertions.assertEquals(1, restoredRoutes.size());
 		Assertions.assertEquals(2, restoredRoutes.get(0).waypoints().size());
 		Assertions.assertEquals(wp1, restoredRoutes.get(0).waypoints().get(0));
 		Assertions.assertEquals(wp2, restoredRoutes.get(0).waypoints().get(1));
@@ -691,7 +691,7 @@ public class PatrolRouteAndHierarchyTest {
 		// 1. Add waypoint to Route 0 (Gold)
 		manager.addWaypoint(playerId, 0, posGold);
 		Assertions.assertTrue(manager.getRoute(playerId, 0).waypoints().contains(posGold));
-		Assertions.assertFalse(manager.getRoute(playerId, 1).waypoints().contains(posGold));
+		Assertions.assertNull(manager.getRoute(playerId, 1), "Route 1 must not be auto-created");
 
 		// 2. findWaypoint must discover posGold across all channels
 		PatrolRouteManager.WaypointMatch match = manager.findWaypoint(playerId, posGold);
@@ -911,6 +911,229 @@ public class PatrolRouteAndHierarchyTest {
 			minionContent.contains("if (this.getPatrolRouteId() >= 0) {\n\t\t\t\treturn;\n\t\t\t}"),
 			"MinionEntity.returnToOwnerPostCombat must return early if minion is on a patrol route"
 		);
+	}
+
+	@Test
+	@DisplayName("Validate single default route initialization and zero auto-creation on query")
+	void testSingleDefaultRouteAndZeroAutoCreationOnQuery() {
+		PatrolRouteManager manager = PatrolRouteManager.getInstance();
+		UUID playerId = UUID.randomUUID();
+
+		// Initially, exactly 1 route must exist (Route 0 / Gold)
+		List<PatrolRoute> initialRoutes = manager.getAllRoutes(playerId);
+		Assertions.assertEquals(1, initialRoutes.size(), "Player must only have 1 route initially");
+		Assertions.assertEquals(0, initialRoutes.get(0).routeId());
+		Assertions.assertTrue(initialRoutes.get(0).name().contains("Gold") || initialRoutes.get(0).name().contains("Route 1"));
+
+		// Querying non-existent routes must return null without auto-creating them
+		Assertions.assertNull(manager.getRoute(playerId, 1), "Querying route 1 must return null");
+		Assertions.assertNull(manager.getRoute(playerId, 2), "Querying route 2 must return null");
+		Assertions.assertNull(manager.getRoute(playerId, 99), "Querying route 99 must return null");
+
+		// Attempting operations on uncreated routes must return null and never auto-create them
+		BlockPos testPos = new BlockPos(10, 64, 20);
+		Assertions.assertNull(manager.addWaypoint(playerId, 1, testPos), "addWaypoint on uncreated route 1 must return null");
+		Assertions.assertNull(manager.removeWaypoint(playerId, 1, testPos), "removeWaypoint on uncreated route 1 must return null");
+		Assertions.assertNull(manager.clearRoute(playerId, 1), "clearRoute on uncreated route 1 must return null");
+		Assertions.assertNull(manager.togglePatrolMode(playerId, 1), "togglePatrolMode on uncreated route 1 must return null");
+
+		// After queries and operations, route list must STILL contain only 1 route
+		List<PatrolRoute> afterQueries = manager.getAllRoutes(playerId);
+		Assertions.assertEquals(1, afterQueries.size(), "Route list must not grow from getRoute or waypoint operations on uncreated routes");
+		Assertions.assertEquals(0, afterQueries.get(0).routeId());
+	}
+
+	@Test
+	@DisplayName("Validate newly created routes are placed first in order using LinkedHashMap")
+	void testNewestFirstRouteOrdering() {
+		PatrolRouteManager manager = PatrolRouteManager.getInstance();
+		UUID playerId = UUID.randomUUID();
+
+		// Initially has Route 0
+		Assertions.assertEquals(1, manager.getAllRoutes(playerId).size());
+
+		// Create Route A
+		PatrolRoute routeA = manager.createRoute(playerId, "Alpha Outpost", 0x112233);
+		List<PatrolRoute> routesAfterA = manager.getAllRoutes(playerId);
+		Assertions.assertEquals(2, routesAfterA.size());
+		Assertions.assertEquals(routeA.routeId(), routesAfterA.get(0).routeId(), "Newly created Route A must be first in list");
+		Assertions.assertEquals(0, routesAfterA.get(1).routeId(), "Initial Route 0 must follow Route A");
+
+		// Create Route B
+		PatrolRoute routeB = manager.createRoute(playerId, "Beta Fortress", 0x445566);
+		List<PatrolRoute> routesAfterB = manager.getAllRoutes(playerId);
+		Assertions.assertEquals(3, routesAfterB.size());
+		Assertions.assertEquals(routeB.routeId(), routesAfterB.get(0).routeId(), "Newly created Route B must be first in list");
+		Assertions.assertEquals(routeA.routeId(), routesAfterB.get(1).routeId(), "Route A must be second");
+		Assertions.assertEquals(0, routesAfterB.get(2).routeId(), "Initial Route 0 must be third");
+
+		// Update Route A in-place (name / color)
+		PatrolRoute updatedA = manager.updateRouteConfig(playerId, routeA.routeId(), "Alpha Citadel", 0x778899, PatrolRoute.PatrolMode.PING_PONG);
+		List<PatrolRoute> routesAfterUpdate = manager.getAllRoutes(playerId);
+		Assertions.assertEquals(3, routesAfterUpdate.size());
+		Assertions.assertEquals(routeB.routeId(), routesAfterUpdate.get(0).routeId(), "Route B remains first");
+		Assertions.assertEquals(routeA.routeId(), routesAfterUpdate.get(1).routeId(), "Updated Route A preserves its relative position");
+		Assertions.assertEquals("Alpha Citadel", routesAfterUpdate.get(1).name());
+		Assertions.assertEquals(0, routesAfterUpdate.get(2).routeId(), "Route 0 remains third");
+
+		// Add waypoint to Route A
+		BlockPos wp = new BlockPos(10, 64, 10);
+		manager.addWaypoint(playerId, routeA.routeId(), wp);
+		List<PatrolRoute> routesAfterWp = manager.getAllRoutes(playerId);
+		Assertions.assertEquals(3, routesAfterWp.size());
+		Assertions.assertEquals(routeB.routeId(), routesAfterWp.get(0).routeId());
+		Assertions.assertEquals(routeA.routeId(), routesAfterWp.get(1).routeId());
+		Assertions.assertEquals(1, routesAfterWp.get(1).waypoints().size());
+		Assertions.assertEquals(0, routesAfterWp.get(2).routeId());
+	}
+
+	@Test
+	@DisplayName("Validate PatrolRoutePersistentState preserves newest-first ordering across NBT roundtrip")
+	void testPatrolRoutePersistentStateNewestFirstPreservation() {
+		PatrolRoutePersistentState state = new PatrolRoutePersistentState();
+		UUID playerId = UUID.randomUUID();
+
+		PatrolRoute r0 = PatrolRoute.createDefault(0);
+		PatrolRoute r1 = PatrolRoute.createCustom(1, "Front Route 1", 0x111111);
+		PatrolRoute r2 = PatrolRoute.createCustom(2, "Newest Front Route 2", 0x222222);
+
+		// Store in newest-first order: [r2, r1, r0]
+		java.util.Map<Integer, PatrolRoute> playerMap = new java.util.LinkedHashMap<>();
+		playerMap.put(r2.routeId(), r2);
+		playerMap.put(r1.routeId(), r1);
+		playerMap.put(r0.routeId(), r0);
+		state.getRoutes().put(playerId, playerMap);
+
+		// Write to NBT
+		net.minecraft.nbt.NbtCompound nbt = state.writeNbt(new net.minecraft.nbt.NbtCompound(), null);
+
+		// Read back from NBT
+		PatrolRoutePersistentState restored = PatrolRoutePersistentState.fromNbt(nbt, null);
+		java.util.Map<Integer, PatrolRoute> restoredMap = restored.getRoutes().get(playerId);
+		Assertions.assertNotNull(restoredMap);
+
+		List<PatrolRoute> restoredList = new java.util.ArrayList<>(restoredMap.values());
+		Assertions.assertEquals(3, restoredList.size());
+		Assertions.assertEquals(2, restoredList.get(0).routeId(), "Newest route r2 must be first after NBT reload");
+		Assertions.assertEquals(1, restoredList.get(1).routeId(), "Route r1 must be second after NBT reload");
+		Assertions.assertEquals(0, restoredList.get(2).routeId(), "Default route r0 must be third after NBT reload");
+	}
+
+	@Test
+	@DisplayName("Source contract: PatrolRouteManager and PatrolRoutePersistentState use LinkedHashMap for newest-first order")
+	void testLinkedHashMapSourceContracts() throws java.io.IOException {
+		String managerContent = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/example/patrol/PatrolRouteManager.java"));
+		Assertions.assertTrue(
+			managerContent.contains("LinkedHashMap"),
+			"PatrolRouteManager must use LinkedHashMap to maintain newest-first route order"
+		);
+		Assertions.assertFalse(
+			managerContent.contains("routes.computeIfAbsent(routeId, PatrolRoute::createDefault)"),
+			"PatrolRouteManager.getRoute must not auto-create routes via computeIfAbsent"
+		);
+
+		String stateContent = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/example/patrol/PatrolRoutePersistentState.java"));
+		Assertions.assertTrue(
+			stateContent.contains("LinkedHashMap"),
+			"PatrolRoutePersistentState must deserialize into LinkedHashMap to preserve order"
+		);
+	}
+
+	@Test
+	@DisplayName("Source contract: CommandScepterItem restricts route cycling strictly to existing routes")
+	void testCommandScepterRouteCyclingSourceContract() throws java.io.IOException {
+		String scepterContent = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/java/com/example/item/custom/CommandScepterItem.java"));
+		Assertions.assertTrue(
+			scepterContent.contains("public static RouteListProvider CLIENT_ROUTE_PROVIDER = null;"),
+			"CommandScepterItem must expose CLIENT_ROUTE_PROVIDER hook for client-side route queries"
+		);
+		Assertions.assertTrue(
+			scepterContent.contains("CLIENT_ROUTE_PROVIDER.getRoutes()"),
+			"CommandScepterItem.cyclePatrolRoute must query CLIENT_ROUTE_PROVIDER when on client"
+		);
+		Assertions.assertTrue(
+			scepterContent.contains("availableRoutes.stream().map(PatrolRoute::routeId).toList()"),
+			"CommandScepterItem.cyclePatrolRoute must preserve route list ordering (newest-first) without ascending sort"
+		);
+		Assertions.assertFalse(
+			scepterContent.contains("next = (current + 1) % PatrolRoute.CHANNEL_COUNT;"),
+			"CommandScepterItem must never cycle to arbitrary uncreated channel IDs"
+		);
+		Assertions.assertTrue(
+			scepterContent.contains("targetRoute = allRoutes.get(0);"),
+			"CommandScepterItem.useOnBlock must fall back to first existing route when target route channel is not found"
+		);
+	}
+
+	@Test
+	@DisplayName("Validate full persistent state reload with newest-first ordering and zero phantom routes")
+	void testMultiRoutePersistentStateReloadAndOrderFidelity() {
+		PatrolRouteManager manager = PatrolRouteManager.getInstance();
+		UUID playerId = UUID.randomUUID();
+		UUID otherPlayerId = UUID.randomUUID();
+
+		// Session 1: Create routes in sequence: default (0), then 1 ("North"), then 2 ("East"), then 3 ("South")
+		PatrolRoute r1 = manager.createRoute(playerId, "North Rampart", 0x00E5FF);
+		PatrolRoute r2 = manager.createRoute(playerId, "East Gate", 0x00FF66);
+		PatrolRoute r3 = manager.createRoute(playerId, "South Trench", 0xFF2244);
+
+		// Add waypoints
+		BlockPos wp3 = new BlockPos(300, 65, 300);
+		BlockPos wp2 = new BlockPos(200, 65, 200);
+		BlockPos wp1 = new BlockPos(100, 65, 100);
+		BlockPos wp0 = new BlockPos(50, 65, 50);
+		manager.addWaypoint(playerId, r3.routeId(), wp3);
+		manager.addWaypoint(playerId, r2.routeId(), wp2);
+		manager.addWaypoint(playerId, r1.routeId(), wp1);
+		manager.addWaypoint(playerId, 0, wp0);
+
+		// Verify order before persistence: [r3, r2, r1, r0]
+		List<PatrolRoute> session1Routes = manager.getAllRoutes(playerId);
+		Assertions.assertEquals(4, session1Routes.size());
+		Assertions.assertEquals(r3.routeId(), session1Routes.get(0).routeId());
+		Assertions.assertEquals(r2.routeId(), session1Routes.get(1).routeId());
+		Assertions.assertEquals(r1.routeId(), session1Routes.get(2).routeId());
+		Assertions.assertEquals(0, session1Routes.get(3).routeId());
+
+		// Serialize to NBT
+		PatrolRoutePersistentState state = new PatrolRoutePersistentState();
+		// Populate state from manager
+		for (UUID pid : List.of(playerId)) {
+			java.util.Map<Integer, PatrolRoute> pmap = new java.util.LinkedHashMap<>();
+			for (PatrolRoute r : manager.getAllRoutes(pid)) {
+				pmap.put(r.routeId(), r);
+			}
+			state.getRoutes().put(pid, pmap);
+		}
+		net.minecraft.nbt.NbtCompound savedCompound = state.writeNbt(new net.minecraft.nbt.NbtCompound(), null);
+
+		// Session 2: Reload state from NBT
+		PatrolRoutePersistentState restoredState = PatrolRoutePersistentState.fromNbt(savedCompound, null);
+		manager.loadFromPersistentState(restoredState);
+
+		// Verify restored routes preserve newest-first ordering exactly
+		List<PatrolRoute> session2Routes = manager.getAllRoutes(playerId);
+		Assertions.assertEquals(4, session2Routes.size(), "Must have exactly 4 routes after reload");
+		Assertions.assertEquals(r3.routeId(), session2Routes.get(0).routeId(), "Newest route r3 must be first");
+		Assertions.assertEquals(r2.routeId(), session2Routes.get(1).routeId(), "Route r2 must be second");
+		Assertions.assertEquals(r1.routeId(), session2Routes.get(2).routeId(), "Route r1 must be third");
+		Assertions.assertEquals(0, session2Routes.get(3).routeId(), "Default route 0 must be fourth");
+
+		// Verify waypoints are intact
+		Assertions.assertEquals(List.of(wp3), session2Routes.get(0).waypoints());
+		Assertions.assertEquals(List.of(wp2), session2Routes.get(1).waypoints());
+		Assertions.assertEquals(List.of(wp1), session2Routes.get(2).waypoints());
+		Assertions.assertEquals(List.of(wp0), session2Routes.get(3).waypoints());
+
+		// Verify non-existent route queries still return null without auto-creation
+		Assertions.assertNull(manager.getRoute(playerId, 99));
+		Assertions.assertEquals(4, manager.getAllRoutes(playerId).size());
+
+		// Verify other player without saved routes initializes with ONLY 1 default route (Route 0)
+		List<PatrolRoute> otherRoutes = manager.getAllRoutes(otherPlayerId);
+		Assertions.assertEquals(1, otherRoutes.size(), "Uninitialized player must have only 1 default route");
+		Assertions.assertEquals(0, otherRoutes.get(0).routeId());
+		Assertions.assertNull(manager.getRoute(otherPlayerId, 1), "Other player route 1 must not exist");
 	}
 }
 

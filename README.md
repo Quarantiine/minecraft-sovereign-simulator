@@ -67,12 +67,13 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 1. **⚔ Warrior (`MinionRole.WARRIOR`)**:
    - **Frontline Combatant & Hunter**: Masters swords, axes, maces, bows, and crossbows.
+   - **Frontline Damage Boost (+4.0 Attack Damage)**: Built as offensive vanguard shock troops, Warriors hit significantly harder than other roles via `WARRIOR_ATTACK_DAMAGE_BONUS = 4.0D`. Unarmed punches deal `9.0` base physical damage (vs. Sentinel/Builder `5.0`), and equipped melee weapons deal `+4.0` bonus damage across all tiers (`15.0` damage with an Iron Sword vs. Sentinel's `11.0`; `16.0` with a Diamond Sword vs. Sentinel's `12.0`). Hits feature server-side critical hit particle bursts (`CRIT`) and visceral knockback audio cues.
    - **Trident Duality**: Throws piercing tridents at long range ($5\text{D}\text{--}20\text{D}$) and seamlessly transitions into deadly close-quarters melee thrusts ($\le 5\text{D}$) with server-side loyalty retrieval.
    - **Tactical Ordnance**: Wields throwable TNT Sticks and cryogenic Frost Grenades.
    - **Procurement Contracts**: Automatically accepts hunting commissions from Builders to hunt mob resources (wool, bones, slime, leather) and delivers them through peer-to-peer logistics.
 
 2. **🛡 Sentinel (`MinionRole.SENTINEL`)**:
-   - **Perimeter Guard & Combat Medic**: Guards designated anchor posts with an 8-block perimeter and 128-block leash, prioritizing shields in offhand.
+   - **Perimeter Guard & Combat Medic**: Guards designated anchor posts with an 8-block perimeter and 128-block leash, prioritizing shields in offhand. Deals baseline `5.0` physical damage (unaffected by warrior damage bonuses) to focus role attributes strictly on defensive endurance and squad sustain.
    - **Aegis of Restoration**: Autonomously channels healing beams to wounded player commanders, allied minions, and friendly **Iron Golems** under 70% HP within 10 blocks (restoring 6.0 HP + Regeneration II for 5s with heart VFX and amethyst resonance).
    - **Warrior Combat Dual-Mode**: Sentinels fight aggressively like Warriors (active hostile target scanning, melee charge at $1.35\text{D}$, and ranged weapon skirmishing) **strictly when all nearby minions, Iron Golems, and commanders need zero healing** (100% full health). The instant an ally takes damage, the Sentinel disengages immediately (`setTarget(null)`) to prioritize medical protection.
 
@@ -84,8 +85,8 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 4. **⚙ Auto (`MinionRole.AUTO`)**:
    - **The Default Dynamic Archetype**: Newly summoned or recruited minions start in `AUTO` mode, evaluating their tactical environment every second:
-     - Morphs to **Sentinel** if an ally drops below 70% HP or when holding a guard post.
-     - Morphs to **Warrior** if hostile mobs enter 16m or when escorting during peacetime.
+     - Morphs to **Sentinel** if an ally drops below 70% HP or when holding a guard post (reverting to baseline damage and prioritizing shields/healing).
+     - Morphs to **Warrior** if hostile mobs enter 16m or when escorting during peacetime (dynamically gaining the `+4.0` frontline Attack Damage bonus and aggressive assault AI).
      - Morphs to **Builder** if an active blueprint or quarry task requires engineering hands.
 
 ---
@@ -113,7 +114,7 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - Left-Click to select/deselect individual units or hold for 90° cone mass sweeps.
   - Right-Click the ground to deploy military waypoint lines.
 - **Ranked Army Battle Formations**:
-  - Minions automatically calculate disciplined, parallel 4-unit battle ranks: Warriors form the vanguard frontline ($+4.0\text{D}$), Sentinels form the protective midline escort ($+1.8\text{D}$), and Builders bring up the rear support ($ -2.0\text{D}$).
+  - Minions automatically calculate disciplined, parallel 4-unit battle ranks: Warriors form the hard-hitting vanguard frontline ($+4.0\text{D}$) to intercept and shred threats, Sentinels form the protective midline escort ($+1.8\text{D}$) ready to shield and heal wounded units, and Builders bring up the rear support ($ -2.0\text{D}$).
 - **Minion Escort Hierarchy & Squad Leaders**:
   - Delegate minions to bodyguard fellow minions. Shift-Punch an owned minion with the Scepter to designate a **Squad Leader**; all selected escorts dynamically form protective flanking ranks around their leader with active cyan-to-magenta Arcane Tether Beams.
 - **Custom In-World Blueprint Capture ('DESIGN' Mode)**:
@@ -124,7 +125,9 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - **3D Blueprint Explorer & Clarity Viewport GUI**: Click `[ 🔍 3D View ]` in the Command Hub to open `BlueprintExplorerScreen`, featuring true 3D rotated quad rendering, 6-directional interior occlusion culling, authentic botanical flora and multi-face textures (flowers, crops, tree bark/rings, workstations, 16-color dyes), directional sunlight ($N \cdot L$), Fullscreen/Maximize mode (`[ ⛶ ]` / `Tab` / `F`), an Architectural Floor Slicer (`▲` / `▼`), full mouse-click and keybind toolbar controls, 2D camera panning, $0.25\times$ to $8.0\times$ zoom, ground pedestal, real-time cardinal compass, and zero text cut-off across all resolutions.
 - **Visual Pathway Patrols**:
   - Script custom patrol loops or ping-pong routes with glowing checkpoint badges (`[ 1 ]`, `[ 2 ]`) and luminous laser vector tethers.
-  - Customize routes with 5 built-in channels or 24-bit RGB hex colors via the interactive modal GUI.
+  - **Single Initial Default Pathway (Zero Auto-Creation)**: Starts with only **one** initial default pathway (**Route 1 🟡 Gold `#FFD700`**). Pathways are **never** auto-created—players have total control to add more routes on their own.
+  - **Newest-First Route Ordering**: Newly created routes appear **first in order** (Slide 1 Slot 1) across the Command Hub dashboard and scepter cycling, with exact order preserved across world saves.
+  - Customize routes with 24-bit RGB hex colors or built-in presets via the interactive `PatrolRouteEditModalScreen` GUI.
 - **Dual-Tier Panic Retreat**:
   - Press **`R`** to immediately recall active squad members within 64m.
   - Press **`Shift + R`** for an army-wide **Emergency Citadel Call** (128m), sounding war horns and tolling fortress bells to sprint all stationed units to the commander's defense.

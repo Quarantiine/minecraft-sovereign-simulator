@@ -1,6 +1,8 @@
 package com.example.patrol;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,7 +50,7 @@ public class PatrolRoutePersistentState extends PersistentState {
 			try {
 				UUID playerUuid = UUID.fromString(uuidKey);
 				NbtList routeListNbt = playersNbt.getList(uuidKey, NbtElement.COMPOUND_TYPE);
-				Map<Integer, PatrolRoute> playerRouteMap = new ConcurrentHashMap<>();
+				Map<Integer, PatrolRoute> playerRouteMap = Collections.synchronizedMap(new LinkedHashMap<>());
 
 				for (int i = 0; i < routeListNbt.size(); i++) {
 					NbtCompound rNbt = routeListNbt.getCompound(i);
@@ -89,23 +91,25 @@ public class PatrolRoutePersistentState extends PersistentState {
 
 		for (Map.Entry<UUID, Map<Integer, PatrolRoute>> entry : this.routes.entrySet()) {
 			NbtList routeListNbt = new NbtList();
-			for (PatrolRoute route : entry.getValue().values()) {
-				NbtCompound rNbt = new NbtCompound();
-				rNbt.putInt("routeId", route.routeId());
-				rNbt.putString("name", route.name());
-				rNbt.putInt("colorRgb", route.colorRgb());
-				rNbt.putString("patrolMode", route.patrolMode().name());
+			synchronized (entry.getValue()) {
+				for (PatrolRoute route : entry.getValue().values()) {
+					NbtCompound rNbt = new NbtCompound();
+					rNbt.putInt("routeId", route.routeId());
+					rNbt.putString("name", route.name());
+					rNbt.putInt("colorRgb", route.colorRgb());
+					rNbt.putString("patrolMode", route.patrolMode().name());
 
-				NbtList wpList = new NbtList();
-				for (BlockPos pos : route.waypoints()) {
-					NbtCompound wp = new NbtCompound();
-					wp.putInt("x", pos.getX());
-					wp.putInt("y", pos.getY());
-					wp.putInt("z", pos.getZ());
-					wpList.add(wp);
+					NbtList wpList = new NbtList();
+					for (BlockPos pos : route.waypoints()) {
+						NbtCompound wp = new NbtCompound();
+						wp.putInt("x", pos.getX());
+						wp.putInt("y", pos.getY());
+						wp.putInt("z", pos.getZ());
+						wpList.add(wp);
+					}
+					rNbt.put("waypoints", wpList);
+					routeListNbt.add(rNbt);
 				}
-				rNbt.put("waypoints", wpList);
-				routeListNbt.add(rNbt);
 			}
 			playersNbt.put(entry.getKey().toString(), routeListNbt);
 		}

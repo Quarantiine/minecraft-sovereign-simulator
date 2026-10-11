@@ -35,7 +35,7 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 | **Shift + Left-Click**                      | Owned Minion                  | **Designate Squad Leader / Untether**: With 1+ minions selected, designates this minion as the **Squad Leader** that all selected minions will escort! With 0 minions selected on an escort, dissolves its escort bond so it follows you.                                                                                                                  |
 | **Right-Click** _(Quick Tap)_               | Block in **PATHWAY**          | **Add / Remove Waypoint (Zero-Overlap)**: Places a waypoint on top of the surface. If _any_ route channel (Color 1–5) already has a waypoint at that position, clicking removes/undoes it from that route instead of creating an overlap!                                                                                                                  |
 | **Shift + Right-Click**                     | Block in **PATHWAY**          | **Remove Waypoint**: Removes clicked waypoint across all route channels (bypasses Command Hub GUI).                                                                                                                                                                                                                                                        |
-| **Right-Click Air**                         | In **PATHWAY** Mode           | **Cycle Route Channel**: Cycles active patrol route (Route 1 🟡 Gold → Route 2 🔵 Cyan → Route 3 🟢 Emerald → Route 4 🟣 Purple → Route 5 🔴 Crimson).                                                                                                                                                                                                     |
+| **Right-Click Air**                         | In **PATHWAY** Mode           | **Cycle Route Channel**: Cycles through your existing patrol routes in dashboard order (newest-first). Starts with single default **Route 1 🟡 Gold**; additional routes are cycled as you create them!                                                                                                                                                    |
 | **Shift + Right-Click Air**                 | In **PATHWAY** Mode           | **Clear Route**: Clears all waypoints from active patrol route channel.                                                                                                                                                                                                                                                                                    |
 | **Right-Click Minion** _(without Shift)_    | In **PATHWAY** Mode           | **Assign Minion to Route**: Assigns target minion (or all currently selected minions) to the active patrol route channel, deselecting them from following the master so they begin patrolling immediately. If already on this route with no others selected, removes them from patrol.                                                                     |
 | **Shift + Left-Click**                      | In **BUILD** Mode             | **Rotate Blueprint**: Rotates hologram 90° clockwise.                                                                                                                                                                                                                                                                                                      |
@@ -133,29 +133,27 @@ To switch squads:
 
 ## 🛡️ 4. Visual Pathway Patrol & Minion Escort Hierarchy
 
-### A. Dynamic Custom Hex Colors & Route Channels
+### A. Single Default Route & Dynamic Custom Pathways
 
-Patrol pathways can be customized with arbitrary 24-bit hex colors or selected from built-in channels:
+Commanders start with **only one default pathway route initially** (**Route 1 🟡 Gold `#FFD700`**). There are **never auto-created pathways**—additional routes must be intentionally authored by the player via the Command Hub GUI (`V`).
 
-- **Route 1**: 🟡 **Gold / Amber** (`#FFD700`) — Base perimeter & main gates (Default Route).
-- **Route 2**: 🔵 **Azure / Cyan** (`#00E5FF`) — Castle battlements & ramparts.
-- **Route 3**: 🟢 **Emerald Green** (`#00FF66`) — Farms, village borders & gardens.
-- **Route 4**: 🟣 **Arcane Purple** (`#B300FF`) — Nether portals & mine shafts.
-- **Route 5**: 🔴 **Crimson Red** (`#FF2244`) — Forward defensive trenches & killzones.
-- **Custom Hex Routes**: Create and configure unlimited dynamic routes with custom names and exact RGB hex codes (e.g. `#FF5500`, `#00AAFF`).
+- **Route 1**: 🟡 **Gold / Amber** (`#FFD700`) — Citadel gates & primary courtyard (Initial Default Route).
+- **Zero Phantom Auto-Creation**: Querying routes, cycling the Scepter, or opening the modal never creates ghost routes.
+- **Newest-First Route Ordering**: Newly created routes automatically appear **first in order** (Slide 1 Slot 1) across the Command Hub dashboard, Scepter cycling, and world save persistence.
+- **Custom Hex Routes & Swatches**: Create and configure unlimited dynamic routes with custom names and exact RGB hex codes (e.g. `#FF5500`, `#00AAFF`) or 8 preset swatches via **`[ + New Route ]`**.
 
 ### B. Configuring & Designing Routes in the Command Hub & PATHWAY Mode
 
 1. Switch to **`PATHWAY`** mode (**Shift + Right-Click** or in the Command Hub **`V`**).
 2. **Paginated Route Dashboard (`V` Menu)**:
-   - Browse routes 4 per page with **`[ ◀ Prev ]`** and **`[ Next ▶ ]`** navigation buttons.
-   - Click **`[ + New Route ]`** to create a fresh custom patrol route on the fly.
+   - Browse routes 4 per page with **`[ ◀ Prev ]`** and **`[ Next ▶ ]`** navigation buttons. Routes are displayed newest-first!
+   - Click **`[ + New Route ]`** to create a fresh custom patrol route on the fly (it will immediately appear as the first card in Slot 1).
    - Click **`[ Edit ]`** on any route to open the **Patrol Route Configuration Modal** (`PatrolRouteEditModalScreen`):
      - Edit custom display name.
      - Pick from 8 quick preset color swatches (Gold, Cyan, Emerald, Purple, Crimson, Blaze Orange, Royal Blue, Hot Pink) rendered in their vibrant swatch colors with active selection highlight borders, or type an exact hex color (`#RRGGBB` / `0xRRGGBB`) with live preview.
      - Click **`[ ✔ Save Route ]`** to persist across server and world saves.
      - Click **`[ ✖ Delete Route ]`** to safely delete the route; all patrolling minions assigned to that route safely detach (`routeId = -1`) and hold position.
-3. **Right-Click Air** to cycle to your desired route channel (e.g. Route 1 Gold).
+3. **Right-Click Air** to cycle through your existing route channels in newest-first order.
 4. **Right-Click Ground Blocks** along your perimeter:
    - Each clicked block places a waypoint tile resting cleanly **on top of the surface** with a 3D holographic bounding wireframe tinted to the route's exact hex color.
    - An animated numbered billboarding badge hovers above the tile: `[ 1 ]`, `[ 2 ]`, `[ 3 ]`, etc.

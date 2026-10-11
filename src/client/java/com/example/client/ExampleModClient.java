@@ -114,6 +114,9 @@ public class ExampleModClient implements ClientModInitializer {
 		CommandScepterItem.MINE_CORNER_STEPPER = ClientMiningCaptureTracker::stepCorner;
 		CommandScepterItem.MINE_CORNER_RESETTER = ClientMiningCaptureTracker::clear;
 
+		// Hook client-side patrol route provider into CommandScepterItem for route cycling
+		CommandScepterItem.CLIENT_ROUTE_PROVIDER = com.example.client.renderer.ClientPatrolRouteTracker::getAllRoutesList;
+
 		CommandScepterItem.DESIGN_CLICK_CONSUMER = () -> {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			while (mc.options.attackKey.wasPressed()) {}

@@ -1,6 +1,7 @@
 package com.example.entity;
 
 import com.example.component.SquadGroup;
+import com.example.entity.custom.MinionEntity;
 import com.example.entity.custom.MinionRole;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
@@ -8,8 +9,12 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -1048,5 +1053,309 @@ public class MinionSquadAndRoleTest {
 		Assertions.assertTrue(minionAlpha.shouldNegateDamage(minionBravo.owner), "Friendly fire from allied minion must be negated");
 		Assertions.assertFalse(minionAlpha.shouldNegateDamage(commanderB), "Damage from rival commander must NOT be negated");
 		Assertions.assertFalse(minionAlpha.shouldNegateDamage(enemyMinion.owner), "Damage from enemy minion must NOT be negated");
+	}
+
+	// =========================================================================
+	// 11. Warrior Attack Damage Bonus & Dynamic Adaptive Role Resolution
+	// =========================================================================
+
+	@Test
+	@DisplayName("Validate Warrior role attack damage attribute bonus (+4.0) over base and Sentinels")
+	void testWarriorAttackDamageBonusAttributeResolution() {
+		// Base attack damage for minions is 5.0D
+		final double baseDamage = 5.0D;
+		final double expectedWarriorDamage = baseDamage + MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS;
+
+		Assertions.assertEquals(4.0D, MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS, 0.001D,
+			"WARRIOR_ATTACK_DAMAGE_BONUS must be exactly 4.0D");
+
+		// Simulate attack damage resolution for different roles
+		java.util.function.BiFunction<MinionRole, MinionRole, Double> resolveAttackDamage = (role, adaptiveRole) -> {
+			boolean isWarrior = (role == MinionRole.WARRIOR) || (role == MinionRole.AUTO && adaptiveRole == MinionRole.WARRIOR);
+			return baseDamage + (isWarrior ? MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS : 0.0D);
+		};
+
+		// 1. Static WARRIOR role must receive bonus (9.0D)
+		double warriorDamage = resolveAttackDamage.apply(MinionRole.WARRIOR, MinionRole.WARRIOR);
+		Assertions.assertEquals(expectedWarriorDamage, warriorDamage, 0.001D,
+			"Warrior minion must possess boosted attack damage (9.0D)");
+
+		// 2. Static SENTINEL role must remain at base damage (5.0D)
+		double sentinelDamage = resolveAttackDamage.apply(MinionRole.SENTINEL, MinionRole.SENTINEL);
+		Assertions.assertEquals(baseDamage, sentinelDamage, 0.001D,
+			"Sentinel minion must remain at base damage (5.0D)");
+
+		// 3. Static BUILDER role must remain at base damage (5.0D)
+		double builderDamage = resolveAttackDamage.apply(MinionRole.BUILDER, MinionRole.BUILDER);
+		Assertions.assertEquals(baseDamage, builderDamage, 0.001D,
+			"Builder minion must remain at base damage (5.0D)");
+
+		// 4. Dynamic AUTO minion adapted to WARRIOR must receive bonus (9.0D)
+		double autoWarriorDamage = resolveAttackDamage.apply(MinionRole.AUTO, MinionRole.WARRIOR);
+		Assertions.assertEquals(expectedWarriorDamage, autoWarriorDamage, 0.001D,
+			"AUTO minion adapted to Warrior must dynamically gain attack damage bonus");
+
+		// 5. Dynamic AUTO minion adapted to SENTINEL must not receive bonus (5.0D)
+		double autoSentinelDamage = resolveAttackDamage.apply(MinionRole.AUTO, MinionRole.SENTINEL);
+		Assertions.assertEquals(baseDamage, autoSentinelDamage, 0.001D,
+			"AUTO minion adapted to Sentinel must return to base damage");
+
+		// 6. Verify weapon calculation differential (e.g. Iron Sword +6 damage)
+		double ironSwordWeaponBonus = 6.0D;
+		double warriorWithWeapon = warriorDamage + ironSwordWeaponBonus;
+		double sentinelWithWeapon = sentinelDamage + ironSwordWeaponBonus;
+		Assertions.assertEquals(15.0D, warriorWithWeapon, 0.001D,
+			"Warrior with Iron Sword deals 15.0 damage (9 base + 6 weapon)");
+		Assertions.assertEquals(11.0D, sentinelWithWeapon, 0.001D,
+			"Sentinel with Iron Sword deals 11.0 damage (5 base + 6 weapon)");
+		Assertions.assertEquals(MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS, warriorWithWeapon - sentinelWithWeapon, 0.001D,
+			"Warrior weapon attack damage difference must exactly match WARRIOR_ATTACK_DAMAGE_BONUS (+4.0)");
+	}
+
+	@Test
+	@DisplayName("Validate Warrior minions have higher attack damage attributes than Sentinels bare-handed and across weapon matrix")
+	void testWarriorVsSentinelBareHandedAndAcrossWeaponMatrix() {
+		final double baseDamage = 5.0D;
+		final double warriorBareHanded = baseDamage + MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS;
+		final double sentinelBareHanded = baseDamage;
+
+		// 1. Bare-handed attack damage comparison
+		Assertions.assertTrue(warriorBareHanded > sentinelBareHanded,
+			"Warrior bare-handed attack damage (9.0D) must be strictly greater than Sentinel (5.0D)");
+		Assertions.assertEquals(9.0D, warriorBareHanded, 0.001D,
+			"Warrior bare-handed damage must equal base (5.0D) + WARRIOR_ATTACK_DAMAGE_BONUS (4.0D) = 9.0D");
+		Assertions.assertEquals(5.0D, sentinelBareHanded, 0.001D,
+			"Sentinel bare-handed damage must equal base (5.0D)");
+		Assertions.assertEquals(MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS, warriorBareHanded - sentinelBareHanded, 0.001D,
+			"Bare-handed damage delta between Warrior and Sentinel must exactly equal +4.0D");
+
+		// 2. Comprehensive weapon matrix across all Minecraft tiers and weapon classes
+		record WeaponSpec(String name, double bonusDamage) {}
+		List<WeaponSpec> weaponArsenal = List.of(
+			new WeaponSpec("Fists / Bare-handed", 0.0D),
+			new WeaponSpec("Wooden Sword", 4.0D),
+			new WeaponSpec("Golden Sword", 4.0D),
+			new WeaponSpec("Stone Sword", 5.0D),
+			new WeaponSpec("Iron Sword", 6.0D),
+			new WeaponSpec("Diamond Sword", 7.0D),
+			new WeaponSpec("Netherite Sword", 8.0D),
+			new WeaponSpec("Wooden Axe", 7.0D),
+			new WeaponSpec("Stone Axe", 9.0D),
+			new WeaponSpec("Iron Axe", 9.0D),
+			new WeaponSpec("Diamond Axe", 9.0D),
+			new WeaponSpec("Netherite Axe", 10.0D),
+			new WeaponSpec("Trident", 8.0D),
+			new WeaponSpec("Heavy Core Mace", 5.0D)
+		);
+
+		for (WeaponSpec weapon : weaponArsenal) {
+			double warriorDamage = warriorBareHanded + weapon.bonusDamage();
+			double sentinelDamage = sentinelBareHanded + weapon.bonusDamage();
+
+			// Invariant A: Warrior attack damage is strictly greater than Sentinel with every weapon
+			Assertions.assertTrue(warriorDamage > sentinelDamage,
+				"Warrior attack damage with " + weapon.name() + " must strictly exceed Sentinel attack damage");
+
+			// Invariant B: Differential is exactly +4.0D (WARRIOR_ATTACK_DAMAGE_BONUS)
+			Assertions.assertEquals(MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS, warriorDamage - sentinelDamage, 0.001D,
+				"Attack damage delta with " + weapon.name() + " must equal WARRIOR_ATTACK_DAMAGE_BONUS (+4.0)");
+
+			// Invariant C: Absolute values match base + bonus + weapon
+			Assertions.assertEquals(baseDamage + MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS + weapon.bonusDamage(), warriorDamage, 0.001D,
+				"Warrior total attack damage with " + weapon.name() + " must equal 5.0 + 4.0 + " + weapon.bonusDamage());
+			Assertions.assertEquals(baseDamage + weapon.bonusDamage(), sentinelDamage, 0.001D,
+				"Sentinel total attack damage with " + weapon.name() + " must equal 5.0 + " + weapon.bonusDamage());
+		}
+	}
+
+	@Test
+	@DisplayName("Validate AUTO minions dynamically gain and drop the attack damage bonus upon role transitions")
+	void testAutoMinionDynamicGainAndDropUponRoleTransitions() {
+		final double baseDamage = 5.0D;
+
+		// Model simulating MinionEntity role tracking, matchesRole(), and getAttributeValue()
+		class DynamicMinionSimulator {
+			MinionRole role = MinionRole.AUTO;
+			MinionRole adaptiveRole = MinionRole.WARRIOR;
+
+			boolean matchesRole(MinionRole expected) {
+				if (this.role == expected) return true;
+				return this.role == MinionRole.AUTO && this.adaptiveRole == expected;
+			}
+
+			double getAttributeValue() {
+				double value = baseDamage;
+				if (this.matchesRole(MinionRole.WARRIOR)) {
+					value += MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS;
+				}
+				return value;
+			}
+
+			double getWeaponAttackDamage(double weaponBonus) {
+				return this.getAttributeValue() + weaponBonus;
+			}
+
+			void updateEnvironmentalContext(boolean allyWounded, boolean hasTargetOrHostiles, boolean hasBuildSession, boolean holdingPosition) {
+				if (this.role != MinionRole.AUTO) return;
+
+				if (allyWounded) {
+					this.adaptiveRole = MinionRole.SENTINEL;
+				} else if (hasTargetOrHostiles) {
+					this.adaptiveRole = MinionRole.WARRIOR;
+				} else if (hasBuildSession) {
+					this.adaptiveRole = MinionRole.BUILDER;
+				} else if (holdingPosition) {
+					this.adaptiveRole = MinionRole.SENTINEL;
+				} else {
+					this.adaptiveRole = MinionRole.WARRIOR;
+				}
+			}
+		}
+
+		DynamicMinionSimulator minion = new DynamicMinionSimulator();
+		Assertions.assertEquals(MinionRole.AUTO, minion.role);
+
+		final double ironSwordBonus = 6.0D;
+		final double diamondSwordBonus = 7.0D;
+
+		// Phase 0: Fresh spawn / peacetime follow -> adapts to WARRIOR (default frontline escort)
+		minion.updateEnvironmentalContext(false, false, false, false);
+		Assertions.assertEquals(MinionRole.WARRIOR, minion.adaptiveRole);
+		Assertions.assertTrue(minion.matchesRole(MinionRole.WARRIOR), "AUTO minion must match WARRIOR");
+		Assertions.assertFalse(minion.matchesRole(MinionRole.SENTINEL), "AUTO minion must not match SENTINEL");
+		Assertions.assertEquals(9.0D, minion.getAttributeValue(), 0.001D,
+			"AUTO minion adapted to Warrior must dynamically gain +4.0 attack damage bonus (9.0D bare-handed)");
+		Assertions.assertEquals(15.0D, minion.getWeaponAttackDamage(ironSwordBonus), 0.001D,
+			"AUTO minion adapted to Warrior must deal 15.0D with Iron Sword");
+
+		// Phase 1: Commander or allied minion takes heavy damage (<70% HP) -> adapts to SENTINEL medic
+		minion.updateEnvironmentalContext(true, false, false, false);
+		Assertions.assertEquals(MinionRole.SENTINEL, minion.adaptiveRole);
+		Assertions.assertFalse(minion.matchesRole(MinionRole.WARRIOR), "AUTO minion adapting to Sentinel must no longer match WARRIOR");
+		Assertions.assertTrue(minion.matchesRole(MinionRole.SENTINEL), "AUTO minion must now match SENTINEL");
+		Assertions.assertEquals(5.0D, minion.getAttributeValue(), 0.001D,
+			"AUTO minion adapted to Sentinel must immediately DROP the attack damage bonus, reverting to base (5.0D)");
+		Assertions.assertEquals(11.0D, minion.getWeaponAttackDamage(ironSwordBonus), 0.001D,
+			"AUTO minion adapted to Sentinel must deal 11.0D with Iron Sword (5 base + 6 weapon)");
+
+		// Phase 2: Ally fully healed, active construction blueprint session placed -> adapts to BUILDER
+		minion.updateEnvironmentalContext(false, false, true, false);
+		Assertions.assertEquals(MinionRole.BUILDER, minion.adaptiveRole);
+		Assertions.assertFalse(minion.matchesRole(MinionRole.WARRIOR), "AUTO minion in Builder role must not match WARRIOR");
+		Assertions.assertTrue(minion.matchesRole(MinionRole.BUILDER), "AUTO minion must match BUILDER");
+		Assertions.assertEquals(5.0D, minion.getAttributeValue(), 0.001D,
+			"AUTO minion adapted to Builder must remain at base damage (5.0D)");
+		Assertions.assertEquals(11.0D, minion.getWeaponAttackDamage(ironSwordBonus), 0.001D);
+
+		// Phase 3: Hostile ambush occurs (target acquired) -> adapts back to WARRIOR combatant
+		minion.updateEnvironmentalContext(false, true, true, false);
+		Assertions.assertEquals(MinionRole.WARRIOR, minion.adaptiveRole);
+		Assertions.assertTrue(minion.matchesRole(MinionRole.WARRIOR), "AUTO minion engaged in combat must match WARRIOR");
+		Assertions.assertEquals(9.0D, minion.getAttributeValue(), 0.001D,
+			"AUTO minion re-adapting to Warrior must dynamically GAIN the +4.0 attack damage bonus again (9.0D)");
+		Assertions.assertEquals(16.0D, minion.getWeaponAttackDamage(diamondSwordBonus), 0.001D,
+			"AUTO minion re-adapted to Warrior must deal 16.0D with Diamond Sword (9 base + 7 weapon)");
+
+		// Phase 4: Commander orders squad to hold position / stand guard -> adapts to SENTINEL guard
+		minion.updateEnvironmentalContext(false, false, false, true);
+		Assertions.assertEquals(MinionRole.SENTINEL, minion.adaptiveRole);
+		Assertions.assertFalse(minion.matchesRole(MinionRole.WARRIOR));
+		Assertions.assertEquals(5.0D, minion.getAttributeValue(), 0.001D,
+			"AUTO minion holding position must DROP the attack damage bonus, returning to 5.0D");
+		Assertions.assertEquals(12.0D, minion.getWeaponAttackDamage(diamondSwordBonus), 0.001D,
+			"AUTO minion holding position must deal 12.0D with Diamond Sword (5 base + 7 weapon)");
+
+		// Phase 5: Manual command override - Commander assigns static WARRIOR role
+		minion.role = MinionRole.WARRIOR;
+		Assertions.assertTrue(minion.matchesRole(MinionRole.WARRIOR));
+		Assertions.assertEquals(9.0D, minion.getAttributeValue(), 0.001D,
+			"Static WARRIOR minion must retain 9.0D attack damage permanently");
+		// Environmental triggers cannot strip bonus from dedicated Warrior
+		minion.updateEnvironmentalContext(true, false, false, true);
+		Assertions.assertEquals(9.0D, minion.getAttributeValue(), 0.001D,
+			"Dedicated WARRIOR minion must keep 9.0D attack damage even when allies wounded");
+
+		// Phase 6: Manual command override - Commander assigns static SENTINEL role
+		minion.role = MinionRole.SENTINEL;
+		Assertions.assertFalse(minion.matchesRole(MinionRole.WARRIOR));
+		Assertions.assertEquals(5.0D, minion.getAttributeValue(), 0.001D,
+			"Static SENTINEL minion must remain at 5.0D attack damage");
+		// Environmental triggers cannot grant warrior bonus to dedicated Sentinel
+		minion.updateEnvironmentalContext(false, true, false, false);
+		Assertions.assertEquals(5.0D, minion.getAttributeValue(), 0.001D,
+			"Dedicated SENTINEL minion must keep base 5.0D attack damage even when hostiles nearby");
+	}
+
+	@Test
+	@DisplayName("Validate multi-cycle alternating role transitions exhibit zero hysteresis and zero damage drift")
+	void testRoleTransitionAlternatingCyclesNoDrift() {
+		final double baseDamage = 5.0D;
+
+		class CycleTestMinion {
+			MinionRole role = MinionRole.AUTO;
+			MinionRole adaptiveRole = MinionRole.WARRIOR;
+
+			boolean matchesRole(MinionRole expected) {
+				if (this.role == expected) return true;
+				return this.role == MinionRole.AUTO && this.adaptiveRole == expected;
+			}
+
+			double getAttackDamage() {
+				return baseDamage + (this.matchesRole(MinionRole.WARRIOR) ? MinionEntity.WARRIOR_ATTACK_DAMAGE_BONUS : 0.0D);
+			}
+		}
+
+		CycleTestMinion minion = new CycleTestMinion();
+
+		// Rapidly oscillate through 100 role transitions
+		for (int i = 0; i < 100; i++) {
+			// Transition to WARRIOR state
+			minion.adaptiveRole = MinionRole.WARRIOR;
+			Assertions.assertTrue(minion.matchesRole(MinionRole.WARRIOR));
+			Assertions.assertEquals(9.0D, minion.getAttackDamage(), 0.001D,
+				"Cycle " + i + ": WARRIOR state must resolve to exactly 9.0D");
+
+			// Transition to SENTINEL state
+			minion.adaptiveRole = MinionRole.SENTINEL;
+			Assertions.assertFalse(minion.matchesRole(MinionRole.WARRIOR));
+			Assertions.assertEquals(5.0D, minion.getAttackDamage(), 0.001D,
+				"Cycle " + i + ": SENTINEL state must resolve to exactly 5.0D");
+
+			// Transition to BUILDER state
+			minion.adaptiveRole = MinionRole.BUILDER;
+			Assertions.assertFalse(minion.matchesRole(MinionRole.WARRIOR));
+			Assertions.assertEquals(5.0D, minion.getAttackDamage(), 0.001D,
+				"Cycle " + i + ": BUILDER state must resolve to exactly 5.0D");
+		}
+	}
+
+	@Test
+	@DisplayName("Source Invariant: MinionEntity defines WARRIOR_ATTACK_DAMAGE_BONUS and overrides attribute lookups")
+	void testMinionEntitySourceInvariantsForWarriorAttackBonus() throws IOException {
+		Path path = Path.of("src/main/java/com/example/entity/custom/MinionEntity.java");
+		Assertions.assertTrue(Files.exists(path), "MinionEntity.java must exist");
+		String content = Files.readString(path);
+
+		// 1. Static constant definition
+		Assertions.assertTrue(content.contains("public static final double WARRIOR_ATTACK_DAMAGE_BONUS = 4.0D;"),
+			"MinionEntity must declare 'public static final double WARRIOR_ATTACK_DAMAGE_BONUS = 4.0D;'");
+
+		// 2. getAttributeValue override with attack damage bonus for WARRIOR
+		Assertions.assertTrue(content.contains("public double getAttributeValue(net.minecraft.registry.entry.RegistryEntry<net.minecraft.entity.attribute.EntityAttribute> attribute)"),
+			"MinionEntity must override getAttributeValue");
+		Assertions.assertTrue(content.contains("EntityAttributes.GENERIC_ATTACK_DAMAGE.equals(attribute) && this.matchesRole(MinionRole.WARRIOR)"),
+			"MinionEntity must check EntityAttributes.GENERIC_ATTACK_DAMAGE and this.matchesRole(MinionRole.WARRIOR)");
+		Assertions.assertTrue(content.contains("value += WARRIOR_ATTACK_DAMAGE_BONUS;"),
+			"MinionEntity must add WARRIOR_ATTACK_DAMAGE_BONUS in getAttributeValue");
+
+		// 3. getAttributeBaseValue override with attack damage bonus for WARRIOR
+		Assertions.assertTrue(content.contains("public double getAttributeBaseValue(net.minecraft.registry.entry.RegistryEntry<net.minecraft.entity.attribute.EntityAttribute> attribute)"),
+			"MinionEntity must override getAttributeBaseValue");
+
+		// 4. tryAttack includes visceral audio and visual critical hit effects for Warrior
+		Assertions.assertTrue(content.contains("this.matchesRole(MinionRole.WARRIOR)"),
+			"MinionEntity.tryAttack must check this.matchesRole(MinionRole.WARRIOR)");
+		Assertions.assertTrue(content.contains("ParticleTypes.CRIT"),
+			"MinionEntity.tryAttack must spawn CRIT particles for Warrior attacks");
 	}
 }

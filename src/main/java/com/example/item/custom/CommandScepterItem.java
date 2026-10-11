@@ -1077,6 +1077,12 @@ public class CommandScepterItem extends Item {
 
 	private static final Map<UUID, UUID> PRIMED_ESCORT_MINIONS = new ConcurrentHashMap<>();
 
+	@FunctionalInterface
+	public interface RouteListProvider {
+		List<PatrolRoute> getRoutes();
+	}
+	public static RouteListProvider CLIENT_ROUTE_PROVIDER = null;
+
 	/**
 	 * Resolves the active patrol route channel index stored on the scepter.
 	 */
@@ -1094,17 +1100,22 @@ public class CommandScepterItem extends Item {
 
 	/**
 	 * Cycles the active patrol route channel in sequence across available routes.
+	 * Traverses strictly across existing routes in newest-first order, never auto-creating phantom routes.
 	 */
 	public static int cyclePatrolRoute(ItemStack stack, PlayerEntity player) {
 		int current = getActivePatrolRoute(stack);
 		List<PatrolRoute> availableRoutes = null;
-		if (player != null && !player.getWorld().isClient()) {
-			availableRoutes = PatrolRouteManager.getInstance().getAllRoutes(player.getUuid());
+		if (player != null) {
+			if (!player.getWorld().isClient()) {
+				availableRoutes = PatrolRouteManager.getInstance().getAllRoutes(player.getUuid());
+			} else if (CLIENT_ROUTE_PROVIDER != null) {
+				availableRoutes = CLIENT_ROUTE_PROVIDER.getRoutes();
+			}
 		}
 
 		int next;
 		if (availableRoutes != null && !availableRoutes.isEmpty()) {
-			List<Integer> ids = availableRoutes.stream().map(PatrolRoute::routeId).sorted().toList();
+			List<Integer> ids = availableRoutes.stream().map(PatrolRoute::routeId).toList();
 			int idx = ids.indexOf(current);
 			if (idx >= 0 && idx < ids.size() - 1) {
 				next = ids.get(idx + 1);
@@ -1112,7 +1123,7 @@ public class CommandScepterItem extends Item {
 				next = ids.get(0);
 			}
 		} else {
-			next = (current + 1) % PatrolRoute.CHANNEL_COUNT;
+			next = 0;
 		}
 
 		setActivePatrolRoute(stack, next);
@@ -1126,8 +1137,21 @@ public class CommandScepterItem extends Item {
 			if (!player.getWorld().isClient()) {
 				PatrolRoute r = PatrolRouteManager.getInstance().getRoute(player.getUuid(), next);
 				if (r != null) routeName = r.getFormattedName();
-			} else if (next >= 0 && next < PatrolRoute.CHANNEL_FORMATTED_NAMES.length) {
-				routeName = PatrolRoute.CHANNEL_FORMATTED_NAMES[next];
+			} else {
+				PatrolRoute r = null;
+				if (availableRoutes != null) {
+					for (PatrolRoute route : availableRoutes) {
+						if (route.routeId() == next) {
+							r = route;
+							break;
+						}
+					}
+				}
+				if (r != null) {
+					routeName = r.getFormattedName();
+				} else if (next >= 0 && next < PatrolRoute.CHANNEL_FORMATTED_NAMES.length) {
+					routeName = PatrolRoute.CHANNEL_FORMATTED_NAMES[next];
+				}
 			}
 			player.sendMessage(Text.literal("§6✦ Active Patrol Channel: §r" + routeName), true);
 		}
@@ -1681,18 +1705,20 @@ public class CommandScepterItem extends Item {
 					if (!world.isClient() && world instanceof ServerWorld serverWorld) {
 						int routeId = getActivePatrolRoute(stack);
 						PatrolRoute updated = PatrolRouteManager.getInstance().clearRoute(player.getUuid(), routeId);
-						PatrolRouteManager.getInstance().syncToPlayer((ServerPlayerEntity) player);
-						List<MinionEntity> routeMinions = serverWorld.getEntitiesByClass(
-							MinionEntity.class,
-							player.getBoundingBox().expand(256.0D),
-							m -> m.isAlive() && m.isOwner(player) && m.getPatrolRouteId() == routeId
-						);
-						for (MinionEntity m : routeMinions) {
-							m.setPatrolRouteId(-1);
-							m.getNavigation().stop();
+						if (updated != null) {
+							PatrolRouteManager.getInstance().syncToPlayer((ServerPlayerEntity) player);
+							List<MinionEntity> routeMinions = serverWorld.getEntitiesByClass(
+								MinionEntity.class,
+								player.getBoundingBox().expand(256.0D),
+								m -> m.isAlive() && m.isOwner(player) && m.getPatrolRouteId() == routeId
+							);
+							for (MinionEntity m : routeMinions) {
+								m.setPatrolRouteId(-1);
+								m.getNavigation().stop();
+							}
+							player.sendMessage(Text.literal("§c✦ Cleared all waypoints for " + updated.getFormattedName()), true);
+							world.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0F, 0.6F);
 						}
-						player.sendMessage(Text.literal("§c✦ Cleared all waypoints for " + updated.getFormattedName()), true);
-						world.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0F, 0.6F);
 					}
 				} else {
 					cyclePatrolRoute(stack, player);
@@ -1760,8 +1786,8 @@ public class CommandScepterItem extends Item {
 				if (player.isSneaking()) {
 					int routeId = getActivePatrolRoute(stack);
 					PatrolRoute route = PatrolRouteManager.getInstance().getRoute(player.getUuid(), routeId);
-					if (route.waypoints().isEmpty()) {
-						player.sendMessage(Text.literal("§c✦ Cannot assign patrol: " + route.getFormattedName() + " has no waypoints! Right-click blocks to set points."), true);
+					if (route == null || route.waypoints().isEmpty()) {
+						player.sendMessage(Text.literal("§c✦ Cannot assign patrol: " + (route != null ? route.getFormattedName() : "Route") + " has no waypoints! Right-click blocks to set points."), true);
 						return;
 					}
 
@@ -2204,20 +2230,22 @@ public class CommandScepterItem extends Item {
 						int matchedRouteId = match.routeId();
 						BlockPos existingWp = match.pos();
 						PatrolRoute updated = PatrolRouteManager.getInstance().removeWaypoint(player.getUuid(), matchedRouteId, existingWp);
-						PatrolRouteManager.getInstance().syncToPlayer((ServerPlayerEntity) player);
-						if (updated.waypoints().isEmpty()) {
-							List<MinionEntity> routeMinions = serverWorld.getEntitiesByClass(
-								MinionEntity.class,
-								player.getBoundingBox().expand(256.0D),
-								m -> m.isAlive() && m.isOwner(player) && m.getPatrolRouteId() == matchedRouteId
-							);
-							for (MinionEntity m : routeMinions) {
-								m.setPatrolRouteId(-1);
-								m.getNavigation().stop();
+						if (updated != null) {
+							PatrolRouteManager.getInstance().syncToPlayer((ServerPlayerEntity) player);
+							if (updated.waypoints().isEmpty()) {
+								List<MinionEntity> routeMinions = serverWorld.getEntitiesByClass(
+									MinionEntity.class,
+									player.getBoundingBox().expand(256.0D),
+									m -> m.isAlive() && m.isOwner(player) && m.getPatrolRouteId() == matchedRouteId
+								);
+								for (MinionEntity m : routeMinions) {
+									m.setPatrolRouteId(-1);
+									m.getNavigation().stop();
+								}
 							}
+							player.sendMessage(Text.literal("§c✦ Removed Waypoint from " + updated.getFormattedName()), true);
+							world.playSound(null, existingWp.getX(), existingWp.getY(), existingWp.getZ(), SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0F, 0.8F);
 						}
-						player.sendMessage(Text.literal("§c✦ Removed Waypoint from " + updated.getFormattedName()), true);
-						world.playSound(null, existingWp.getX(), existingWp.getY(), existingWp.getZ(), SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0F, 0.8F);
 						serverWorld.spawnParticles(ParticleTypes.SMOKE, existingWp.getX() + 0.5D, existingWp.getY() + 0.5D, existingWp.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.05D);
 						return ActionResult.SUCCESS;
 					}
@@ -2291,29 +2319,45 @@ public class CommandScepterItem extends Item {
 					int matchedRouteId = match.routeId();
 					BlockPos existingWp = match.pos();
 					PatrolRoute updated = PatrolRouteManager.getInstance().removeWaypoint(player.getUuid(), matchedRouteId, existingWp);
-					PatrolRouteManager.getInstance().syncToPlayer((ServerPlayerEntity) player);
-					if (updated.waypoints().isEmpty()) {
-						List<MinionEntity> routeMinions = serverWorld.getEntitiesByClass(
-							MinionEntity.class,
-							player.getBoundingBox().expand(256.0D),
-							m -> m.isAlive() && m.isOwner(player) && m.getPatrolRouteId() == matchedRouteId
-						);
-						for (MinionEntity m : routeMinions) {
-							m.setPatrolRouteId(-1);
-							m.getNavigation().stop();
+					if (updated != null) {
+						PatrolRouteManager.getInstance().syncToPlayer((ServerPlayerEntity) player);
+						if (updated.waypoints().isEmpty()) {
+							List<MinionEntity> routeMinions = serverWorld.getEntitiesByClass(
+								MinionEntity.class,
+								player.getBoundingBox().expand(256.0D),
+								m -> m.isAlive() && m.isOwner(player) && m.getPatrolRouteId() == matchedRouteId
+							);
+							for (MinionEntity m : routeMinions) {
+								m.setPatrolRouteId(-1);
+								m.getNavigation().stop();
+							}
 						}
+						world.playSound(null, existingWp.getX(), existingWp.getY(), existingWp.getZ(), SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0F, 0.8F);
+						serverWorld.spawnParticles(ParticleTypes.SMOKE, existingWp.getX() + 0.5D, existingWp.getY() + 0.5D, existingWp.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.05D);
+						player.sendMessage(Text.literal("§c✦ Removed Waypoint from " + updated.getFormattedName()), true);
 					}
-					world.playSound(null, existingWp.getX(), existingWp.getY(), existingWp.getZ(), SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0F, 0.8F);
-					serverWorld.spawnParticles(ParticleTypes.SMOKE, existingWp.getX() + 0.5D, existingWp.getY() + 0.5D, existingWp.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.05D);
-					player.sendMessage(Text.literal("§c✦ Removed Waypoint from " + updated.getFormattedName()), true);
 				} else {
 					// Zero-overlap guarantee: no route contains this position, add to active route channel
 					int routeId = getActivePatrolRoute(stack);
-					PatrolRoute updated = PatrolRouteManager.getInstance().addWaypoint(player.getUuid(), routeId, targetPos);
-					PatrolRouteManager.getInstance().syncToPlayer((ServerPlayerEntity) player);
-					world.playSound(null, targetPos.getX(), targetPos.getY(), targetPos.getZ(), SoundEvents.BLOCK_AMETHYST_BLOCK_HIT, SoundCategory.PLAYERS, 1.0F, 1.2F + (updated.waypoints().size() * 0.05F));
-					serverWorld.spawnParticles(ParticleTypes.ENCHANT, targetPos.getX() + 0.5D, targetPos.getY() + 1.2D, targetPos.getZ() + 0.5D, 8, 0.3D, 0.3D, 0.3D, 0.1D);
-					player.sendMessage(Text.literal("§6✦ Added Waypoint §e#" + updated.waypoints().size() + " §6to " + updated.getFormattedName()), true);
+					PatrolRoute targetRoute = PatrolRouteManager.getInstance().getRoute(player.getUuid(), routeId);
+					if (targetRoute == null) {
+						// Active route channel doesn't exist; fall back to first existing route in newest-first order
+						List<PatrolRoute> allRoutes = PatrolRouteManager.getInstance().getAllRoutes(player.getUuid());
+						if (!allRoutes.isEmpty()) {
+							targetRoute = allRoutes.get(0);
+							routeId = targetRoute.routeId();
+							setActivePatrolRoute(stack, routeId);
+						}
+					}
+					if (targetRoute != null) {
+						PatrolRoute updated = PatrolRouteManager.getInstance().addWaypoint(player.getUuid(), routeId, targetPos);
+						if (updated != null) {
+							PatrolRouteManager.getInstance().syncToPlayer((ServerPlayerEntity) player);
+							world.playSound(null, targetPos.getX(), targetPos.getY(), targetPos.getZ(), SoundEvents.BLOCK_AMETHYST_BLOCK_HIT, SoundCategory.PLAYERS, 1.0F, 1.2F + (updated.waypoints().size() * 0.05F));
+							serverWorld.spawnParticles(ParticleTypes.ENCHANT, targetPos.getX() + 0.5D, targetPos.getY() + 1.2D, targetPos.getZ() + 0.5D, 8, 0.3D, 0.3D, 0.3D, 0.1D);
+							player.sendMessage(Text.literal("§6✦ Added Waypoint §e#" + updated.waypoints().size() + " §6to " + updated.getFormattedName()), true);
+						}
+					}
 				}
 			}
 			return ActionResult.success(world.isClient());
@@ -3329,8 +3373,8 @@ public class CommandScepterItem extends Item {
 			ItemStack stack = getHeldScepter(player);
 			int routeId = getActivePatrolRoute(stack);
 			PatrolRoute route = PatrolRouteManager.getInstance().getRoute(player.getUuid(), routeId);
-			if (route.waypoints().isEmpty()) {
-				player.sendMessage(Text.literal("§c✦ Cannot assign patrol: " + route.getFormattedName() + " has no waypoints! Right-click blocks to set points."), true);
+			if (route == null || route.waypoints().isEmpty()) {
+				player.sendMessage(Text.literal("§c✦ Cannot assign patrol: " + (route != null ? route.getFormattedName() : "Route") + " has no waypoints! Right-click blocks to set points."), true);
 				return;
 			}
 			Box searchBox = player.getBoundingBox().expand(MINION_COMMAND_RADIUS);
