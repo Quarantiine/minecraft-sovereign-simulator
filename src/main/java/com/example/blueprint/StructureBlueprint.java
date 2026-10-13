@@ -300,6 +300,54 @@ public class StructureBlueprint {
 		};
 	}
 
+	/**
+	 * Returns a new StructureBlueprint with an updated user-facing display name,
+	 * retaining all other properties (id, description, geometry, blocks, required items, rotation).
+	 *
+	 * @param newName The new display name. If null or blank, the current name is preserved.
+	 * @return A new StructureBlueprint instance with the updated name.
+	 */
+	public StructureBlueprint withName(String newName) {
+		String validName = (newName != null && !newName.isBlank()) ? newName.trim() : this.name;
+		return new StructureBlueprint(
+			this.id,
+			validName,
+			this.description,
+			this.sizeX,
+			this.sizeY,
+			this.sizeZ,
+			this.blocks,
+			this.requiredItems,
+			this.boundingBox,
+			this.rotation
+		);
+	}
+
+	/**
+	 * Returns a new StructureBlueprint with an updated user-facing display name and description,
+	 * retaining all other properties (id, geometry, blocks, required items, rotation).
+	 *
+	 * @param newName        The new display name. If null or blank, the current name is preserved.
+	 * @param newDescription The new description.
+	 * @return A new StructureBlueprint instance with the updated metadata.
+	 */
+	public StructureBlueprint withNameAndDescription(String newName, String newDescription) {
+		String validName = (newName != null && !newName.isBlank()) ? newName.trim() : this.name;
+		String validDesc = newDescription != null ? newDescription.trim() : "";
+		return new StructureBlueprint(
+			this.id,
+			validName,
+			validDesc,
+			this.sizeX,
+			this.sizeY,
+			this.sizeZ,
+			this.blocks,
+			this.requiredItems,
+			this.boundingBox,
+			this.rotation
+		);
+	}
+
 	public static final int MAX_SPATIAL_DIMENSION = 64;
 	public static final int MAX_SPATIAL_HEIGHT = 96;
 	public static final int MAX_SPATIAL_VOLUME = 393216;
@@ -366,6 +414,69 @@ public class StructureBlueprint {
 		}
 		return builder.build();
 	}
+
+	/**
+	 * Creates a new StructureBlueprint derived from an existing source blueprint by applying
+	 * block replacements, preserving compatible block state properties, and recomputing bounding geometry.
+	 *
+	 * @param source       The source blueprint to derive from.
+	 * @param id           The new (or overwritten) blueprint identifier.
+	 * @param name         The new (or overwritten) blueprint display name.
+	 * @param description  The new (or overwritten) blueprint description.
+	 * @param replacements Map of source block IDs to replacement block IDs (or minecraft:air).
+	 * @return A new compiled StructureBlueprint.
+	 */
+	public static StructureBlueprint createRemapped(
+		StructureBlueprint source,
+		String id,
+		String name,
+		String description,
+		Map<Identifier, Identifier> replacements
+	) {
+		Objects.requireNonNull(source, "source blueprint cannot be null");
+		String cleanId = id != null && !id.isBlank() ? id : source.getId();
+		String cleanName = name != null && !name.isBlank() ? name : source.getName();
+		String cleanDesc = description != null ? description.trim() : source.getDescription();
+
+		List<BlueprintBlock> remappedBlocks = new ArrayList<>();
+		for (BlueprintBlock b : source.getBlocks()) {
+			BlockState state = b.state();
+			if (state == null || state.isAir()) {
+				continue;
+			}
+
+			if (replacements != null && !replacements.isEmpty()) {
+				try {
+					if (state.getBlock() != null && net.minecraft.registry.Registries.BLOCK != null) {
+						Identifier originalId = net.minecraft.registry.Registries.BLOCK.getId(state.getBlock());
+						if (originalId != null && replacements.containsKey(originalId)) {
+							Identifier targetId = replacements.get(originalId);
+							if (targetId != null && targetId.equals(Identifier.of("minecraft", "air"))) {
+								// Erased with Air -> omit from blueprint
+								continue;
+							}
+							if (targetId != null && net.minecraft.registry.Registries.BLOCK.containsId(targetId)) {
+								Block targetBlock = net.minecraft.registry.Registries.BLOCK.get(targetId);
+								if (targetBlock != null) {
+									state = transferBlockStateProperties(state, targetBlock);
+								}
+							}
+						}
+					}
+				} catch (Throwable ignored) {
+				}
+			}
+			remappedBlocks.add(new BlueprintBlock(b.offset(), state));
+		}
+
+		List<BlueprintBlock> normalized = normalizeBlocks(remappedBlocks);
+		Builder builder = builder(cleanId, cleanName).description(cleanDesc);
+		for (BlueprintBlock block : normalized) {
+			builder.addBlock(block.offset(), block.state());
+		}
+		return builder.build();
+	}
+
 
 	/**
 	 * Creates a custom area blueprint for mining/quarrying enclosing the exact volume between pos1 and pos2.

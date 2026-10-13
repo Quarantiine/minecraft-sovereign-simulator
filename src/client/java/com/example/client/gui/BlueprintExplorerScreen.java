@@ -6,6 +6,7 @@ import com.example.blueprint.StructureBlueprint;
 import com.example.client.network.ModClientNetworking;
 import com.example.item.custom.CommandScepterItem;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -70,6 +71,8 @@ public class BlueprintExplorerScreen extends Screen {
 	private ButtonWidget prevListBtn;
 	private ButtonWidget nextListBtn;
 	private ButtonWidget selectBtn;
+	private ButtonWidget renameBtn;
+	private ButtonWidget remapBtn;
 	private ButtonWidget bomBtn;
 	private ButtonWidget deleteBtn;
 	private ButtonWidget resetViewBtn;
@@ -79,6 +82,23 @@ public class BlueprintExplorerScreen extends Screen {
 	private ButtonWidget sliceResetBtn;
 	private ButtonWidget sliceUpBtn;
 	private ButtonWidget closeBtn;
+
+	// 6-Directional Unit Cube Normals: Top, Bottom, East, West, South, North
+	private static final int[][] NORMALS = {
+		{0, 1, 0},   // Top
+		{0, -1, 0},  // Bottom
+		{1, 0, 0},   // East
+		{-1, 0, 0},  // West
+		{0, 0, 1},   // South
+		{0, 0, -1}   // North
+	};
+
+	// High-Performance 3D Mesh Pre-Cache and Reusable Zero-Allocation Render Buffers
+	private BlueprintMeshCache meshCache = null;
+	private long[] sortBuffer = new long[2048];
+	private float[] projQuadX = new float[2048 * 4];
+	private float[] projQuadY = new float[2048 * 4];
+	private int[] projColor = new int[2048];
 
 	// 3D Orbital & Pan Camera Parameters
 	private float yaw = 0.785F; // 45 degrees
@@ -102,6 +122,13 @@ public class BlueprintExplorerScreen extends Screen {
 	private StructureBlueprint pendingDeleteBlueprint = null;
 	private ButtonWidget confirmDeleteBtn;
 	private ButtonWidget cancelDeleteBtn;
+
+	// Rename Modal
+	private boolean isRenaming = false;
+	private String renameError = null;
+	private TextFieldWidget renameField;
+	private ButtonWidget confirmRenameBtn;
+	private ButtonWidget cancelRenameBtn;
 
 	public BlueprintExplorerScreen(String initialBlueprintId, ItemStack scepterStack, Screen parentScreen) {
 		super(Text.literal("3D Blueprint Explorer"));
@@ -137,14 +164,12 @@ public class BlueprintExplorerScreen extends Screen {
 		for (int i = 0; i < LIST_PAGE_SIZE; i++) {
 			final int slotIndex = i;
 			int btnY = listStartY + i * (cardH + 4);
-			ButtonWidget cardBtn = ButtonWidget.builder(Text.empty(), b -> {
+			ButtonWidget cardBtn = new CardSlotButton(searchX, btnY, cardW, cardH, b -> {
 				int targetIdx = this.listPage * LIST_PAGE_SIZE + slotIndex;
 				if (targetIdx >= 0 && targetIdx < this.filteredBlueprints.size()) {
 					selectBlueprintCard(this.filteredBlueprints.get(targetIdx));
 				}
-			})
-			.dimensions(searchX, btnY, cardW, cardH)
-			.build();
+			});
 			cardBtn.visible = !this.isMaximized;
 			this.blueprintListButtons.add(cardBtn);
 			this.addDrawableChild(cardBtn);
@@ -225,34 +250,86 @@ public class BlueprintExplorerScreen extends Screen {
 			.build();
 		this.addDrawableChild(this.sliceDownBtn);
 
-		// 6. Action Buttons (Bottom Bar)
-		int actionStartX = this.isMaximized ? (winX + 24) : vpX;
-		int actionWidth = this.isMaximized ? 88 : 78;
+		// 6. Action Buttons
+		if (!this.isMaximized) {
+			int vpStartX = vpX;
+			int specY = winY + 180;
 
-		this.selectBtn = ButtonWidget.builder(Text.literal("§a✔ Select"), b -> applyAndCloseSelection())
-			.dimensions(actionStartX, btnBarY, actionWidth, 18)
-			.tooltip(Tooltip.of(Text.literal("§aArm this blueprint on your Command Scepter.")))
-			.build();
-		this.addDrawableChild(this.selectBtn);
+			// Rename button positioned cleanly in top-right of Specifications Card
+			this.renameBtn = ButtonWidget.builder(Text.literal("§b✏ Rename"), b -> promptRenameCustomBlueprint())
+				.dimensions(vpX + vpW - 58, specY + 3, 52, 14)
+				.tooltip(Tooltip.of(Text.literal("§bRename this custom blueprint (R).")))
+				.build();
+			this.addDrawableChild(this.renameBtn);
 
-		this.bomBtn = ButtonWidget.builder(Text.literal("§e📋 BOM"), b -> openMaterialBomModal())
-			.dimensions(actionStartX + actionWidth + 6, btnBarY, this.isMaximized ? 74 : 56, 18)
-			.tooltip(Tooltip.of(Text.literal("§eInspect required materials against player & minion inventories.")))
-			.build();
-		this.addDrawableChild(this.bomBtn);
+			// Bottom Bar: 5 spacious, uncluttered action buttons
+			this.selectBtn = ButtonWidget.builder(Text.literal("§a✔ Arm"), b -> applyAndCloseSelection())
+				.dimensions(vpStartX, btnBarY, 48, 18)
+				.tooltip(Tooltip.of(Text.literal("§aArm this blueprint on your Command Scepter.")))
+				.build();
+			this.addDrawableChild(this.selectBtn);
 
-		this.deleteBtn = ButtonWidget.builder(Text.literal("§c🗑 Del"), b -> promptDeleteCustomBlueprint())
-			.dimensions(actionStartX + actionWidth + (this.isMaximized ? 86 : 68), btnBarY, 46, 18)
-			.tooltip(Tooltip.of(Text.literal("§cDelete custom captured blueprint permanently.")))
-			.build();
-		this.addDrawableChild(this.deleteBtn);
+			this.remapBtn = ButtonWidget.builder(Text.literal("§6🎨 Remap"), b -> openPaletteRemapModal())
+				.dimensions(vpStartX + 51, btnBarY, 54, 18)
+				.tooltip(Tooltip.of(Text.literal("§6Remap the block palette of this blueprint (Overwrite or Save Copy).")))
+				.build();
+			this.addDrawableChild(this.remapBtn);
 
-		int closeX = this.isMaximized ? (winX + WINDOW_WIDTH - 64) : (vpX + 192);
-		this.closeBtn = ButtonWidget.builder(Text.literal("§7Close"), b -> closeScreen())
-			.dimensions(closeX, btnBarY, 46, 18)
-			.tooltip(Tooltip.of(Text.literal("Close explorer.")))
-			.build();
-		this.addDrawableChild(this.closeBtn);
+			this.bomBtn = ButtonWidget.builder(Text.literal("§e📋 BOM"), b -> openMaterialBomModal())
+				.dimensions(vpStartX + 108, btnBarY, 44, 18)
+				.tooltip(Tooltip.of(Text.literal("§eInspect required materials against player & minion inventories.")))
+				.build();
+			this.addDrawableChild(this.bomBtn);
+
+			this.deleteBtn = ButtonWidget.builder(Text.literal("§c🗑 Del"), b -> promptDeleteCustomBlueprint())
+				.dimensions(vpStartX + 155, btnBarY, 40, 18)
+				.tooltip(Tooltip.of(Text.literal("§cDelete custom captured blueprint permanently.")))
+				.build();
+			this.addDrawableChild(this.deleteBtn);
+
+			this.closeBtn = ButtonWidget.builder(Text.literal("§7Close"), b -> closeScreen())
+				.dimensions(vpStartX + 198, btnBarY, 40, 18)
+				.tooltip(Tooltip.of(Text.literal("Close explorer.")))
+				.build();
+			this.addDrawableChild(this.closeBtn);
+		} else {
+			int maxStartX = winX + 24;
+			this.selectBtn = ButtonWidget.builder(Text.literal("§a✔ Arm"), b -> applyAndCloseSelection())
+				.dimensions(maxStartX, btnBarY, 56, 18)
+				.tooltip(Tooltip.of(Text.literal("§aArm this blueprint on your Command Scepter.")))
+				.build();
+			this.addDrawableChild(this.selectBtn);
+
+			this.renameBtn = ButtonWidget.builder(Text.literal("§b✏ Rename"), b -> promptRenameCustomBlueprint())
+				.dimensions(maxStartX + 60, btnBarY, 66, 18)
+				.tooltip(Tooltip.of(Text.literal("§bRename this custom blueprint (R).")))
+				.build();
+			this.addDrawableChild(this.renameBtn);
+
+			this.remapBtn = ButtonWidget.builder(Text.literal("§6🎨 Remap"), b -> openPaletteRemapModal())
+				.dimensions(maxStartX + 130, btnBarY, 66, 18)
+				.tooltip(Tooltip.of(Text.literal("§6Remap the block palette of this blueprint (Overwrite or Save Copy).")))
+				.build();
+			this.addDrawableChild(this.remapBtn);
+
+			this.bomBtn = ButtonWidget.builder(Text.literal("§e📋 BOM"), b -> openMaterialBomModal())
+				.dimensions(maxStartX + 200, btnBarY, 56, 18)
+				.tooltip(Tooltip.of(Text.literal("§eInspect required materials against player & minion inventories.")))
+				.build();
+			this.addDrawableChild(this.bomBtn);
+
+			this.deleteBtn = ButtonWidget.builder(Text.literal("§c🗑 Del"), b -> promptDeleteCustomBlueprint())
+				.dimensions(maxStartX + 260, btnBarY, 52, 18)
+				.tooltip(Tooltip.of(Text.literal("§cDelete custom captured blueprint permanently.")))
+				.build();
+			this.addDrawableChild(this.deleteBtn);
+
+			this.closeBtn = ButtonWidget.builder(Text.literal("§7Close"), b -> closeScreen())
+				.dimensions(winX + WINDOW_WIDTH - 64, btnBarY, 46, 18)
+				.tooltip(Tooltip.of(Text.literal("Close explorer.")))
+				.build();
+			this.addDrawableChild(this.closeBtn);
+		}
 
 		// 7. Delete Confirmation Modal Buttons (initially invisible)
 		int modalW = 220;
@@ -262,14 +339,42 @@ public class BlueprintExplorerScreen extends Screen {
 		this.confirmDeleteBtn = ButtonWidget.builder(Text.literal("§cConfirm"), b -> confirmDeleteSelected())
 			.dimensions(modalX + 16, modalY + 68, 88, 18)
 			.build();
-		this.confirmDeleteBtn.visible = false;
+		this.confirmDeleteBtn.visible = this.pendingDeleteBlueprint != null;
 		this.addDrawableChild(this.confirmDeleteBtn);
 
 		this.cancelDeleteBtn = ButtonWidget.builder(Text.literal("Cancel"), b -> cancelDelete())
 			.dimensions(modalX + 116, modalY + 68, 88, 18)
 			.build();
-		this.cancelDeleteBtn.visible = false;
+		this.cancelDeleteBtn.visible = this.pendingDeleteBlueprint != null;
 		this.addDrawableChild(this.cancelDeleteBtn);
+
+		// 8. Rename Modal Controls (initially invisible)
+		int renameModalW = 240;
+		int renameModalH = 104;
+		int renameModalX = (this.width - renameModalW) / 2;
+		int renameModalY = (this.height - renameModalH) / 2;
+
+		String curName = (this.renameField != null && this.isRenaming) ? this.renameField.getText()
+			: (this.selectedBlueprint != null ? this.selectedBlueprint.getName() : "");
+		this.renameField = new TextFieldWidget(this.textRenderer, renameModalX + 16, renameModalY + 40, renameModalW - 32, 18, Text.literal("Blueprint Name"));
+		this.renameField.setMaxLength(64);
+		this.renameField.setText(curName);
+		this.renameField.visible = this.isRenaming;
+		this.addDrawableChild(this.renameField);
+
+		this.confirmRenameBtn = ButtonWidget.builder(Text.literal("§a✔ Save"), b -> confirmRename())
+			.dimensions(renameModalX + 16, renameModalY + 76, 98, 18)
+			.tooltip(Tooltip.of(Text.literal("§aSave updated blueprint name.")))
+			.build();
+		this.confirmRenameBtn.visible = this.isRenaming;
+		this.addDrawableChild(this.confirmRenameBtn);
+
+		this.cancelRenameBtn = ButtonWidget.builder(Text.literal("§7Cancel"), b -> cancelRename())
+			.dimensions(renameModalX + 126, renameModalY + 76, 98, 18)
+			.tooltip(Tooltip.of(Text.literal("Cancel renaming.")))
+			.build();
+		this.cancelRenameBtn.visible = this.isRenaming;
+		this.addDrawableChild(this.cancelRenameBtn);
 
 		// Refresh filtered dataset and button state
 		refreshFilteredDataset();
@@ -390,6 +495,7 @@ public class BlueprintExplorerScreen extends Screen {
 		}
 
 		this.sliceY = Integer.MAX_VALUE;
+		this.meshCache = null;
 		updateLayerButtons();
 		updateCardButtons();
 		updateActionButtons();
@@ -404,12 +510,20 @@ public class BlueprintExplorerScreen extends Screen {
 		this.selectedBlueprint = bp;
 		this.selectedBlueprintId = bp.getId();
 		this.sliceY = Integer.MAX_VALUE;
+		this.meshCache = null;
 		updateLayerButtons();
 		updateCardButtons();
 		updateActionButtons();
 		if (this.client != null) {
 			this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.2F));
 		}
+	}
+
+	public void refreshAndSelect(String blueprintId) {
+		if (blueprintId != null) {
+			this.selectedBlueprintId = blueprintId;
+		}
+		refreshFilteredDataset();
 	}
 
 	private void updateCardButtons() {
@@ -421,18 +535,10 @@ public class BlueprintExplorerScreen extends Screen {
 
 			if (itemIndex < this.filteredBlueprints.size()) {
 				StructureBlueprint bp = this.filteredBlueprints.get(itemIndex);
-				boolean isSelected = this.selectedBlueprint != null && bp.getId().equalsIgnoreCase(this.selectedBlueprint.getId());
 
 				btn.visible = !this.isMaximized;
-				btn.active = this.pendingDeleteBlueprint == null;
-
-				String cleanName = bp.getName();
-				if (this.textRenderer.getWidth(cleanName) > 95) {
-					cleanName = this.textRenderer.trimToWidth(cleanName, 88) + "…";
-				}
-
-				String prefix = isSelected ? "§b▶ §f" : "§7  ";
-				btn.setMessage(Text.literal(prefix + cleanName));
+				btn.active = this.pendingDeleteBlueprint == null && !this.isRenaming;
+				btn.setMessage(Text.empty());
 
 				List<Text> tooltipLines = new ArrayList<>();
 				tooltipLines.add(Text.literal("§6✦ " + bp.getName()));
@@ -457,21 +563,28 @@ public class BlueprintExplorerScreen extends Screen {
 
 		if (this.prevListBtn != null) {
 			this.prevListBtn.visible = !this.isMaximized;
-			this.prevListBtn.active = this.pendingDeleteBlueprint == null && this.listPage > 0;
+			this.prevListBtn.active = this.pendingDeleteBlueprint == null && !this.isRenaming && this.listPage > 0;
 		}
 		if (this.nextListBtn != null) {
 			this.nextListBtn.visible = !this.isMaximized;
-			this.nextListBtn.active = this.pendingDeleteBlueprint == null && (this.listPage + 1) < getTotalListPages();
+			this.nextListBtn.active = this.pendingDeleteBlueprint == null && !this.isRenaming && (this.listPage + 1) < getTotalListPages();
 		}
 	}
 
 	private void updateActionButtons() {
-		boolean modalOpen = this.pendingDeleteBlueprint != null;
+		boolean modalOpen = this.pendingDeleteBlueprint != null || this.isRenaming;
 		boolean hasSelection = this.selectedBlueprint != null && !this.selectedBlueprint.getId().equalsIgnoreCase("empty");
 		boolean isCustom = hasSelection && BlueprintRegistry.isCustom(this.selectedBlueprint.getId());
 
 		if (this.selectBtn != null) {
 			this.selectBtn.active = !modalOpen && hasSelection;
+		}
+		if (this.renameBtn != null) {
+			this.renameBtn.visible = !this.isMaximized ? (hasSelection && isCustom) : true;
+			this.renameBtn.active = !modalOpen && isCustom;
+		}
+		if (this.remapBtn != null) {
+			this.remapBtn.active = !modalOpen && hasSelection && hasValidBlocks();
 		}
 		if (this.bomBtn != null) {
 			this.bomBtn.active = !modalOpen && hasSelection;
@@ -515,6 +628,30 @@ public class BlueprintExplorerScreen extends Screen {
 			} else {
 				this.client.setScreen(null);
 			}
+		}
+	}
+
+	private void openPaletteRemapModal() {
+		if (this.selectedBlueprint != null && this.client != null) {
+			this.client.setScreen(new BlueprintPaletteRemapModalScreen(
+				null,
+				null,
+				this.selectedBlueprint,
+				null,
+				this,
+				replacements -> {
+					if (replacements != null && !replacements.isEmpty()) {
+						if (this.client != null) {
+							this.client.setScreen(new BlueprintSaveChoiceModalScreen(
+								this.selectedBlueprint,
+								replacements,
+								this.scepterStack,
+								this
+							));
+						}
+					}
+				}
+			));
 		}
 	}
 
@@ -562,6 +699,78 @@ public class BlueprintExplorerScreen extends Screen {
 		updateActionButtons();
 	}
 
+	private void promptRenameCustomBlueprint() {
+		if (this.selectedBlueprint == null || !BlueprintRegistry.isCustom(this.selectedBlueprint.getId())) {
+			return;
+		}
+		this.isRenaming = true;
+		this.renameError = null;
+		if (this.renameField != null) {
+			this.renameField.setText(this.selectedBlueprint.getName());
+			this.renameField.visible = true;
+			this.renameField.setFocused(true);
+			this.setFocused(this.renameField);
+		}
+		if (this.confirmRenameBtn != null) {
+			this.confirmRenameBtn.visible = true;
+		}
+		if (this.cancelRenameBtn != null) {
+			this.cancelRenameBtn.visible = true;
+		}
+		if (this.searchField != null) {
+			this.searchField.setFocused(false);
+		}
+		updateCardButtons();
+		updateActionButtons();
+	}
+
+	private void confirmRename() {
+		if (!this.isRenaming || this.selectedBlueprint == null || this.client == null) {
+			return;
+		}
+		String newName = this.renameField != null ? this.renameField.getText().trim() : "";
+		if (newName.isBlank()) {
+			this.renameError = "Name cannot be empty";
+			this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), 0.8F));
+			return;
+		}
+
+		StructureBlueprint renamed = this.selectedBlueprint.withName(newName);
+		ModClientNetworking.sendCreateCustomBlueprint(renamed);
+		BlueprintRegistry.registerCustomBlueprint(renamed, false);
+
+		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
+			if (this.selectedBlueprint.getId().equalsIgnoreCase(CommandScepterItem.getBlueprintId(this.scepterStack))) {
+				CommandScepterItem.setBlueprintId(this.scepterStack, renamed.getId());
+			}
+		}
+
+		this.selectedBlueprint = renamed;
+		this.selectedBlueprintId = renamed.getId();
+		cancelRename();
+
+		refreshFilteredDataset();
+		this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, 1.2F));
+	}
+
+	private void cancelRename() {
+		this.isRenaming = false;
+		this.renameError = null;
+		if (this.renameField != null) {
+			this.renameField.visible = false;
+			this.renameField.setFocused(false);
+		}
+		if (this.confirmRenameBtn != null) {
+			this.confirmRenameBtn.visible = false;
+		}
+		if (this.cancelRenameBtn != null) {
+			this.cancelRenameBtn.visible = false;
+		}
+		this.setFocused(null);
+		updateCardButtons();
+		updateActionButtons();
+	}
+
 	private void closeScreen() {
 		if (this.client != null) {
 			this.client.setScreen(this.parentScreen);
@@ -575,6 +784,21 @@ public class BlueprintExplorerScreen extends Screen {
 
 	@Override
 	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+		if (this.isRenaming) {
+			if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+				cancelRename();
+				return true;
+			}
+			if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+				confirmRename();
+				return true;
+			}
+			if (this.renameField != null && this.renameField.keyPressed(keyCode, scanCode, modifiers)) {
+				return true;
+			}
+			return true;
+		}
+
 		if (this.pendingDeleteBlueprint != null) {
 			if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
 				cancelDelete();
@@ -600,6 +824,14 @@ public class BlueprintExplorerScreen extends Screen {
 			}
 		}
 
+		// Rename hotkey: R (when search field is not active and custom blueprint selected)
+		if (keyCode == GLFW.GLFW_KEY_R) {
+			if ((this.searchField == null || !this.searchField.isFocused()) && this.renameBtn != null && this.renameBtn.active) {
+				promptRenameCustomBlueprint();
+				return true;
+			}
+		}
+
 		// Auto-spin toggle hotkey: Space
 		if (keyCode == GLFW.GLFW_KEY_SPACE) {
 			if (this.searchField == null || !this.searchField.isFocused()) {
@@ -620,7 +852,11 @@ public class BlueprintExplorerScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		if (this.pendingDeleteBlueprint != null) {
+		if (this.pendingDeleteBlueprint != null || this.isRenaming) {
+			if (this.isRenaming && this.renameField != null && this.renameField.mouseClicked(mouseX, mouseY, button)) {
+				this.setFocused(this.renameField);
+				return true;
+			}
 			return super.mouseClicked(mouseX, mouseY, button);
 		}
 
@@ -721,6 +957,9 @@ public class BlueprintExplorerScreen extends Screen {
 
 	@Override
 	public boolean charTyped(char chr, int modifiers) {
+		if (this.isRenaming && this.renameField != null && this.renameField.charTyped(chr, modifiers)) {
+			return true;
+		}
 		if (this.searchField != null && this.searchField.charTyped(chr, modifiers)) {
 			return true;
 		}
@@ -730,7 +969,7 @@ public class BlueprintExplorerScreen extends Screen {
 	@Override
 	public void tick() {
 		super.tick();
-		if (this.autoSpin && !this.dragging && !this.panning && this.pendingDeleteBlueprint == null) {
+		if (this.autoSpin && !this.dragging && !this.panning && this.pendingDeleteBlueprint == null && !this.isRenaming) {
 			this.yaw += 0.012F;
 			float twoPi = (float) (Math.PI * 2);
 			if (this.yaw > twoPi) {
@@ -800,16 +1039,26 @@ public class BlueprintExplorerScreen extends Screen {
 					StructureBlueprint bp = this.filteredBlueprints.get(itemIndex);
 					int cardY = listStartY + i * (cardH + 4);
 					boolean isSelected = this.selectedBlueprint != null && bp.getId().equalsIgnoreCase(this.selectedBlueprint.getId());
+					boolean isHovered = mouseX >= searchX && mouseX < searchX + cardW && mouseY >= cardY && mouseY < cardY + cardH;
 
-					int bgCol = isSelected ? 0x662979FF : 0x44141E28;
+					int bgCol = isSelected ? 0x662979FF : (isHovered ? 0x551E2D3E : 0x44141E28);
 					context.fill(searchX, cardY, searchX + cardW, cardY + cardH, bgCol);
 
-					int borderCol = isSelected ? 0xFF00E5FF : 0xFF2A3D54;
+					int borderCol = isSelected ? 0xFF00E5FF : (isHovered ? 0xFF4A688F : 0xFF2A3D54);
 					context.drawBorder(searchX, cardY, cardW, cardH, borderCol);
 
+					// 1. Card Title on top line (cardY + 5)
+					String cleanName = bp.getName();
+					if (this.textRenderer.getWidth(cleanName) > 115) {
+						cleanName = this.textRenderer.trimToWidth(cleanName, 108) + "…";
+					}
+					String prefix = isSelected ? "§b▶ §f" : "§7  ";
+					context.drawTextWithShadow(this.textRenderer, Text.literal(prefix + cleanName), searchX + 6, cardY + 5, 0xFFFFFF);
+
+					// 2. Card Size & block count on bottom line (cardY + 18)
 					net.minecraft.util.math.BlockBox itemBox = bp.getBoundingBox();
 					String sub = "§7" + itemBox.getBlockCountX() + "×" + itemBox.getBlockCountY() + "×" + itemBox.getBlockCountZ() + " §8| §b" + bp.getBlockCount() + "b";
-					context.drawTextWithShadow(this.textRenderer, Text.literal(sub), searchX + 6, cardY + 18, 0x888888);
+					context.drawTextWithShadow(this.textRenderer, Text.literal(sub), searchX + 18, cardY + 18, 0x888888);
 
 					boolean isCustom = BlueprintRegistry.isCustom(bp.getId());
 					String badge = isCustom ? "§6[C]" : "§8[B]";
@@ -848,19 +1097,31 @@ public class BlueprintExplorerScreen extends Screen {
 				int blocks = this.selectedBlueprint.getBlockCount();
 				long volume = (long) width * height * length;
 
-				String specRow1 = "§eSize: §f" + width + "×" + height + "×" + length +
-					" §8| §bBlocks: §f" + blocks +
-					" §8| §aVol: §f" + volume + "m³";
-				context.drawTextWithShadow(this.textRenderer, Text.literal(specRow1), vpX + 6, specY + 5, 0xFFFFFF);
+				// Line 1: Blueprint Name (leaving space on the right for the Rename button)
+				String title = "§6✦ " + this.selectedBlueprint.getName();
+				int maxTitleW = (this.renameBtn != null && this.renameBtn.visible) ? (vpW - 68) : (vpW - 12);
+				if (this.textRenderer.getWidth(title) > maxTitleW) {
+					title = this.textRenderer.trimToWidth(title, maxTitleW - 8) + "…";
+				}
+				context.drawTextWithShadow(this.textRenderer, Text.literal(title), vpX + 6, specY + 5, 0xFFFFFF);
 
+				// Line 2: Size & Blocks Specs
+				String specRow1 = "§eSize: §f" + width + "×" + height + "×" + length +
+					" §8| §b" + blocks + "b" +
+					" §8| §a" + volume + "m³";
+				context.drawTextWithShadow(this.textRenderer, Text.literal(specRow1), vpX + 6, specY + 18, 0xEEEEEE);
+
+				// Line 3: Description text
 				String desc = this.selectedBlueprint.getDescription();
 				if (desc == null || desc.isBlank()) {
 					desc = "Standard architectural construction directive.";
 				}
 				List<OrderedText> wrappedDesc = this.textRenderer.wrapLines(Text.literal("§7" + desc), vpW - 12);
-				int maxLines = Math.min(3, wrappedDesc.size());
-				for (int l = 0; l < maxLines; l++) {
-					context.drawTextWithShadow(this.textRenderer, wrappedDesc.get(l), vpX + 6, specY + 17 + l * 10, 0xAAAAAA);
+				if (!wrappedDesc.isEmpty()) {
+					context.drawTextWithShadow(this.textRenderer, wrappedDesc.get(0), vpX + 6, specY + 31, 0xAAAAAA);
+				}
+				if (wrappedDesc.size() > 1) {
+					context.drawTextWithShadow(this.textRenderer, wrappedDesc.get(1), vpX + 6, specY + 40, 0x888888);
 				}
 			} else {
 				context.drawCenteredTextWithShadow(
@@ -916,23 +1177,231 @@ public class BlueprintExplorerScreen extends Screen {
 
 			context.getMatrices().pop();
 		}
+
+		// 7. Render Rename Modal Overlay if active
+		if (this.isRenaming) {
+			context.getMatrices().push();
+			context.getMatrices().translate(0, 0, 400.0F);
+
+			context.fill(0, 0, this.width, this.height, 0xAA080C12);
+
+			int modalW = 240;
+			int modalH = 104;
+			int modalX = (this.width - modalW) / 2;
+			int modalY = (this.height - modalH) / 2;
+
+			context.fill(modalX, modalY, modalX + modalW, modalY + modalH, 0xFA141E2B);
+			context.drawBorder(modalX, modalY, modalW, modalH, 0xFF00E5FF);
+
+			context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§b✦ RENAME BLUEPRINT ✦"), modalX + modalW / 2, modalY + 10, 0x55FFFF);
+			context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Enter new display name:"), modalX + modalW / 2, modalY + 25, 0xAAAAAA);
+
+			if (this.renameField != null) {
+				this.renameField.render(context, mouseX, mouseY, delta);
+			}
+
+			if (this.renameError != null) {
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§c" + this.renameError), modalX + modalW / 2, modalY + 62, 0xFF5555);
+			} else {
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§8Press Enter to save, Esc to cancel"), modalX + modalW / 2, modalY + 62, 0x777777);
+			}
+
+			if (this.confirmRenameBtn != null) {
+				this.confirmRenameBtn.render(context, mouseX, mouseY, delta);
+			}
+			if (this.cancelRenameBtn != null) {
+				this.cancelRenameBtn.render(context, mouseX, mouseY, delta);
+			}
+
+			context.getMatrices().pop();
+		}
 	}
 
 	/**
-	 * Projected 3D polygon face representation for true isometric rasterization.
+	 * Custom card button widget that delegates rendering to BlueprintExplorerScreen.render()
+	 * to prevent vanilla button text positioning from colliding with card specifications.
 	 */
-	private record ProjectedFace(
-		double x0, double y0,
-		double x1, double y1,
-		double x2, double y2,
-		double x3, double y3,
-		double depth,
-		int color
-	) {}
+	private static class CardSlotButton extends ButtonWidget {
+		CardSlotButton(int x, int y, int width, int height, PressAction onPress) {
+			super(x, y, width, height, Text.empty(), onPress, DEFAULT_NARRATION_SUPPLIER);
+		}
+
+		@Override
+		protected void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
+			// Card visual rendering handled in BlueprintExplorerScreen.render() to prevent title/size text collision
+		}
+	}
 
 	/**
-	 * Renders the 3D isometric structure preview using real-time true 3D rotated quads,
-	 * 6-directional neighbor occlusion culling, floor cutaway slicing, and Painter's depth sorting.
+	 * Pre-cached surface face representation (ProjectedFace) for high-performance 3D rendering.
+	 */
+	private static class CachedFace {
+		final byte faceIndex;
+		final int blockY;
+		final boolean occludedUnlessSliced;
+		final int baseColor;
+		final float fcX, fcY, fcZ;
+		final float c0x, c0y, c0z;
+		final float c1x, c1y, c1z;
+		final float c2x, c2y, c2z;
+		final float c3x, c3y, c3z;
+
+		CachedFace(
+			byte faceIndex, int blockY, boolean occludedUnlessSliced, int baseColor,
+			float fcX, float fcY, float fcZ,
+			float c0x, float c0y, float c0z,
+			float c1x, float c1y, float c1z,
+			float c2x, float c2y, float c2z,
+			float c3x, float c3y, float c3z
+		) {
+			this.faceIndex = faceIndex;
+			this.blockY = blockY;
+			this.occludedUnlessSliced = occludedUnlessSliced;
+			this.baseColor = baseColor;
+			this.fcX = fcX; this.fcY = fcY; this.fcZ = fcZ;
+			this.c0x = c0x; this.c0y = c0y; this.c0z = c0z;
+			this.c1x = c1x; this.c1y = c1y; this.c1z = c1z;
+			this.c2x = c2x; this.c2y = c2y; this.c2z = c2z;
+			this.c3x = c3x; this.c3y = c3y; this.c3z = c3z;
+		}
+	}
+
+	/**
+	 * Precomputed blueprint mesh cache storing interior-culled surface faces and bounding extents.
+	 */
+	private static class BlueprintMeshCache {
+		final StructureBlueprint blueprint;
+		final int minX, maxX, minY, maxY, minZ, maxZ;
+		final double cx, cy, cz;
+		final double maxDim;
+		final CachedFace[] faces;
+
+		BlueprintMeshCache(
+			StructureBlueprint blueprint,
+			int minX, int maxX, int minY, int maxY, int minZ, int maxZ,
+			double cx, double cy, double cz, double maxDim,
+			CachedFace[] faces
+		) {
+			this.blueprint = blueprint;
+			this.minX = minX; this.maxX = maxX;
+			this.minY = minY; this.maxY = maxY;
+			this.minZ = minZ; this.maxZ = maxZ;
+			this.cx = cx; this.cy = cy; this.cz = cz;
+			this.maxDim = maxDim;
+			this.faces = faces;
+		}
+
+		static BlueprintMeshCache build(StructureBlueprint bp) {
+			if (bp == null || bp.getBlocks() == null || bp.getBlocks().isEmpty()) {
+				return null;
+			}
+			List<BlueprintBlock> blocks = bp.getBlocks();
+			int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
+			int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
+			int minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+
+			Set<BlockPos> occupied = new HashSet<>(blocks.size());
+			for (BlueprintBlock b : blocks) {
+				BlockPos pos = b.offset();
+				int bx = pos.getX(), by = pos.getY(), bz = pos.getZ();
+				if (bx < minX) minX = bx;
+				if (bx > maxX) maxX = bx;
+				if (by < minY) minY = by;
+				if (by > maxY) maxY = by;
+				if (bz < minZ) minZ = bz;
+				if (bz > maxZ) maxZ = bz;
+
+				if (isOpaque(b.state())) {
+					occupied.add(pos);
+				}
+			}
+
+			double cx = (minX + maxX) / 2.0;
+			double cy = (minY + maxY) / 2.0;
+			double cz = (minZ + maxZ) / 2.0;
+
+			int spanX = Math.max(1, maxX - minX + 1);
+			int spanY = Math.max(1, maxY - minY + 1);
+			int spanZ = Math.max(1, maxZ - minZ + 1);
+			double maxDim = Math.max(spanX, Math.max(spanY, spanZ));
+
+			List<CachedFace> faceList = new ArrayList<>(blocks.size() * 3);
+
+			for (BlueprintBlock b : blocks) {
+				BlockPos pos = b.offset();
+				int bx = pos.getX();
+				int by = pos.getY();
+				int bz = pos.getZ();
+
+				double relX = bx - cx;
+				double relY = by - cy;
+				double relZ = bz - cz;
+
+				double[] bnd = getBlockBounds(b.state());
+				double xMin = bnd[0], xMax = bnd[1];
+				double yMin = bnd[2], yMax = bnd[3];
+				double zMin = bnd[4], zMax = bnd[5];
+				boolean isFullCube = (xMin == -0.5 && xMax == 0.5 && yMin == -0.5 && yMax == 0.5 && zMin == -0.5 && zMax == 0.5);
+
+				for (int f = 0; f < 6; f++) {
+					int[] norm = NORMALS[f];
+					int nx = norm[0], ny = norm[1], nz = norm[2];
+
+					boolean occludedUnlessSliced = false;
+					if (isFullCube) {
+						BlockPos neighborPos = pos.add(nx, ny, nz);
+						if (occupied.contains(neighborPos)) {
+							if (f == 0) { // Top face (+Y)
+								// Occluded in full view, but exposed if sliced at by
+								occludedUnlessSliced = true;
+							} else {
+								// Bottom, East, West, South, North: neighbor is at or below this layer,
+								// so if occupied, this face is never exposed under slicing!
+								continue;
+							}
+						}
+					}
+
+					int baseColor = getBlockColor(b.state(), f);
+					double[][] c = getFaceCorners(f, xMin, xMax, yMin, yMax, zMin, zMax);
+
+					float fcX = (float) (relX + (xMin + xMax) * 0.5 + nx * 0.02);
+					float fcY = (float) (relY + (yMin + yMax) * 0.5 + ny * 0.02);
+					float fcZ = (float) (relZ + (zMin + zMax) * 0.5 + nz * 0.02);
+
+					faceList.add(new CachedFace(
+						(byte) f, by, occludedUnlessSliced, baseColor,
+						fcX, fcY, fcZ,
+						(float) (relX + c[0][0]), (float) (relY + c[0][1]), (float) (relZ + c[0][2]),
+						(float) (relX + c[1][0]), (float) (relY + c[1][1]), (float) (relZ + c[1][2]),
+						(float) (relX + c[2][0]), (float) (relY + c[2][1]), (float) (relZ + c[2][2]),
+						(float) (relX + c[3][0]), (float) (relY + c[3][1]), (float) (relZ + c[3][2])
+					));
+				}
+			}
+
+			return new BlueprintMeshCache(
+				bp,
+				minX, maxX, minY, maxY, minZ, maxZ,
+				cx, cy, cz, maxDim,
+				faceList.toArray(new CachedFace[0])
+			);
+		}
+	}
+
+	private void ensureBufferCapacity(int count) {
+		if (this.sortBuffer.length < count) {
+			int newCap = Math.max(this.sortBuffer.length * 2, count);
+			this.sortBuffer = new long[newCap];
+			this.projQuadX = new float[newCap * 4];
+			this.projQuadY = new float[newCap * 4];
+			this.projColor = new int[newCap];
+		}
+	}
+
+	/**
+	 * Renders the 3D isometric structure preview using pre-cached surface geometry,
+	 * zero-allocation primitive depth sorting, and fast Painter's algorithm quad rasterization.
 	 */
 	private void render3DBlueprint(DrawContext context, int vpX, int vpY, int vpW, int vpH) {
 		if (!hasValidBlocks()) {
@@ -947,40 +1416,22 @@ public class BlueprintExplorerScreen extends Screen {
 			return;
 		}
 
-		List<BlueprintBlock> blocks = this.selectedBlueprint.getBlocks();
-		int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
-		int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
-		int minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
-
-		Set<BlockPos> occupied = new HashSet<>(blocks.size());
-		for (BlueprintBlock b : blocks) {
-			BlockPos pos = b.offset();
-			int bx = pos.getX();
-			int by = pos.getY();
-			int bz = pos.getZ();
-			if (bx < minX) minX = bx;
-			if (bx > maxX) maxX = bx;
-			if (by < minY) minY = by;
-			if (by > maxY) maxY = by;
-			if (bz < minZ) minZ = bz;
-			if (bz > maxZ) maxZ = bz;
-
-			if (isOpaque(b.state())) {
-				occupied.add(pos);
-			}
+		if (this.meshCache == null || this.meshCache.blueprint != this.selectedBlueprint) {
+			this.meshCache = BlueprintMeshCache.build(this.selectedBlueprint);
 		}
+		BlueprintMeshCache mesh = this.meshCache;
+		if (mesh == null || mesh.faces.length == 0) {
+			return;
+		}
+
+		int minX = mesh.minX, maxX = mesh.maxX;
+		int minY = mesh.minY, maxY = mesh.maxY;
+		int minZ = mesh.minZ, maxZ = mesh.maxZ;
+		double cx = mesh.cx, cy = mesh.cy, cz = mesh.cz;
+		double maxDim = mesh.maxDim;
 
 		// Floor Cutaway: clamp active slice level
 		int currentSlice = (this.sliceY == Integer.MAX_VALUE || this.sliceY > maxY) ? maxY : Math.max(minY, Math.min(maxY, this.sliceY));
-
-		double cx = (minX + maxX) / 2.0;
-		double cy = (minY + maxY) / 2.0;
-		double cz = (minZ + maxZ) / 2.0;
-
-		int spanX = Math.max(1, maxX - minX + 1);
-		int spanY = Math.max(1, maxY - minY + 1);
-		int spanZ = Math.max(1, maxZ - minZ + 1);
-		double maxDim = Math.max(spanX, Math.max(spanY, spanZ));
 
 		// Pixel scale calculation
 		double baseScale = Math.min((vpW - 32) / (maxDim * 1.5), (vpH - 32) / (maxDim * 1.4)) * this.zoom;
@@ -995,121 +1446,81 @@ public class BlueprintExplorerScreen extends Screen {
 		double centerY = vpY + vpH / 2.0 + this.panY;
 
 		// Directional Sun Vector in world space: (0.355, 0.862, -0.355) normalized
-		double sunX = 0.355;
-		double sunY = 0.862;
-		double sunZ = -0.355;
+		final double sunX = 0.355;
+		final double sunY = 0.862;
+		final double sunZ = -0.355;
 
-		List<ProjectedFace> visibleFaces = new ArrayList<>(blocks.size() * 3);
+		ensureBufferCapacity(mesh.faces.length);
+		int survivorCount = 0;
 
-		// 6-Directional Unit Cube Normals & Corner Definitions
-		// Corner offsets relative to block center for all 6 faces
-		final double[][] TOP_CORNERS = { {-0.5, 0.5, -0.5}, {-0.5, 0.5, 0.5}, {0.5, 0.5, 0.5}, {0.5, 0.5, -0.5} };
-		final double[][] BOTTOM_CORNERS = { {-0.5, -0.5, 0.5}, {-0.5, -0.5, -0.5}, {0.5, -0.5, -0.5}, {0.5, -0.5, 0.5} };
-		final double[][] EAST_CORNERS = { {0.5, -0.5, -0.5}, {0.5, 0.5, -0.5}, {0.5, 0.5, 0.5}, {0.5, -0.5, 0.5} };
-		final double[][] WEST_CORNERS = { {-0.5, -0.5, 0.5}, {-0.5, 0.5, 0.5}, {-0.5, 0.5, -0.5}, {-0.5, -0.5, -0.5} };
-		final double[][] SOUTH_CORNERS = { {-0.5, -0.5, 0.5}, {0.5, -0.5, 0.5}, {0.5, 0.5, 0.5}, {-0.5, 0.5, 0.5} };
-		final double[][] NORTH_CORNERS = { {0.5, -0.5, -0.5}, {-0.5, -0.5, -0.5}, {-0.5, 0.5, -0.5}, {0.5, 0.5, -0.5} };
-
-		final int[][] NORMALS = {
-			{0, 1, 0},   // Top
-			{0, -1, 0},  // Bottom
-			{1, 0, 0},   // East
-			{-1, 0, 0},  // West
-			{0, 0, 1},   // South
-			{0, 0, -1}   // North
-		};
-
-		for (BlueprintBlock b : blocks) {
-			BlockPos pos = b.offset();
-			int bx = pos.getX();
-			int by = pos.getY();
-			int bz = pos.getZ();
-
-			// Cutaway slicing: ignore blocks above current slice level
-			if (by > currentSlice) {
+		for (CachedFace face : mesh.faces) {
+			if (face.blockY > currentSlice) {
+				continue;
+			}
+			if (face.occludedUnlessSliced && face.blockY + 1 <= currentSlice) {
 				continue;
 			}
 
-			double relX = bx - cx;
-			double relY = by - cy;
-			double relZ = bz - cz;
+			int[] norm = NORMALS[face.faceIndex];
+			int nx = norm[0], ny = norm[1], nz = norm[2];
 
-			double[] bnd = getBlockBounds(b.state());
-			double xMin = bnd[0], xMax = bnd[1];
-			double yMin = bnd[2], yMax = bnd[3];
-			double zMin = bnd[4], zMax = bnd[5];
-			boolean isFullCube = (xMin == -0.5 && xMax == 0.5 && yMin == -0.5 && yMax == 0.5 && zMin == -0.5 && zMax == 0.5);
+			// Backface culling: rotate face normal by (yaw, pitch)
+			double rnx1 = nx * cosYaw - nz * sinYaw;
+			double rnz1 = nx * sinYaw + nz * cosYaw;
+			double rny1 = ny * cosPitch - rnz1 * sinPitch;
+			double rnz2 = ny * sinPitch + rnz1 * cosPitch;
 
-			for (int f = 0; f < 6; f++) {
-				int[] norm = NORMALS[f];
-				int nx = norm[0];
-				int ny = norm[1];
-				int nz = norm[2];
-
-				// 1. Occlusion culling: if neighbor in direction is opaque and inside slice, cull!
-				// Only full cubes cull against neighbors to keep partial models (plants, slabs, torches) visible
-				if (isFullCube) {
-					BlockPos neighborPos = pos.add(nx, ny, nz);
-					if (neighborPos.getY() <= currentSlice && occupied.contains(neighborPos)) {
-						continue;
-					}
-				}
-
-				// 2. Backface culling: rotate face normal by (yaw, pitch)
-				double rnx1 = nx * cosYaw - nz * sinYaw;
-				double rnz1 = nx * sinYaw + nz * cosYaw;
-				double rny1 = ny * cosPitch - rnz1 * sinPitch;
-				double rnz2 = ny * sinPitch + rnz1 * cosPitch;
-
-				// If face points away from camera, cull it!
-				if (rnz2 <= 0.001) {
-					continue;
-				}
-
-				// 3. Directional Sunlight intensity: Dot product (Normal · Sun)
-				double dot = nx * sunX + ny * sunY + nz * sunZ;
-				float brightness = (float) MathHelper.clamp(0.55 + 0.45 * Math.max(0.0, dot), 0.42, 1.25);
-				int baseColor = getBlockColor(b.state(), f);
-				int shadedColor = shadeColor(baseColor, brightness);
-
-				// 4. Project 4 corner vertices
-				double[][] c = getFaceCorners(f, xMin, xMax, yMin, yMax, zMin, zMax);
-				double[] px = new double[4];
-				double[] py = new double[4];
-
-				for (int i = 0; i < 4; i++) {
-					double wx = relX + c[i][0];
-					double wy = relY + c[i][1];
-					double wz = relZ + c[i][2];
-
-					double x1 = wx * cosYaw - wz * sinYaw;
-					double z1 = wx * sinYaw + wz * cosYaw;
-					double y1 = wy * cosPitch - z1 * sinPitch;
-
-					px[i] = centerX + x1 * baseScale;
-					py[i] = centerY - y1 * baseScale;
-				}
-
-				// Face center depth for Painter's algorithm
-				double fcX = relX + (xMin + xMax) * 0.5 + nx * 0.02;
-				double fcY = relY + (yMin + yMax) * 0.5 + ny * 0.02;
-				double fcZ = relZ + (zMin + zMax) * 0.5 + nz * 0.02;
-				double cz1 = fcX * sinYaw + fcZ * cosYaw;
-				double depth = fcY * sinPitch + cz1 * cosPitch;
-
-				visibleFaces.add(new ProjectedFace(
-					px[0], py[0],
-					px[1], py[1],
-					px[2], py[2],
-					px[3], py[3],
-					depth,
-					shadedColor
-				));
+			if (rnz2 <= 0.001) {
+				continue;
 			}
+
+			// Directional Sunlight intensity: Dot product (Normal · Sun)
+			double dot = nx * sunX + ny * sunY + nz * sunZ;
+			float brightness = (float) MathHelper.clamp(0.55 + 0.45 * Math.max(0.0, dot), 0.42, 1.25);
+			int shadedColor = shadeColor(face.baseColor, brightness);
+
+			int baseVertex = survivorCount * 4;
+
+			// Project Corner 0
+			double x1_0 = face.c0x * cosYaw - face.c0z * sinYaw;
+			double z1_0 = face.c0x * sinYaw + face.c0z * cosYaw;
+			double y1_0 = face.c0y * cosPitch - z1_0 * sinPitch;
+			projQuadX[baseVertex] = (float) (centerX + x1_0 * baseScale);
+			projQuadY[baseVertex] = (float) (centerY - y1_0 * baseScale);
+
+			// Project Corner 1
+			double x1_1 = face.c1x * cosYaw - face.c1z * sinYaw;
+			double z1_1 = face.c1x * sinYaw + face.c1z * cosYaw;
+			double y1_1 = face.c1y * cosPitch - z1_1 * sinPitch;
+			projQuadX[baseVertex + 1] = (float) (centerX + x1_1 * baseScale);
+			projQuadY[baseVertex + 1] = (float) (centerY - y1_1 * baseScale);
+
+			// Project Corner 2
+			double x1_2 = face.c2x * cosYaw - face.c2z * sinYaw;
+			double z1_2 = face.c2x * sinYaw + face.c2z * cosYaw;
+			double y1_2 = face.c2y * cosPitch - z1_2 * sinPitch;
+			projQuadX[baseVertex + 2] = (float) (centerX + x1_2 * baseScale);
+			projQuadY[baseVertex + 2] = (float) (centerY - y1_2 * baseScale);
+
+			// Project Corner 3
+			double x1_3 = face.c3x * cosYaw - face.c3z * sinYaw;
+			double z1_3 = face.c3x * sinYaw + face.c3z * cosYaw;
+			double y1_3 = face.c3y * cosPitch - z1_3 * sinPitch;
+			projQuadX[baseVertex + 3] = (float) (centerX + x1_3 * baseScale);
+			projQuadY[baseVertex + 3] = (float) (centerY - y1_3 * baseScale);
+
+			projColor[survivorCount] = shadedColor;
+
+			// Face center depth for Painter's algorithm
+			double cz1 = face.fcX * sinYaw + face.fcZ * cosYaw;
+			float depth = (float) (face.fcY * sinPitch + cz1 * cosPitch);
+
+			sortBuffer[survivorCount] = (((long) Float.floatToIntBits(depth + 100000.0F)) << 32) | (survivorCount & 0xFFFFFFFFL);
+			survivorCount++;
 		}
 
 		// Painter's Algorithm: Sort faces by depth ascending (furthest first, closest on top)
-		visibleFaces.sort(Comparator.comparingDouble(ProjectedFace::depth));
+		Arrays.sort(this.sortBuffer, 0, survivorCount);
 
 		// Hardware-accelerated viewport scissor clipping
 		context.enableScissor(vpX + 1, vpY + 1, vpX + vpW - 1, vpY + vpH - 1);
@@ -1121,11 +1532,14 @@ public class BlueprintExplorerScreen extends Screen {
 		VertexConsumer buffer = context.getVertexConsumers().getBuffer(RenderLayer.getGui());
 		Matrix4f matrix = context.getMatrices().peek().getPositionMatrix();
 
-		for (ProjectedFace f : visibleFaces) {
-			buffer.vertex(matrix, (float) f.x0(), (float) f.y0(), 0.0F).color(f.color());
-			buffer.vertex(matrix, (float) f.x1(), (float) f.y1(), 0.0F).color(f.color());
-			buffer.vertex(matrix, (float) f.x2(), (float) f.y2(), 0.0F).color(f.color());
-			buffer.vertex(matrix, (float) f.x3(), (float) f.y3(), 0.0F).color(f.color());
+		for (int i = 0; i < survivorCount; i++) {
+			int sIdx = (int) (sortBuffer[i] & 0xFFFFFFFFL);
+			int baseV = sIdx * 4;
+			int col = projColor[sIdx];
+			buffer.vertex(matrix, projQuadX[baseV], projQuadY[baseV], 0.0F).color(col);
+			buffer.vertex(matrix, projQuadX[baseV + 1], projQuadY[baseV + 1], 0.0F).color(col);
+			buffer.vertex(matrix, projQuadX[baseV + 2], projQuadY[baseV + 2], 0.0F).color(col);
+			buffer.vertex(matrix, projQuadX[baseV + 3], projQuadY[baseV + 3], 0.0F).color(col);
 		}
 
 		context.draw();
@@ -1304,7 +1718,7 @@ public class BlueprintExplorerScreen extends Screen {
 	/**
 	 * Material palette color mapping for authentic architectural block representation.
 	 */
-	private int getBlockColor(BlockState state) {
+	private static int getBlockColor(BlockState state) {
 		return getBlockColor(state, 0);
 	}
 
@@ -1312,7 +1726,7 @@ public class BlueprintExplorerScreen extends Screen {
 	 * Multi-face textured color mapping providing distinct top/bottom/side textures,
 	 * authentic flower bloom hues, botanical greens, wood rings vs bark, and 16-dye color support.
 	 */
-	private int getBlockColor(BlockState state, int face) {
+	private static int getBlockColor(BlockState state, int face) {
 		if (state == null) return 0xFF888888;
 		Block block = state.getBlock();
 		String id = Registries.BLOCK.getId(block).getPath().toLowerCase(Locale.ROOT);
@@ -1581,7 +1995,7 @@ public class BlueprintExplorerScreen extends Screen {
 		return 0xFF7F8C8D;
 	}
 
-	private int resolveDyeColor(String id) {
+	private static int resolveDyeColor(String id) {
 		if (id.contains("white")) return 0xFFF9F9F9;
 		if (id.contains("orange")) return 0xFFF9801D;
 		if (id.contains("magenta")) return 0xFFC74EBD;
@@ -1601,7 +2015,7 @@ public class BlueprintExplorerScreen extends Screen {
 		return 0;
 	}
 
-	private int getTerracottaColor(String id) {
+	private static int getTerracottaColor(String id) {
 		if (id.contains("white")) return 0xFFD1B1A1;
 		if (id.contains("orange")) return 0xFFA05325;
 		if (id.contains("magenta")) return 0xFF95576C;
@@ -1621,7 +2035,7 @@ public class BlueprintExplorerScreen extends Screen {
 		return 0xFF9E6148;
 	}
 
-	private int shadeColor(int argb, float factor) {
+	private static int shadeColor(int argb, float factor) {
 		int a = (argb >> 24) & 0xFF;
 		if (a == 0) a = 0xFF;
 		int r = (int) (((argb >> 16) & 0xFF) * factor);

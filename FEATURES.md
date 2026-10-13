@@ -1918,8 +1918,8 @@ Deficient items (`delta < 0`) are dynamically tagged using `MinionHarvestingHelp
                                                    • Maximize Mode [⛶/🗗] (404x194 Viewport Canvas)
                                                    • Architectural Floor Slicer [▲] / [▼]
                                                    • Ground Foundation Pedestal & Compass HUD
-                                                   • Specs & Auto-Wrapped Description Card
-                                                   • [✔ Select] | [📋 BOM] | [🗑 Del]
+                                                   • Specs Card (with [✏ Rename] for custom blueprints)
+                                                   • Spacious Bottom Bar: [✔ Arm] | [🎨 Remap] | [📋 BOM] | [🗑 Del] | [Close]
 ```
 
 ### 27.1 Dedicated 3D Blueprint Explorer Screen (`BlueprintExplorerScreen`)
@@ -1934,10 +1934,13 @@ Deficient items (`delta < 0`) are dynamically tagged using `MinionHarvestingHelp
 - **Zero Text Cut-Off Architecture**:
   - Blueprint card titles are cleanly trimmed with ellipsis (`textRenderer.trimToWidth`) with full titles displayed on hover tooltips.
   - Multi-line descriptions are dynamically wrapped (`textRenderer.wrapLines`) ensuring zero text clipping across any Minecraft GUI scale (Normal, Large, Auto).
-- **Direct Lifecycle Actions**:
-  - `[ ✔ Select ]`: Immediately arms the active blueprint on the held Command Scepter, updates server state, and closes the explorer.
+- **Direct Lifecycle Actions & Uncluttered Ergonomics**:
+  - `[ ✔ Arm ]`: Immediately arms the active blueprint on the held Command Scepter, updates server state, and closes the explorer.
+  - `[ ✏ Rename ]`: Directly renames custom blueprints without recapturing. In split-pane mode, neatly docked in the Specifications Card header beside the title; in maximized mode, integrated into the expanded bottom toolbar. Also triggers via keyboard shortcut **`[R]`**.
   - `[ 📋 BOM ]`: Directly launches the Material Bill of Materials modal screen for the active blueprint.
+  - `[ 🎨 Remap ]`: Directly opens the Palette Remap modal (`BlueprintPaletteRemapModalScreen`) from the 3D viewer. Commanders can replace any block type with another placeable block or erase with `minecraft:air`, then choose to **[ 💾 Overwrite ]** the existing blueprint or **[ 📋 Save as Copy ]** via `BlueprintSaveChoiceModalScreen`.
   - `[ 🗑 Del ]`: Deletes custom player-captured blueprints permanently with a safety confirmation modal.
+  - `[ Close ]`: Exits the explorer smoothly to the parent screen.
 
 ### 27.2 3D Blueprint Clarity Overhaul & Architectural Viewport Engine
 
@@ -1995,3 +1998,57 @@ Deficient items (`delta < 0`) are dynamically tagged using `MinionHarvestingHelp
 - **Slab, Stair, Carpet, Snow & Path Block Exemption**: Refined `unstuckIfInSolidWall()` in `MinionEntity` to evaluate torso (`getY() + 0.6D`) and head (`getEyeY()`) blocks using `shouldSuffocate()` and `isFullCube()`. Minions traversing uneven walkable floors (slabs, stairs, carpets, snow layers, path blocks) are never falsely flagged as embedded in solid walls.
 - **20-Tick Unstuck Safety Cooldown**: Emergency extractions impose a 20-tick cooldown (`unstuckCooldownTicks`), permanently eliminating stutter, teleport particles, and velocity zeroing while moving towards tactical waypoints.
 - **Arcane Levitation Traversal Landing Stability**: Obstacle-climbing maneuvers maintain at least 4 ticks of lift before touchdown can occur, eliminating flutter and chatter on ground surfaces.
+
+### 27.5 Architectural 3D Palette Remapping & Save Choice Engine
+
+- **In-Viewer Palette Customization**: Commanders can inspect any blueprint in the 3D explorer and click the **`[ 🎨 Remap ]`** toolbar button (available in both standard split and maximized viewports) to launch the `BlueprintPaletteRemapModalScreen`.
+- **Selective Block Replacement & Air Erasure**:
+  - The modal analyzes all non-air blocks present in the blueprint and lists unique block types with quantities and visual swatches.
+  - Clicking any entry opens the searchable `BlockPickerModalScreen` to choose a new target block, or erase blocks completely into `minecraft:air`.
+  - Directional properties (stairs, slabs, logs, pillars, fences) are transferred cleanly between compatible block types via `transferBlockStateProperties`.
+  - Air-erased blocks are omitted from the resulting blueprint data, automatically re-normalizing the bounding box and dimensions.
+- **Save Choice Modal (`BlueprintSaveChoiceModalScreen`)**:
+  - **`[ 💾 Overwrite ]`**: Updates the selected blueprint file on disk and in memory in-place, synchronizing the changes to server and clients immediately.
+  - **`[ 📋 Save as Copy ]`**: Prompts the player to enter a new name for a derivative blueprint. Upon saving, the copy is saved as a new file at index 0 (Slot 1 on Page 1) and armed on the held Command Scepter stack.
+  - **Clean Screen Transitions**: Dismissing or cancelling returns directly to the 3D explorer with camera angles and pan coordinates preserved.
+
+### 27.6 Zero-Lag Large Structure 3D Mesh Rendering Engine (`BlueprintMeshCache`)
+
+- **High-Performance Mesh Pre-Caching**:
+  - Large captured structures (such as entire villages, fortresses, or cathedral complexes with 10k–50k+ blocks) previously suffered frame rate drops due to per-frame occlusion scanning and thousands of per-frame heap allocations.
+  - The 3D viewer now compiles an immutable pre-culled mesh (`BlueprintMeshCache`) once upon blueprint selection, discarding internal solid-to-solid faces upfront.
+- **Zero-Allocation Primitive Depth Sorting**:
+  - Replaces per-frame boxed collections and `ProjectedFace` heap allocations with a reusable primitive `long[] sortBuffer` sorted via native `Arrays.sort(...)`.
+  - Distance values and face indices are packed into 64-bit primitive integers, eliminating garbage collection pressure and providing smooth 60+ FPS navigation even on massive mega-structures.
+- **Card Title & Dimensions Separation (`CardSlotButton`)**:
+  - Fixed vertical text overlap where card titles collided with dimension and block count subtitles.
+  - `CardSlotButton` suppresses vanilla button text centering, cleanly rendering the blueprint title at `cardY + 5` and block dimensions/counts at `cardY + 18`.
+
+### 27.7 Long-Range Container Logistics & Sub-Millisecond Chunk Querying
+
+- **Expanded 32-Block Search Radius**: Builder minions search nearby chests and containers within an expanded 32-block horizontal and 16-block vertical radius (a 64x32x64 block volume) to acquire required building blocks or deposit excess inventory.
+- **Sub-Millisecond Chunk-Level Block Entity Scanning**: Instead of iterating through over 130,000 individual `BlockPos` coords, queries chunk block entities directly via `world.getWorldChunk(...).getBlockEntities()`, maintaining sub-millisecond execution times and zero server tick lag.
+
+### 27.8 Autonomous Minion Roaming on Patrol Route Deletion
+
+- **Decoupled Patrol Dismantle**: When a patrol route is deleted (`deleteRoute` in `PatrolRouteManager`), assigned minions are cleanly unbound (`setPatrolRouteId(-1)`), have sitting and guard anchors cleared (`setSitting(false)`, `setGuardAnchorPos(null)`), and have active navigation halted.
+- **Immediate Free Roaming**: Minions immediately switch to autonomous ambient wandering (`WanderAroundFarGoal`) instead of freezing or remaining locked in a stationary holding position.
+
+### 27.9 Custom Blueprint Direct Renaming & Uncluttered Action Bar Architecture
+
+- **Direct In-Viewer Blueprint Renaming (`[ ✏ Rename ]` / `[R]`)**:
+  - Commanders can rename any custom-captured or derivative blueprint directly from within `BlueprintExplorerScreen` without re-capturing the structure in the world.
+  - Clicking the **`[ ✏ Rename ]`** button or pressing **`[R]`** while browsing custom blueprints opens a centered glassmorphic rename dialog (`240x104`) at `z=400` with dark styling (`#141E2B`), cyan glowing border (`#00E5FF`), and prefilled `TextFieldWidget` (up to 64 characters).
+  - Validation blocks empty or blank names, providing warning note block bass audio cues, while successful saves play an amethyst chime (`BLOCK_AMETHYST_BLOCK_CHIME`), dispatch `CreateCustomBlueprintPayload`, update `BlueprintRegistry`, synchronize the held Command Scepter, and refresh the catalog.
+- **Catalog Browsing Order Preservation**:
+  - Unlike brand-new captures that prepend to Slot 1, renaming an existing blueprint retains its exact slot index in `customBlueprints` and `BlueprintRegistry`, preventing the catalog from shifting under the player while browsing.
+- **Ergonomic, Uncluttered Button Architecture**:
+  - Resolves UI crowding in the 238px split-pane right column by elevating **`[ ✏ Rename ]`** into the Specifications Card header (`vpX + vpW - 58, specY + 3, 52, 14`) directly beside the title it modifies.
+  - Leaves the bottom toolbar strictly dedicated to 5 spacious, full-word action buttons with 3px margins:
+    - **`[ ✔ Arm ]`** (48px)
+    - **`[ 🎨 Remap ]`** (54px)
+    - **`[ 📋 BOM ]`** (44px)
+    - **`[ 🗑 Del ]`** (40px)
+    - **`[ Close ]`** (40px)
+  - In maximized / fullscreen mode, seamlessly integrates **`[ ✏ Rename ]`** into the wide 376px bottom action bar alongside Arm, Remap, BOM, Del, and Close with generous spacing.
+

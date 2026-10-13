@@ -395,29 +395,16 @@ public class ExampleModClient implements ClientModInitializer {
 			}
 
 			// Left-click / Attack key handling:
-			// In BUILD mode: cycles rotation.
 			// In DESIGN mode: sets Pos1 corner coordinate.
 			// In other modes: Shift + left-click deselects all minions.
+			// In BUILD mode: standard Minecraft hit/break; rotation handled via R key or GUI.
 			if (client.player != null && client.options.attackKey.wasPressed()) {
 				ItemStack heldScepter = CommandScepterItem.getHeldScepter(client.player);
 				if (!heldScepter.isEmpty()) {
 					CommandMode heldMode = CommandScepterItem.getMode(heldScepter);
 					boolean physicalSneak = client.options.sneakKey.isPressed() || client.player.isSneaking();
 
-					if (heldMode == CommandMode.BUILD) {
-						boolean isTargetingOwnedMinion = client.targetedEntity instanceof com.example.entity.custom.MinionEntity minion
-							&& minion.isOwner(client.player);
-						if (!isTargetingOwnedMinion) {
-							CommandScepterItem.cycleRotation(heldScepter, client.player);
-							ModClientNetworking.sendUpdateScepter(
-								heldMode,
-								CommandScepterItem.getBlueprintId(heldScepter),
-								CommandScepterItem.getTargetSquad(heldScepter),
-								CommandScepterItem.getRotationIndex(heldScepter),
-								false
-							);
-						}
-					} else if (heldMode == CommandMode.DESIGN) {
+					if (heldMode == CommandMode.DESIGN) {
 						long currentTick = client.world != null ? client.world.getTime() : 0L;
 						long currentTime = System.currentTimeMillis();
 						if (currentTick == lastDesignClickTick || (currentTime - lastDesignClickTime) < 350L || CommandScepterItem.isDesignClickDebounced()) {

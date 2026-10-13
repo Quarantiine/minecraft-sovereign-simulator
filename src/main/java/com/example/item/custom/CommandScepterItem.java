@@ -3731,7 +3731,8 @@ public class CommandScepterItem extends Item {
 		tooltip.add(Text.literal("§8• Right-Click Minion: Select / Deselect Unit (Squad Glowing Outline)"));
 		tooltip.add(Text.literal("§8• Right-Click Ground: 32b Waypoint Ping (Selected Units Move & Hold)"));
 		tooltip.add(Text.literal("§8• Right-Click Hostile: 32b Focus-Fire Ping (Crosshair Aiming & Drum SFX)"));
-		tooltip.add(Text.literal("§8• Shift + Left-Click: Deselect All Minions (Cycle Rotation in Build)"));
+		tooltip.add(Text.literal("§8• Shift + Left-Click: Deselect All Minions"));
+		tooltip.add(Text.literal("§8• Press [R]: Rotate Active Blueprint 90° (Build Mode)"));
 		tooltip.add(Text.literal("§8• Shift + Left-Click Minion: Prime as Escort (Right-Click leader to bind)"));
 		tooltip.add(Text.literal("§8• DESIGN: Left-Click for Pos1 then Pos2, Right-Click to Capture Blueprint"));
 		tooltip.add(Text.literal("§8• PATHWAY: Right-Click block to add waypoint, Sneak + Right-Click to remove"));

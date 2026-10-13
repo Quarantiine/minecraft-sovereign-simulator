@@ -35,7 +35,7 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 
 	public static final int WINDOW_WIDTH = 340;
 	public static final int WINDOW_HEIGHT = 246;
-	public static final int PAGE_SIZE = 4;
+	public static final int PAGE_SIZE = 5;
 
 	private final String blueprintId;
 	private final StructureBlueprint blueprint;
@@ -246,11 +246,8 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 		String readinessSummary = "§fReadiness: §l" + readinessPct + "%§r §7(" + totalAvail + "/" + totalReq + "b) §8| §e" + minionCount + " Minions in 64m";
 		context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(readinessSummary), this.width / 2, barY + 3, 0xFFFFFF);
 
-		// 4. Quick Category Tally Row
-		renderCategoryTallies(context, startX, startY + 49);
-
-		// 5. Material Breakdown Table Header
-		int tableHeaderY = startY + 63;
+		// 4. Material Breakdown Table Header
+		int tableHeaderY = startY + 49;
 		context.fill(startX + 16, tableHeaderY, startX + WINDOW_WIDTH - 16, tableHeaderY + 12, 0xDD182230);
 		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Material"), startX + 22, tableHeaderY + 2, 0xAAAAAA);
 		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Req"), startX + 128, tableHeaderY + 2, 0xAAAAAA);
@@ -258,10 +255,10 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Minions"), startX + 205, tableHeaderY + 2, 0xAAAAAA);
 		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Status / Delta"), startX + 252, tableHeaderY + 2, 0xAAAAAA);
 
-		// 6. Paginated Material Rows
+		// 5. Paginated Material Rows
 		List<ResourceEstimateEntry> entries = getEntries();
-		int rowStartY = startY + 76;
-		int rowHeight = 26;
+		int rowStartY = startY + 63;
+		int rowHeight = 24;
 
 		if (entries.isEmpty()) {
 			context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§8[ No Materials Required / Blueprint Empty ]"), this.width / 2, startY + 115, 0x888888);
@@ -283,7 +280,7 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 				ItemStack displayStack = item != null ? new ItemStack(item) : ItemStack.EMPTY;
 
 				if (!displayStack.isEmpty()) {
-					context.drawItem(displayStack, startX + 18, currentRowY + 2);
+					context.drawItem(displayStack, startX + 18, currentRowY + 3);
 				}
 
 				// Item name
@@ -291,26 +288,22 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 				if (itemName.length() > 14) {
 					itemName = itemName.substring(0, 13) + "…";
 				}
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§f" + itemName), startX + 38, currentRowY + 3, 0xFFFFFF);
-
-				// Category subtitle under item name
-				String catTag = getCategoryTag(item);
-				context.drawTextWithShadow(this.textRenderer, Text.literal(catTag), startX + 38, currentRowY + 13, 0x888888);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§f" + itemName), startX + 38, currentRowY + 6, 0xFFFFFF);
 
 				// Quantities
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§e" + entry.requiredCount()), startX + 130, currentRowY + 7, 0xFFFF55);
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§a" + entry.playerCount()), startX + 164, currentRowY + 7, 0x55FF55);
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§b" + entry.minionCount()), startX + 210, currentRowY + 7, 0x55FFFF);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§e" + entry.requiredCount()), startX + 130, currentRowY + 6, 0xFFFF55);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§a" + entry.playerCount()), startX + 164, currentRowY + 6, 0x55FF55);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§b" + entry.minionCount()), startX + 210, currentRowY + 6, 0x55FFFF);
 
 				// Status & Delta Badge
 				int itemDelta = entry.delta();
 				if (entry.isSatisfied()) {
 					String surplus = itemDelta > 0 ? " (+" + itemDelta + ")" : "";
-					context.drawTextWithShadow(this.textRenderer, Text.literal("§a✔ Ready" + surplus), startX + 252, currentRowY + 7, 0x55FF55);
+					context.drawTextWithShadow(this.textRenderer, Text.literal("§a✔ Ready" + surplus), startX + 252, currentRowY + 6, 0x55FF55);
 				} else if (entry.harvestable()) {
-					context.drawTextWithShadow(this.textRenderer, Text.literal("§6⚒ Auto (" + itemDelta + ")"), startX + 252, currentRowY + 7, 0xFFA500);
+					context.drawTextWithShadow(this.textRenderer, Text.literal("§6⚒ Auto (" + itemDelta + ")"), startX + 252, currentRowY + 6, 0xFFA500);
 				} else {
-					context.drawTextWithShadow(this.textRenderer, Text.literal("§c✕ Need (" + itemDelta + ")"), startX + 252, currentRowY + 7, 0xFF5555);
+					context.drawTextWithShadow(this.textRenderer, Text.literal("§c✕ Need (" + itemDelta + ")"), startX + 252, currentRowY + 6, 0xFF5555);
 				}
 
 				// Tooltip on row hover
@@ -331,92 +324,17 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 			}
 		}
 
-		// 7. Page Indicator
+		// 6. Page Indicator
 		int totalPages = getTotalPages();
 		context.drawCenteredTextWithShadow(
 			this.textRenderer,
 			Text.literal("§7Page §f" + (this.page + 1) + "§7/§f" + totalPages),
-			startX + 170,
-			startY + 193,
+			startX + 160,
+			startY + 190,
 			0xAAAAAA
 		);
 
 		super.render(context, mouseX, mouseY, delta);
-	}
-
-	private void renderCategoryTallies(DrawContext context, int startX, int startY) {
-		int stoneReq = 0, stoneAvail = 0;
-		int timberReq = 0, timberAvail = 0;
-		int glassReq = 0, glassAvail = 0;
-		int miscReq = 0, miscAvail = 0;
-
-		List<ResourceEstimateEntry> entries = getEntries();
-		for (ResourceEstimateEntry entry : entries) {
-			Identifier id = Identifier.tryParse(entry.itemId());
-			Item item = id != null ? Registries.ITEM.get(id) : null;
-			int req = entry.requiredCount();
-			int avail = Math.min(req, entry.totalAvailable());
-
-			if (isStoneCategory(item)) {
-				stoneReq += req;
-				stoneAvail += avail;
-			} else if (isTimberCategory(item)) {
-				timberReq += req;
-				timberAvail += avail;
-			} else if (isGlassCategory(item)) {
-				glassReq += req;
-				glassAvail += avail;
-			} else {
-				miscReq += req;
-				miscAvail += avail;
-			}
-		}
-
-		int pillW = 73;
-		renderCategoryPill(context, startX + 16, startY, "🪨 Stone", stoneAvail, stoneReq);
-		renderCategoryPill(context, startX + 16 + pillW + 4, startY, "🪵 Timber", timberAvail, timberReq);
-		renderCategoryPill(context, startX + 16 + (pillW + 4) * 2, startY, "🪟 Glass", glassAvail, glassReq);
-		renderCategoryPill(context, startX + 16 + (pillW + 4) * 3, startY, "🌿 Organic", miscAvail, miscReq);
-	}
-
-	private void renderCategoryPill(DrawContext context, int x, int y, String label, int avail, int req) {
-		int w = 73;
-		int h = 11;
-		int bg = req > 0 ? (avail >= req ? 0xAA1C3B24 : 0xAA2B231A) : 0x88182230;
-		context.fill(x, y, x + w, y + h, bg);
-		context.drawBorder(x, y, w, h, req > 0 ? (avail >= req ? 0xFF2ECC71 : 0xFFE2B007) : 0xFF3A4E63);
-
-		String text = req > 0 ? (label + " " + avail + "/" + req) : (label + " -");
-		context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7" + text), x + w / 2, y + 2, 0xCCCCCC);
-	}
-
-	private boolean isStoneCategory(Item item) {
-		if (item == null) return false;
-		return MinionHarvestingHelper.isQuarryResource(item)
-			|| MinionHarvestingHelper.isStoneBrickResource(item)
-			|| MinionHarvestingHelper.isSandstoneResource(item)
-			|| MinionHarvestingHelper.isDeepslateDerivedResource(item)
-			|| MinionHarvestingHelper.isPolishedStoneResource(item);
-	}
-
-	private boolean isTimberCategory(Item item) {
-		if (item == null) return false;
-		return MinionHarvestingHelper.isWoodResource(item)
-			|| MinionHarvestingHelper.isWoodenDerivative(item);
-	}
-
-	private boolean isGlassCategory(Item item) {
-		if (item == null) return false;
-		return MinionHarvestingHelper.isGlassResource(item)
-			|| Registries.ITEM.getId(item).getPath().contains("glass")
-			|| Registries.ITEM.getId(item).getPath().contains("pane");
-	}
-
-	private String getCategoryTag(Item item) {
-		if (isStoneCategory(item)) return "§8[Stone]";
-		if (isTimberCategory(item)) return "§6[Timber]";
-		if (isGlassCategory(item)) return "§b[Glass]";
-		return "§7[Detail]";
 	}
 
 	@Override

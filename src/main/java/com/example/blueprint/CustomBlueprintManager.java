@@ -247,18 +247,26 @@ public class CustomBlueprintManager {
 		Objects.requireNonNull(blueprint, "blueprint cannot be null");
 		String cleanId = blueprint.getId().toLowerCase().trim();
 		synchronized (this.customBlueprints) {
-			Map<String, StructureBlueprint> reordered = new java.util.LinkedHashMap<>();
-			reordered.put(cleanId, blueprint);
-			for (Map.Entry<String, StructureBlueprint> entry : this.customBlueprints.entrySet()) {
-				if (!entry.getKey().equalsIgnoreCase(cleanId)) {
-					reordered.put(entry.getKey(), entry.getValue());
+			if (this.customBlueprints.containsKey(cleanId)) {
+				this.customBlueprints.put(cleanId, blueprint);
+			} else {
+				Map<String, StructureBlueprint> reordered = new java.util.LinkedHashMap<>();
+				reordered.put(cleanId, blueprint);
+				for (Map.Entry<String, StructureBlueprint> entry : this.customBlueprints.entrySet()) {
+					if (!entry.getKey().equalsIgnoreCase(cleanId)) {
+						reordered.put(entry.getKey(), entry.getValue());
+					}
 				}
+				this.customBlueprints.clear();
+				this.customBlueprints.putAll(reordered);
 			}
-			this.customBlueprints.clear();
-			this.customBlueprints.putAll(reordered);
 		}
 		try {
-			BlueprintRegistry.registerCustomBlueprintFirst(blueprint);
+			if (BlueprintRegistry.isCustom(cleanId)) {
+				BlueprintRegistry.registerCustomBlueprint(blueprint, false);
+			} else {
+				BlueprintRegistry.registerCustomBlueprintFirst(blueprint);
+			}
 		} catch (Throwable ignored) {}
 		if (this.persistentState != null) {
 			this.persistentState.addBlueprint(blueprint);

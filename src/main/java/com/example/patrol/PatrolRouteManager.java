@@ -233,7 +233,8 @@ public class PatrolRouteManager {
 			);
 			for (MinionEntity m : routeMinions) {
 				m.setPatrolRouteId(-1);
-				m.setSitting(true);
+				m.setSitting(false);
+				m.setGuardAnchorPos(null);
 				m.getNavigation().stop();
 			}
 		}
@@ -242,7 +243,7 @@ public class PatrolRouteManager {
 
 	/**
 	 * Deletes a patrol route for a player, unbinds all assigned minions to prevent orphaned states,
-	 * places them into holding position, flushes persistent state to disk, and syncs to player.
+	 * sets them to roam freely, flushes persistent state to disk, and syncs to player.
 	 *
 	 * @param playerUuid The commanding player.
 	 * @param routeId    The channel ID to delete.

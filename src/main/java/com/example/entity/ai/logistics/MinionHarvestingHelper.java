@@ -267,9 +267,9 @@ public final class MinionHarvestingHelper {
 			return;
 		}
 
-		// 1. Look for existing container within 24 blocks
+		// 1. Look for existing container within 32 blocks
 		BlockPos minionPos = minion.getBlockPos();
-		BlockPos targetChestPos = findNearbyChestWithSpace(world, minionPos, 24);
+		BlockPos targetChestPos = findNearbyChestWithSpace(world, minionPos, 32);
 
 		// 2. If no container with space found, attempt autonomous chest crafting and deployment
 		if (targetChestPos == null) {
@@ -391,7 +391,7 @@ public final class MinionHarvestingHelper {
 	}
 
 	public static BlockPos findNearbyChestWithSpace(ServerWorld world, BlockPos center, int radius) {
-		for (BlockPos pos : BlockPos.iterateOutwards(center, radius, 4, radius)) {
+		for (BlockPos pos : BlockPos.iterateOutwards(center, radius, 8, radius)) {
 			BlockState state = world.getBlockState(pos);
 			if (state.isOf(Blocks.CHEST) || state.isOf(Blocks.BARREL) || state.isOf(Blocks.TRAPPED_CHEST)) {
 				BlockEntity be = world.getBlockEntity(pos);
@@ -454,7 +454,7 @@ public final class MinionHarvestingHelper {
 			return stack;
 		}
 
-		BlockPos targetChestPos = findNearbyChestWithSpace(world, searchCenter, 24);
+		BlockPos targetChestPos = findNearbyChestWithSpace(world, searchCenter, 32);
 		if (targetChestPos != null) {
 			BlockEntity be = world.getBlockEntity(targetChestPos);
 			if (be instanceof Inventory containerInv) {

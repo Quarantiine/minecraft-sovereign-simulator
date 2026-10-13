@@ -698,7 +698,7 @@ public class ConstructionManager {
 					if (!stack.isEmpty()) {
 						ItemStack rem = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(stack, world, anchor, session, session.getOwnerUuid());
 						if (!rem.isEmpty()) {
-							// If existing containers are full or none found within 24 blocks, attempt autonomous chest deployment by a nearby minion
+							// If existing containers are full or none found within 32 blocks, attempt autonomous chest deployment by a nearby minion
 							for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
 								BlockPos newChestPos = com.example.entity.ai.logistics.MinionHarvestingHelper.deployAutonomousChest(minion, world, session);
 								if (newChestPos != null) {

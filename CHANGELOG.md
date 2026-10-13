@@ -6,14 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
-## [1.0.2] - 2026-10-13
+## [1.1.0] - 2026-10-13
 
-### 🎨 Blueprint Block Replacement & Palette Remapping (Design Save GUI)
+### 🎨 Blueprint Palette Remapping, Rotation Cleanup, & Architecture Overhaul
 
 ### Added
 
-#### 🎨 Granular Blueprint Palette Remapping & Material Replacement (`DESIGN` Mode)
+#### 🎨 3D Blueprint Palette Remapping & Save Choice Dialog (`BlueprintExplorerScreen` & `BlueprintSaveChoiceModalScreen`)
+- **Direct 3D Viewer Palette Modification**: Players can now modify the block palette of any blueprint directly from within the 3D Architectural Blueprint Explorer (`BlueprintExplorerScreen`) via a new `[ 🎨 Remap ]` action button.
+- **Save Choice Dialog (`BlueprintSaveChoiceModalScreen`)**:
+  - Modal dialog allowing players to choose between **[ 💾 Overwrite ]** (updates existing blueprint in-place) or **[ 📋 Save as Copy ]** (generates a new unique blueprint identifier and registers a new custom blueprint).
+  - Configurable display name text field, prefilled with the blueprint name.
+  - Complete validation ensuring names are not empty and preventing saving blueprints where all blocks have been erased with Air (`getBlockCount() > 0`).
+  - Seamless networking integration: dispatches `CreateCustomBlueprintPayload`, updates the client registry immediately, and automatically arms the new blueprint onto the player's active Command Scepter.
+- **Directional Property Preservation (`StructureBlueprint.createRemapped`)**:
+  - Automatically transfers directional properties (`facing`, `half`, `shape`, `axis`, `waterlogged`, etc.) from source states to replacement blocks.
+  - Dynamically re-normalizes coordinate offsets to `(0, 0, 0)` if outer boundary blocks were erased.
 
+#### ✏️ Custom Blueprint Direct Renaming in 3D Viewer (`BlueprintExplorerScreen`)
+- **Direct 3D Viewer Renaming**: Players can now rename any custom blueprint directly from within the 3D Architectural Blueprint Explorer (`BlueprintExplorerScreen`) via a dedicated **`[ ✏ Rename ]`** button or keyboard shortcut **`[R]`** without having to recapture or clone the structure.
+- **Glassmorphic Rename Modal Dialog**:
+  - Centered modal dialog (`240x104`) with dark arcane styling (`#141E2B`), cyan glowing border (`#00E5FF`), and prefilled `TextFieldWidget` (up to 64 characters).
+  - Spacious action buttons: **`[ ✔ Save ]`** (`Enter`) and **`[ Cancel ]`** (`Escape`) with instant validation preventing empty or blank names.
+  - Crisp audio feedback: plays resonant chime (`BLOCK_AMETHYST_BLOCK_CHIME`) upon saving and warning bass note (`BLOCK_NOTE_BLOCK_BASS`) on blank input errors.
+- **Immediate Network & World Synchronization**:
+  - Dispatches `CreateCustomBlueprintPayload` to the server, updates client-side `BlueprintRegistry`, and refreshes catalog cards in real time.
+  - Held Command Scepters armed with the previous blueprint name automatically synchronize to the new name on both client and server.
+- **Catalog Order Preservation**:
+  - Updating or renaming an existing custom blueprint preserves its exact slot position in `customBlueprints` and `BlueprintRegistry` rather than bumping it to index 0, keeping the player's browsing context intact.
+
+
+#### 🎨 Granular Blueprint Palette Remapping & Material Replacement (`DESIGN` Mode)
 - **Dedicated Palette Remapping Modal (`BlueprintPaletteRemapModalScreen`)**:
   - Live volumetric scan aggregates unique non-air blocks into a sorted tally table (descending by block frequency).
   - Offers granular per-block row controls: `[ 🔍 Change ]` (opens searchable block picker), `[ ✕ Erase ]` (maps block to `minecraft:air` to omit it from the blueprint), and `[ ↺ Reset ]` (reverts to original captured block).
@@ -31,6 +54,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Dynamic Survival Bill of Materials (BOM) Recalculation**:
   - Substituted blocks dynamically recalculate `requiredItems`, immediately updating survival mode builder resource requirements and the Material Bill of Materials (BOM) in `BlueprintResourceEstimatorModalScreen`.
 
+#### ⚡ High-Performance 3D Voxel Engine (`BlueprintMeshCache` & Zero-Allocation Depth Sorting)
+- **Eliminated 3D Viewer Lag on Massive Structures**:
+  - Fixed severe frame drops when inspecting large captured structures (e.g., villages, keeps, or castles with 10k–50k blocks).
+  - **Surface Face Pre-Caching (`BlueprintMeshCache`)**: Solid-to-solid interior faces are pre-culled once when the blueprint loads, discarding 85–95% of hidden faces from runtime consideration.
+  - **Zero-Allocation Primitive Depth Buffer**: Replaced per-frame `ProjectedFace` object allocations and boxed `Double` comparator sorting with reusable primitive `long[]` sorting (`Arrays.sort`) encoding 32-bit depth and face index, completely eliminating per-frame garbage collection pauses.
+
 #### 🛡 Sentinel Wall-Penetrating "Hearing" & Sentry Senses (`MinionActiveTargetGoal`, `MinionEntity`)
 - **Exclusive Wall-Penetrating Echolocation for Sentinels**:
   - Sentinels (and `AUTO` minions dynamically adapted as Sentinels) gain supernatural sentry senses (`MinionEntity.hasSentrySense()`), autonomously detecting and targeting allowed hostile mobs through solid walls, closed doors, floors, and ceilings within their 24-block horizontal and expanded 128-block perimeter guard zone.
@@ -46,7 +75,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Pathfinding & Weapon Engagement Coordination**:
     - When locked onto a target behind cover, Sentinels navigate using pathfinding toward the hostile or flank around obstructions. If equipped with ranged weapons (`MinionRangedAttackGoal`), they maneuver around walls until line of sight is achieved before releasing arrows, fireworks, or tridents.
 
-### Fixed
+### Changed & Fixed
+
+#### 🎯 Left-Click / Ground-Hitting Blueprint Rotation Removed
+- **Standard Left-Click Behavior in Build Mode**: Left-clicking in `BUILD` mode is now a standard attack (survival) or break block (creative) action. Ground-hitting no longer triggers blueprint rotation.
+- **Exclusive `[R]` Key & GUI Rotation**: Blueprint rotation is now exclusively triggered via the `[R]` key or GUI rotation buttons.
+- Updated action bar flight guide (`[R] Rotate`), Command Scepter item tooltips, and client input contract tests.
+
+#### 📦 Expanded Builder Minion Container Search Radius (32 Blocks)
+- **Expanded Scavenge Radius**: Builder minions now search nearby containers (chests, barrels, shulker boxes) within **32 blocks horizontally and 16 blocks vertically** (expanded from 12 blocks).
+- **Sub-Millisecond Chunk Querying**: Implemented `chunk.getBlockEntities()` chunk-level container discovery, preventing server lag across large search volumes.
+- Minion harvesting helpers (`MinionHarvestingHelper`) updated to deposit excess materials and search for storage containers across 32 blocks.
+
+#### 🚶 Free Roaming on Patrol Route Deletion
+- **Eliminated Sitting/Holding Position on Route Deletion**: When a patrol route is deleted, assigned minions have their route assignment cleared (`setPatrolRouteId(-1)`), are set to not sit (`setSitting(false)`), have their guard anchor cleared, and stop navigation so their ambient wandering AI (`WanderAroundFarGoal`) engages immediately to roam freely.
+
+#### 🖥 Card Title & Size Text Overlap Resolved in 3D Explorer
+- **Fixed UI Collision**: Replaced vanilla `ButtonWidget` centering with `CardSlotButton` and two-line rendering in `BlueprintExplorerScreen.render()`:
+  - Card Title rendered at `cardY + 5`.
+  - Card Dimensions and Block Count rendered at `cardY + 18`.
+  - Selection indicators (`▶`) and badges (`[C]`, `[B]`) rendered with hover highlights without text collision.
+
+#### 🎛️ Uncluttered 3D Viewer Action Button Architecture (`BlueprintExplorerScreen`)
+- **Eliminated Button Crowding**: Redesigned the 3D Blueprint Explorer button layout to guarantee clean visual hierarchy, generous margins, and full-word labels without cramming or unreadable abbreviations.
+- **Specifications Card Rename Integration**:
+  - In standard split-pane mode, elevated the **`[ ✏ Rename ]`** button directly into the Specifications Card header (`vpX + vpW - 58, specY + 3, 52, 14`) right beside the blueprint title it modifies.
+  - Automatically trims long titles with ellipsis while reserving dedicated space for the rename button when a custom blueprint is selected, and gives full width to built-in blueprint titles.
+- **Spacious Bottom Action Bar**:
+  - The bottom bar in split-pane mode now houses exactly 5 full-word action buttons across the 238px pane with 3px margins: **`[ ✔ Arm ]`** (48px), **`[ 🎨 Remap ]`** (54px), **`[ 📋 BOM ]`** (44px), **`[ 🗑 Del ]`** (40px), and **`[ Close ]`** (40px).
+  - Maximized mode seamlessly distributes all 6 actions across the expanded 376px bottom toolbar with spacious gaps and zero visual clutter.
+
+#### 📋 Material Bill of Materials (BOM) Cleanup
+- Removed the redundant category tallies section (`Stone 0/N | Timber 0/N | Glass 0/N | Organic 0/N`) from `BlueprintResourceEstimatorModalScreen`, shifting table rows up and displaying 5 rows per page for a cleaner layout.
 
 #### ⛏ Seamless Building & Mining Session Chaining & Egress Prevention
 - **Eliminated Egress Traps & Forced Ground Landings for Builders & Miners**:

@@ -59,7 +59,7 @@ import net.minecraft.world.World;
  * Supports two resource paradigms:
  * 1. Creative Mode: instant, infinite placement at zero resource cost.
  * 2. Survival Mode: validates minion's 9-slot inventory first; if missing,
- *    scavenges nearby containers (chests, barrels, shulker boxes) within 12 blocks;
+ *    scavenges nearby containers (chests, barrels, shulker boxes) within 32 blocks;
  *    if absent, emits smoke, dispenser fail sound, releases the task, and notifies the player.
  */
 public class MinionBuildGoal extends Goal {
@@ -693,7 +693,7 @@ public class MinionBuildGoal extends Goal {
 				minionInv.removeStack(minionSlot, 1);
 				hasResources = true;
 			} else {
-				// 2. Scavenge nearby containers (chests, barrels, shulkers) within 12 blocks
+				// 2. Scavenge nearby containers (chests, barrels, shulkers) within 32 blocks
 				hasResources = scavengeNearbyContainers(serverWorld, requiredItem);
 			}
 
@@ -871,44 +871,59 @@ public class MinionBuildGoal extends Goal {
 	}
 
 	/**
-	 * Scavenges nearby container block entities within 12 blocks of the minion or session anchor.
+	 * Scavenges nearby container block entities within 32 blocks of the minion or session anchor.
+	 * Uses chunk block-entity querying for sub-millisecond lookup across large volumes.
 	 */
 	private boolean scavengeNearbyContainers(ServerWorld world, Item requiredItem) {
 		BlockPos center = this.minion.getBlockPos();
-		int radius = 12;
+		int radius = 32;
+		int verticalRadius = 16;
 
-		BlockPos minPos = center.add(-radius, -4, -radius);
-		BlockPos maxPos = center.add(radius, 4, radius);
+		int minChunkX = (center.getX() - radius) >> 4;
+		int maxChunkX = (center.getX() + radius) >> 4;
+		int minChunkZ = (center.getZ() - radius) >> 4;
+		int maxChunkZ = (center.getZ() + radius) >> 4;
 
-		for (BlockPos pos : BlockPos.iterate(minPos, maxPos)) {
-			BlockEntity be = world.getBlockEntity(pos);
-			if (be instanceof Inventory containerInv) {
-				int slot = findItemSlot(containerInv, requiredItem);
-				if (slot != -1) {
-					containerInv.removeStack(slot, 1);
-					be.markDirty();
+		for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+			for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+				if (!world.isChunkLoaded(cx, cz)) continue;
+				net.minecraft.world.chunk.WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, center.getY(), cz << 4));
+				if (chunk == null) continue;
+				for (BlockEntity be : chunk.getBlockEntities().values()) {
+					if (be instanceof Inventory containerInv) {
+						BlockPos pos = be.getPos();
+						if (Math.abs(pos.getX() - center.getX()) <= radius
+							&& Math.abs(pos.getY() - center.getY()) <= verticalRadius
+							&& Math.abs(pos.getZ() - center.getZ()) <= radius) {
+							int slot = findItemSlot(containerInv, requiredItem);
+							if (slot != -1) {
+								containerInv.removeStack(slot, 1);
+								be.markDirty();
 
-					// Arcane scavenging particle trail and chest creak sound
-					world.spawnParticles(
-						ParticleTypes.CLOUD,
-						pos.getX() + 0.5,
-						pos.getY() + 0.8,
-						pos.getZ() + 0.5,
-						4,
-						0.1,
-						0.1,
-						0.1,
-						0.02
-					);
-					world.playSound(
-						null,
-						pos,
-						SoundEvents.BLOCK_CHEST_OPEN,
-						SoundCategory.BLOCKS,
-						0.4F,
-						1.3F
-					);
-					return true;
+								// Arcane scavenging particle trail and chest creak sound
+								world.spawnParticles(
+									ParticleTypes.CLOUD,
+									pos.getX() + 0.5,
+									pos.getY() + 0.8,
+									pos.getZ() + 0.5,
+									4,
+									0.1,
+									0.1,
+									0.1,
+									0.02
+								);
+								world.playSound(
+									null,
+									pos,
+									SoundEvents.BLOCK_CHEST_OPEN,
+									SoundCategory.BLOCKS,
+									0.4F,
+									1.3F
+								);
+								return true;
+							}
+						}
+					}
 				}
 			}
 		}

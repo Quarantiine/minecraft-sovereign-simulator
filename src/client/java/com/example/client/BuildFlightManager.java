@@ -129,7 +129,7 @@ public class BuildFlightManager {
 				if (statusMessageCooldown <= 0) {
 					statusMessageCooldown = 50;
 					player.sendMessage(
-						Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R/L-Click] Rotate"),
+						Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R] Rotate"),
 						true
 					);
 				}

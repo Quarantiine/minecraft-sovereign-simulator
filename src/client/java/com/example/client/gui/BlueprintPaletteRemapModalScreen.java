@@ -175,13 +175,18 @@ public class BlueprintPaletteRemapModalScreen extends Screen {
 	}
 
 	private void applyAndClose() {
-		if (this.onApplyCallback != null) {
-			this.onApplyCallback.accept(new LinkedHashMap<>(this.activeReplacements));
-		}
 		if (this.client != null) {
 			this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
 		}
-		this.close();
+		Map<Identifier, Identifier> chosen = new LinkedHashMap<>(this.activeReplacements);
+		if (this.parentScreen != null && this.client != null) {
+			this.client.setScreen(this.parentScreen);
+		} else {
+			super.close();
+		}
+		if (this.onApplyCallback != null) {
+			this.onApplyCallback.accept(chosen);
+		}
 	}
 
 	private int contentHeight() {

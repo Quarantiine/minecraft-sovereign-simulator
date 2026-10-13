@@ -174,7 +174,7 @@ public class BlueprintExplorerAndOrderingTest {
 		Assertions.assertTrue(content.contains("sliceDownBtn") && content.contains("sliceUpBtn"), "Must declare layer slicer buttons");
 
 		// 3. True 3D Rotated Geometry & Occlusion Culling
-		Assertions.assertTrue(content.contains("ProjectedFace"), "Must define ProjectedFace for true 3D rotated face quads");
+		Assertions.assertTrue(content.contains("CachedFace") || content.contains("ProjectedFace"), "Must define CachedFace/ProjectedFace for true 3D rotated face quads");
 		Assertions.assertTrue(content.contains("isOpaque"), "Must define isOpaque for 6-directional interior block occlusion culling");
 		Assertions.assertTrue(content.contains("sunX") && content.contains("sunY"), "Must define directional sun lighting vector");
 
@@ -193,6 +193,13 @@ public class BlueprintExplorerAndOrderingTest {
 		Assertions.assertTrue(content.contains("resolveDyeColor"), "Must define resolveDyeColor for 16-color wool/concrete/terracotta/glass");
 		Assertions.assertTrue(content.contains("poppy") && content.contains("dandelion") && content.contains("blue_orchid"),
 			"Must map authentic flower bloom colors so flora does not look like stone");
+
+		// 7. Palette Remap, Card Slot Isolation & High-Performance Mesh Pre-caching
+		Assertions.assertTrue(content.contains("remapBtn"), "Must declare remapBtn for 3D explorer palette remapping");
+		Assertions.assertTrue(content.contains("openPaletteRemapModal"), "Must define openPaletteRemapModal method");
+		Assertions.assertTrue(content.contains("CardSlotButton"), "Must define CardSlotButton to prevent card title/size collision");
+		Assertions.assertTrue(content.contains("BlueprintMeshCache"), "Must define BlueprintMeshCache for zero-allocation rendering");
+		Assertions.assertTrue(content.contains("sortBuffer"), "Must define primitive sortBuffer for zero-allocation depth sorting");
 	}
 
 	@Test

@@ -102,8 +102,8 @@ public class PatrolRouteAndHierarchyTest {
 			"PatrolRouteManager must provide deleteRoute overload with ServerWorld to unbind patrolling minions"
 		);
 		Assertions.assertTrue(
-			managerContent.contains("m.setPatrolRouteId(-1);") && managerContent.contains("m.setSitting(true);"),
-			"PatrolRouteManager.deleteRoute must reset minion route ID to -1 and station them sitting"
+			managerContent.contains("m.setPatrolRouteId(-1);") && managerContent.contains("m.setSitting(false);"),
+			"PatrolRouteManager.deleteRoute must reset minion route ID to -1 and set them to roam freely"
 		);
 	}
 

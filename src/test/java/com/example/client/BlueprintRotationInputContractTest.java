@@ -18,7 +18,7 @@ import java.nio.file.Path;
 public class BlueprintRotationInputContractTest {
 
 	@Test
-	@DisplayName("Source Invariant: ExampleModClient rotates blueprint on R key and on Left-Click in BUILD mode")
+	@DisplayName("Source Invariant: ExampleModClient rotates blueprint on R key and leaves Left-Click standard in BUILD mode")
 	void testClientRotationControls() throws IOException {
 		Path clientPath = Path.of("src/client/java/com/example/client/ExampleModClient.java");
 		Assertions.assertTrue(Files.exists(clientPath), "ExampleModClient.java must exist");
@@ -31,12 +31,10 @@ public class BlueprintRotationInputContractTest {
 			"R key in BUILD mode must cycle blueprint rotation"
 		);
 
-		// 2. Left-click / attackKey cycles rotation in BUILD mode
-		Assertions.assertTrue(
-			content.contains("client.options.attackKey.wasPressed()") &&
-			content.contains("heldMode == CommandMode.BUILD") &&
-			content.contains("isTargetingOwnedMinion"),
-			"Left-click attack key in BUILD mode must cycle blueprint rotation when not targeting owned minion"
+		// 2. Left-click / attackKey in BUILD mode is standard Minecraft hit/break (not intercepted for rotation)
+		Assertions.assertFalse(
+			content.contains("heldMode == CommandMode.BUILD") && content.contains("CommandScepterItem.cycleRotation(heldScepter, client.player)"),
+			"Left-click attack key in BUILD mode must not hijack click for rotation"
 		);
 
 		// 3. Physical sneak detection for opening Command Hub GUI in flight
@@ -47,7 +45,7 @@ public class BlueprintRotationInputContractTest {
 	}
 
 	@Test
-	@DisplayName("Source Invariant: BuildFlightManager supports altitude adjustment using Space and Shift keys")
+	@DisplayName("Source Invariant: BuildFlightManager supports altitude adjustment using Space and Shift keys and R for rotation")
 	void testFlightAltitudeAdjustmentControls() throws IOException {
 		Path flightPath = Path.of("src/client/java/com/example/client/BuildFlightManager.java");
 		Assertions.assertTrue(Files.exists(flightPath), "BuildFlightManager.java must exist");
@@ -67,30 +65,30 @@ public class BlueprintRotationInputContractTest {
 
 		// 3. Action bar feedback includes keys
 		Assertions.assertTrue(
-			content.contains("[Space/Shift] Alt") && content.contains("[R/L-Click] Rotate"),
-			"Action bar message must guide player on flight altitude and rotation keys"
+			content.contains("[Space/Shift] Alt") && content.contains("[R] Rotate"),
+			"Action bar message must guide player on flight altitude and R rotation key"
 		);
 	}
 
 	@Test
-	@DisplayName("Source Invariant: ExampleMod handles left-click attack block and entity callbacks in BUILD mode")
+	@DisplayName("Source Invariant: ExampleMod Attack callbacks do not hijack BUILD mode for rotation")
 	void testServerAttackCallbacks() throws IOException {
 		Path modPath = Path.of("src/main/java/com/example/ExampleMod.java");
 		Assertions.assertTrue(Files.exists(modPath), "ExampleMod.java must exist");
 		String content = Files.readString(modPath);
 
-		// 1. Attack block in BUILD mode
+		// 1. Attack block in BUILD mode is standard hit/break (not intercepted)
 		Assertions.assertTrue(
 			content.contains("AttackBlockCallback.EVENT.register"),
 			"AttackBlockCallback must be registered"
 		);
-		Assertions.assertTrue(
+		Assertions.assertFalse(
 			content.contains("mode == CommandMode.BUILD") &&
 			content.contains("CommandScepterItem.cycleRotation(stack, player)"),
-			"Attack block in BUILD mode must cycle rotation"
+			"Attack block in BUILD mode must not hijack block hitting/mining for rotation"
 		);
 
-		// 2. Attack entity in BUILD mode
+		// 2. Attack entity callback registered
 		Assertions.assertTrue(
 			content.contains("AttackEntityCallback.EVENT.register"),
 			"AttackEntityCallback must be registered"

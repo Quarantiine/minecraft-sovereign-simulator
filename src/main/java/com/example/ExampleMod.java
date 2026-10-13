@@ -82,20 +82,15 @@ public class ExampleMod implements ModInitializer {
 		});
 
 		// Register attack block callback for the Command Scepter:
-		// In BUILD mode: cycles blueprint rotation
 		// In DESIGN mode: steps corner coordinates (Pos1 -> Pos2 -> restart)
 		// In PATHWAY mode: left-click (punch) an existing waypoint block removes it
 		// In other modes: sneak + left-click deselects all minions
+		// Note: In BUILD mode, left-click is standard Minecraft hit (survival) / break (creative); rotation is via 'R' or GUI.
 		AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
 			ItemStack stack = CommandScepterItem.getHeldScepter(player);
 			if (!stack.isEmpty()) {
 				CommandMode mode = CommandScepterItem.getMode(stack);
-				if (mode == CommandMode.BUILD) {
-					if (!world.isClient()) {
-						CommandScepterItem.cycleRotation(stack, player);
-					}
-					return ActionResult.SUCCESS;
-				} else if (mode == CommandMode.DESIGN) {
+				if (mode == CommandMode.DESIGN) {
 					if (world.isClient()) {
 						boolean sneaking = player.isSneaking();
 						BlockPos effectivePos = world.getBlockState(pos).isReplaceable()
@@ -162,8 +157,8 @@ public class ExampleMod implements ModInitializer {
 
 		// Register attack entity callback:
 		// 1. Prevents damaging owned minions with the Command Scepter, toggling selection instead.
-		// 2. In BUILD mode: cycles rotation when left-clicking non-owned entities.
-		// 3. In other modes: handles sneak + left-click deselecting.
+		// 2. In other modes: handles sneak + left-click deselecting.
+		// Note: In BUILD mode, left-clicking non-minion entities attacks them normally.
 		AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
 			ItemStack stack = CommandScepterItem.getHeldScepter(player);
 			if (!stack.isEmpty()) {
@@ -194,12 +189,7 @@ public class ExampleMod implements ModInitializer {
 				}
 
 				CommandMode mode = CommandScepterItem.getMode(stack);
-				if (mode == CommandMode.BUILD) {
-					if (!world.isClient()) {
-						CommandScepterItem.cycleRotation(stack, player);
-					}
-					return ActionResult.SUCCESS;
-				} else if (mode == CommandMode.DESIGN) {
+				if (mode == CommandMode.DESIGN) {
 					if (world.isClient()) {
 						BlockPos entityPos = entity.getBlockPos();
 						boolean sneaking = player.isSneaking();
