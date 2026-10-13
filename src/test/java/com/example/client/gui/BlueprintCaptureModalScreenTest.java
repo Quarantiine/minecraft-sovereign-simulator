@@ -202,5 +202,35 @@ public class BlueprintCaptureModalScreenTest {
 		Assertions.assertEquals("", precompiledModal.getBlueprintDescription());
 		Assertions.assertEquals("Precompiled Watchtower", precompiledModal.getPrecompiledBlueprint().getName());
 	}
+
+	@Test
+	@DisplayName("Modal correctly manages active block replacements lifecycle and clearing")
+	void testActiveReplacementsLifecycle() {
+		BlueprintCaptureModalScreen modal = new BlueprintCaptureModalScreen();
+		Assertions.assertTrue(modal.getActiveReplacements().isEmpty());
+
+		net.minecraft.util.Identifier moss = net.minecraft.util.Identifier.of("minecraft", "moss_block");
+		net.minecraft.util.Identifier cobble = net.minecraft.util.Identifier.of("minecraft", "cobblestone");
+		net.minecraft.util.Identifier air = net.minecraft.util.Identifier.of("minecraft", "air");
+
+		modal.setBlockReplacement(moss, cobble);
+		Assertions.assertEquals(1, modal.getActiveReplacements().size());
+		Assertions.assertEquals(cobble, modal.getActiveReplacements().get(moss));
+
+		// Erasing with air
+		net.minecraft.util.Identifier dirt = net.minecraft.util.Identifier.of("minecraft", "dirt");
+		modal.setBlockReplacement(dirt, air);
+		Assertions.assertEquals(2, modal.getActiveReplacements().size());
+		Assertions.assertEquals(air, modal.getActiveReplacements().get(dirt));
+
+		// Resetting individual block
+		modal.setBlockReplacement(moss, null);
+		Assertions.assertEquals(1, modal.getActiveReplacements().size());
+		Assertions.assertNull(modal.getActiveReplacements().get(moss));
+
+		// Full reset via clearSelection
+		modal.clearSelection();
+		Assertions.assertTrue(modal.getActiveReplacements().isEmpty());
+	}
 }
 

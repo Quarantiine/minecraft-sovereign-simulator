@@ -4,7 +4,10 @@ import com.example.blueprint.StructureBlueprint;
 import com.example.client.network.ModClientNetworking;
 import com.example.client.renderer.ClientDesignCaptureTracker;
 import com.example.item.custom.CommandScepterItem;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -15,6 +18,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import org.lwjgl.glfw.GLFW;
 
@@ -26,6 +30,7 @@ import org.lwjgl.glfw.GLFW;
  * - Real-time spatial dimension, coordinate, and voxel volume validation (<= 64x96x64, <= 393216 voxels).
  * - Vertical height offset adjustment ([-5], [-1], [+1], [+5]) cleanly separated from all title and info text.
  * - Blueprint name and description input with sanitization.
+ * - Granular block palette remapping (substituting materials or erasing with Air).
  * - Client-to-server compilation dispatch via {@link ModClientNetworking#sendCaptureSpatialBlueprint}.
  */
 public class BlueprintCaptureModalScreen extends Screen {
@@ -44,6 +49,9 @@ public class BlueprintCaptureModalScreen extends Screen {
 	private ButtonWidget saveButton;
 	private ButtonWidget cancelButton;
 	private ButtonWidget clearCornersButton;
+	private ButtonWidget remapButton;
+
+	private final Map<Identifier, Identifier> activeReplacements = new LinkedHashMap<>();
 
 	private boolean closed = false;
 
@@ -205,6 +213,19 @@ public class BlueprintCaptureModalScreen extends Screen {
 			this.addDrawableChild(minus1);
 			this.addDrawableChild(plus1);
 			this.addDrawableChild(plus5);
+
+			this.remapButton = ButtonWidget.builder(getRemapButtonText(), b -> openPaletteRemapScreen())
+				.dimensions(startX + 210, hBtnY, 90, 18)
+				.tooltip(Tooltip.of(Text.literal("Change block types or erase unwanted blocks from the blueprint")))
+				.build();
+			this.addDrawableChild(this.remapButton);
+		} else if (this.precompiledBlueprint != null) {
+			int hBtnY = startY + 64;
+			this.remapButton = ButtonWidget.builder(getRemapButtonText(), b -> openPaletteRemapScreen())
+				.dimensions(startX + 20, hBtnY, 110, 18)
+				.tooltip(Tooltip.of(Text.literal("Change block types or erase unwanted blocks from the blueprint")))
+				.build();
+			this.addDrawableChild(this.remapButton);
 		}
 
 		// 2. Name text input field
@@ -245,6 +266,38 @@ public class BlueprintCaptureModalScreen extends Screen {
 		updateSaveButtonState();
 	}
 
+	private Text getRemapButtonText() {
+		if (this.activeReplacements.isEmpty()) {
+			return Text.literal("§d🎨 Remap");
+		}
+		return Text.literal("§d🎨 Remap §e(" + this.activeReplacements.size() + ")");
+	}
+
+	public void updateRemapButtonLabel() {
+		if (this.remapButton != null) {
+			this.remapButton.setMessage(getRemapButtonText());
+		}
+	}
+
+	public void openPaletteRemapScreen() {
+		if (this.client != null) {
+			this.client.setScreen(new BlueprintPaletteRemapModalScreen(
+				this.pos1,
+				this.pos2,
+				this.precompiledBlueprint,
+				this.activeReplacements,
+				this,
+				updated -> {
+					this.activeReplacements.clear();
+					if (updated != null) {
+						this.activeReplacements.putAll(updated);
+					}
+					updateRemapButtonLabel();
+				}
+			));
+		}
+	}
+
 	private void adjustModalHeight(int delta) {
 		if (this.pos1 == null || this.pos2 == null) return;
 		ClientDesignCaptureTracker.adjustHeight(delta);
@@ -263,6 +316,7 @@ public class BlueprintCaptureModalScreen extends Screen {
 	}
 
 	public void clearSelection() {
+		this.activeReplacements.clear();
 		ClientDesignCaptureTracker.clear();
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.clearDesignCorners(this.scepterStack);
@@ -296,12 +350,30 @@ public class BlueprintCaptureModalScreen extends Screen {
 			StructureBlueprint.Builder builder = StructureBlueprint.builder(cleanId, cleanName)
 				.description(cleanDesc);
 			for (com.example.blueprint.BlueprintBlock block : this.precompiledBlueprint.getBlocks()) {
-				builder.addBlock(block.offset(), block.state());
+				net.minecraft.block.BlockState state = block.state();
+				if (state != null && !state.isAir()) {
+					if (!this.activeReplacements.isEmpty() && state.getBlock() != null && net.minecraft.registry.Registries.BLOCK != null) {
+						Identifier originalId = net.minecraft.registry.Registries.BLOCK.getId(state.getBlock());
+						if (this.activeReplacements.containsKey(originalId)) {
+							Identifier targetId = this.activeReplacements.get(originalId);
+							if (targetId.equals(Identifier.of("minecraft", "air"))) {
+								continue;
+							}
+							if (net.minecraft.registry.Registries.BLOCK.containsId(targetId)) {
+								net.minecraft.block.Block targetBlock = net.minecraft.registry.Registries.BLOCK.get(targetId);
+								if (targetBlock != null) {
+									state = StructureBlueprint.transferBlockStateProperties(state, targetBlock);
+								}
+							}
+						}
+					}
+					builder.addBlock(block.offset(), state);
+				}
 			}
 			StructureBlueprint compiled = builder.build();
 			ModClientNetworking.sendCreateCustomBlueprint(compiled);
 		} else if (this.pos1 != null && this.pos2 != null) {
-			ModClientNetworking.sendCaptureSpatialBlueprint(cleanId, cleanName, cleanDesc, this.pos1, this.pos2);
+			ModClientNetworking.sendCaptureSpatialBlueprint(cleanId, cleanName, cleanDesc, this.pos1, this.pos2, this.activeReplacements);
 		}
 
 		// Update scepter to point to the newly captured blueprint
@@ -459,6 +531,23 @@ public class BlueprintCaptureModalScreen extends Screen {
 
 	public ButtonWidget getClearCornersButton() {
 		return this.clearCornersButton;
+	}
+
+	public ButtonWidget getRemapButton() {
+		return this.remapButton;
+	}
+
+	public Map<Identifier, Identifier> getActiveReplacements() {
+		return Collections.unmodifiableMap(this.activeReplacements);
+	}
+
+	public void setBlockReplacement(Identifier from, Identifier to) {
+		if (to == null) {
+			this.activeReplacements.remove(from);
+		} else {
+			this.activeReplacements.put(from, to);
+		}
+		updateRemapButtonLabel();
 	}
 
 	@Override

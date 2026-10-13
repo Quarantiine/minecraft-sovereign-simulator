@@ -1886,6 +1886,7 @@ public class CommandScepterItem extends Item {
 						);
 					}
 				}
+				attackMinions.removeIf(m -> m.matchesRole(MinionRole.BUILDER));
 				attackMinions.removeIf(m -> m.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE);
 
 				// Sort hostiles by proximity to player (frontline to backline)
@@ -3282,6 +3283,7 @@ public class CommandScepterItem extends Item {
 					m -> m.isAlive() && m.isOwner(player) && !m.isSitting() && m.getPatrolRouteId() < 0 && filterSquad.matches(m.getSquad())
 				);
 			}
+			minions.removeIf(m -> m.matchesRole(MinionRole.BUILDER));
 			minions.removeIf(m -> m.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE);
 
 			for (MinionEntity minion : minions) {
@@ -3481,13 +3483,13 @@ public class CommandScepterItem extends Item {
 			List<MinionEntity> minions = world.getEntitiesByClass(
 				MinionEntity.class,
 				searchBox,
-				m -> m.isAlive() && m.isOwner(player) && m.isSelected() && filterSquad.matches(m.getSquad())
+				m -> m.isAlive() && m.isOwner(player) && m.isSelected() && !m.matchesRole(MinionRole.BUILDER) && filterSquad.matches(m.getSquad())
 			);
 			if (minions.isEmpty()) {
 				minions = world.getEntitiesByClass(
 					MinionEntity.class,
 					searchBox,
-					m -> m.isAlive() && m.isOwner(player) && !m.isSitting() && filterSquad.matches(m.getSquad())
+					m -> m.isAlive() && m.isOwner(player) && !m.isSitting() && !m.matchesRole(MinionRole.BUILDER) && filterSquad.matches(m.getSquad())
 				);
 			}
 
@@ -3522,13 +3524,13 @@ public class CommandScepterItem extends Item {
 		List<MinionEntity> minions = world.getEntitiesByClass(
 			MinionEntity.class,
 			searchBox,
-			m -> m.isAlive() && m.isOwner(player) && m.isSelected() && filterSquad.matches(m.getSquad())
+			m -> m.isAlive() && m.isOwner(player) && m.isSelected() && !m.matchesRole(MinionRole.BUILDER) && filterSquad.matches(m.getSquad())
 		);
 		if (minions.isEmpty()) {
 			minions = world.getEntitiesByClass(
 				MinionEntity.class,
 				searchBox,
-				m -> m.isAlive() && m.isOwner(player) && !m.isSitting() && filterSquad.matches(m.getSquad())
+				m -> m.isAlive() && m.isOwner(player) && !m.isSitting() && !m.matchesRole(MinionRole.BUILDER) && filterSquad.matches(m.getSquad())
 			);
 		}
 

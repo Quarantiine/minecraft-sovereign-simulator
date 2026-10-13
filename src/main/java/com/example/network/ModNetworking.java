@@ -10,17 +10,23 @@ import com.example.item.ModItems;
 import com.example.item.custom.CommandScepterItem;
 import com.example.screen.MinionScreenHandler;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 
@@ -857,6 +863,26 @@ public class ModNetworking {
 		}
 
 		try {
+			// Strict non-block guardrail: validate block replacements
+			Map<Identifier, Identifier> validatedReplacements = new LinkedHashMap<>();
+			if (payload.blockReplacements() != null && !payload.blockReplacements().isEmpty()) {
+				for (Map.Entry<Identifier, Identifier> entry : payload.blockReplacements().entrySet()) {
+					Identifier from = entry.getKey();
+					Identifier to = entry.getValue();
+					if (from == null || to == null) continue;
+					if (to.equals(Identifier.of("minecraft", "air"))) {
+						validatedReplacements.put(from, to);
+						continue;
+					}
+					if (Registries.BLOCK.containsId(to)) {
+						Block toBlock = Registries.BLOCK.get(to);
+						if (toBlock != null && (toBlock.asItem() instanceof BlockItem) && !toBlock.getDefaultState().isAir()) {
+							validatedReplacements.put(from, to);
+						}
+					}
+				}
+			}
+
 			com.example.blueprint.StructureBlueprint blueprint = com.example.blueprint.CustomBlueprintManager.getInstance()
 				.captureAndSaveBlueprint(
 					player.getServer(),
@@ -866,7 +892,8 @@ public class ModNetworking {
 					pos2,
 					payload.id(),
 					payload.name(),
-					payload.description()
+					payload.description(),
+					validatedReplacements
 				);
 
 			net.minecraft.item.ItemStack mainHand = player.getMainHandStack();

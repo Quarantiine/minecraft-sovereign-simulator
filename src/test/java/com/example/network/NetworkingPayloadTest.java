@@ -465,8 +465,41 @@ public class NetworkingPayloadTest {
 			CaptureSpatialBlueprintPayload decoded = CaptureSpatialBlueprintPayload.PACKET_CODEC.decode(buf);
 			Assertions.assertEquals(payload, decoded);
 			Assertions.assertEquals(0, buf.readableBytes());
+			Assertions.assertTrue(decoded.blockReplacements().isEmpty());
 		} finally {
 			buf.release();
+		}
+
+		// Block replacements mapping serialization roundtrip
+		java.util.Map<net.minecraft.util.Identifier, net.minecraft.util.Identifier> replacements = new java.util.LinkedHashMap<>();
+		replacements.put(net.minecraft.util.Identifier.of("minecraft", "moss_block"), net.minecraft.util.Identifier.of("minecraft", "cobblestone"));
+		replacements.put(net.minecraft.util.Identifier.of("minecraft", "dirt"), net.minecraft.util.Identifier.of("minecraft", "air"));
+
+		CaptureSpatialBlueprintPayload remappedPayload = new CaptureSpatialBlueprintPayload(
+			"custom_remapped",
+			"Remapped Home",
+			"House with moss swapped to cobblestone",
+			pos1,
+			pos2,
+			replacements
+		);
+		Assertions.assertEquals(2, remappedPayload.blockReplacements().size());
+		Assertions.assertEquals(net.minecraft.util.Identifier.of("minecraft", "cobblestone"), remappedPayload.blockReplacements().get(net.minecraft.util.Identifier.of("minecraft", "moss_block")));
+		Assertions.assertEquals(net.minecraft.util.Identifier.of("minecraft", "air"), remappedPayload.blockReplacements().get(net.minecraft.util.Identifier.of("minecraft", "dirt")));
+
+		RegistryByteBuf remapBuf = new RegistryByteBuf(Unpooled.buffer(), null);
+		try {
+			CaptureSpatialBlueprintPayload.PACKET_CODEC.encode(remapBuf, remappedPayload);
+			Assertions.assertTrue(remapBuf.readableBytes() > 0);
+
+			CaptureSpatialBlueprintPayload decodedRemapped = CaptureSpatialBlueprintPayload.PACKET_CODEC.decode(remapBuf);
+			Assertions.assertEquals(remappedPayload, decodedRemapped);
+			Assertions.assertEquals(2, decodedRemapped.blockReplacements().size());
+			Assertions.assertEquals(net.minecraft.util.Identifier.of("minecraft", "cobblestone"), decodedRemapped.blockReplacements().get(net.minecraft.util.Identifier.of("minecraft", "moss_block")));
+			Assertions.assertEquals(net.minecraft.util.Identifier.of("minecraft", "air"), decodedRemapped.blockReplacements().get(net.minecraft.util.Identifier.of("minecraft", "dirt")));
+			Assertions.assertEquals(0, remapBuf.readableBytes());
+		} finally {
+			remapBuf.release();
 		}
 	}
 

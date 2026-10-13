@@ -2964,13 +2964,8 @@ public final class MinionHarvestingHelper {
 		if (warrior != null) {
 			return commissionWarriorHunt(builder, warrior, targetMob, requiredItem, world);
 		} else {
-			// Solo Hunting Fallback: Builder engages target mob directly
-			builder.setProcurementRequesterUuid(builder.getUuid());
-			builder.setProcurementItem(requiredItem);
-			builder.setProcurementTarget(targetMob);
-			builder.setTarget(targetMob);
-			world.playSound(null, builder.getX(), builder.getY(), builder.getZ(), SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.NEUTRAL, 0.8F, 1.2F);
-			return true;
+			// Builder minions do not fight. Mob procurement requires an available Warrior thrall.
+			return false;
 		}
 	}
 

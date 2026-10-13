@@ -397,6 +397,7 @@ public class ConstructionManager {
 		Objects.requireNonNull(session, "session cannot be null");
 		Objects.requireNonNull(world, "world cannot be null");
 
+		session.markCompleted();
 		removeSession(session);
 
 		// Inform tracking clients that the session has completed so persistent wireframe outline is removed
@@ -575,8 +576,6 @@ public class ConstructionManager {
 		int minionIdx = 0;
 
 		for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
-			minion.setActivelyBuilding(false);
-
 			// Check if the minion has another active blueprint session in their vicinity (<= 128 blocks)
 			Optional<ConstructionSession> nextSession = findNearestSessionForMinion(
 				world,
@@ -587,20 +586,18 @@ public class ConstructionManager {
 			);
 
 			if (nextSession.isPresent()) {
-				// Minion has another pending blueprint session nearby!
-				// Prevent premature stationing/sleeping so they seamlessly chain to the next build
-				if (minion.isInsideStructure(box)) {
-					minion.startEgressFromStructure(box, anchor, null);
-				} else {
-					if (minion.isArcaneLevitating()) {
-						minion.setArcaneLevitating(false);
-					}
-					minion.getNavigation().stop();
-				}
+				// Minion has another pending blueprint/mining session nearby!
+				// Prevent premature stationing/sleeping, clear any egress state, and keep levitation active so they seamlessly chain.
+				minion.clearBuildingEgress();
+				minion.setActivelyBuilding(true);
+				minion.setArcaneLevitating(true);
+				minion.setNoGravity(true);
 				minion.setSitting(false);
 				minion.setGuardAnchorPos(null);
 				continue;
 			}
+
+			minion.setActivelyBuilding(false);
 
 			if (!perimeterWaypoints.isEmpty()) {
 				int ringSize = perimeterWaypoints.size();
@@ -625,11 +622,11 @@ public class ConstructionManager {
 				}
 				world.playSound(null, wx, waypoint.getY(), wz, SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 1.0F, 1.3F);
 
-				// Station minion at this perimeter waypoint in hold position
+				// Safely relocate minion to perimeter waypoint, releasing from hold position to roam freely
 				minion.requestTeleport(wx, waypoint.getY(), wz);
 				minion.setSelected(false);
-				minion.setSitting(true);
-				minion.setGuardAnchorPos(waypoint);
+				minion.setSitting(false);
+				minion.setGuardAnchorPos(null);
 				minion.clearAssaultTargets();
 				minion.getNavigation().stop();
 				minion.setTarget(null);
@@ -642,12 +639,10 @@ public class ConstructionManager {
 				}
 				if (safeFallback != null) {
 					minion.requestTeleport(safeFallback.getX() + 0.5D, safeFallback.getY(), safeFallback.getZ() + 0.5D);
-					minion.setGuardAnchorPos(safeFallback);
-				} else {
-					minion.setGuardAnchorPos(minion.getBlockPos());
 				}
 				minion.setSelected(false);
-				minion.setSitting(true);
+				minion.setSitting(false);
+				minion.setGuardAnchorPos(null);
 				minion.clearAssaultTargets();
 				minion.getNavigation().stop();
 				minion.setTarget(null);
@@ -1041,7 +1036,7 @@ public class ConstructionManager {
 	 * @return True if actively engaged or near an active construction site for their role.
 	 */
 	public boolean isMinionEngagedInConstruction(MinionEntity minion) {
-		return isMinionEngagedInConstruction(minion, 48.0D);
+		return isMinionEngagedInConstruction(minion, 128.0D);
 	}
 
 	/**
@@ -1153,6 +1148,7 @@ public class ConstructionManager {
 							&& (m.isSitting() || m.getGuardAnchorPos() != null)
 					);
 					for (com.example.entity.custom.MinionEntity builder : stationedBuilders) {
+						builder.clearBuildingEgress();
 						builder.setSitting(false);
 						builder.setGuardAnchorPos(null);
 					}

@@ -25,7 +25,8 @@ public class AttackWithLeaderGoal extends TrackTargetGoal {
 
 	@Override
 	public boolean canStart() {
-		if (this.minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE
+		if (this.minion.matchesRole(com.example.entity.custom.MinionRole.BUILDER)
+				|| this.minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE
 				|| this.minion.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.DEFENSIVE) {
 			return false;
 		}

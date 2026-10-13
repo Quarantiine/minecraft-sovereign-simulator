@@ -27,7 +27,9 @@ public class GuiBlurRemovalTest {
 		BlueprintCaptureModalScreen.class,
 		BlueprintExplorerScreen.class,
 		CommandScepterScreen.class,
-		MinionScreen.class
+		MinionScreen.class,
+		BlueprintPaletteRemapModalScreen.class,
+		BlockPickerModalScreen.class
 	})
 	@DisplayName("Screen declares applyBlur(float) override directly on class")
 	void testApplyBlurMethodDeclaredOnScreen(Class<?> screenClass) throws NoSuchMethodException {

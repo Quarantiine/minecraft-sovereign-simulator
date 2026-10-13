@@ -6,6 +6,91 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.0.2] - 2026-10-13
+
+### 🎨 Blueprint Block Replacement & Palette Remapping (Design Save GUI)
+
+### Added
+
+#### 🎨 Granular Blueprint Palette Remapping & Material Replacement (`DESIGN` Mode)
+
+- **Dedicated Palette Remapping Modal (`BlueprintPaletteRemapModalScreen`)**:
+  - Live volumetric scan aggregates unique non-air blocks into a sorted tally table (descending by block frequency).
+  - Offers granular per-block row controls: `[ 🔍 Change ]` (opens searchable block picker), `[ ✕ Erase ]` (maps block to `minecraft:air` to omit it from the blueprint), and `[ ↺ Reset ]` (reverts to original captured block).
+  - Includes batch actions: `[ ↺ Reset All ]` and `[ ✔ Apply ]` with real-time active substitution count badges.
+- **Strict Placeable Block Picker (`BlockPickerModalScreen`)**:
+  - Searchable 9-column grid modal featuring real-time sub-millisecond query filtering across block names and registry identifiers.
+  - **Strict Placeable Block Guardrail**: Strictly indexes items where `item instanceof BlockItem && !blockItem.getBlock().getDefaultState().isAir()`, permanently preventing players from selecting non-block items (swords, tools, armor, food, diamonds, sticks, etc.).
+- **Directional BlockState Property Preservation (`transferBlockStateProperties`)**:
+  - Intelligently transfers directional and architectural properties (`facing`, `half`, `shape`, `axis`, `type`, `waterlogged`) when substituting blocks (stairs, slabs, pillars, logs, fences, walls), ensuring architectural fidelity and orientation remain intact.
+- **Air as "Eraser" Block**:
+  - Erased blocks mapped to `minecraft:air` are cleanly omitted from blueprint compilation; minions never queue, place, or require erased blocks.
+- **Full Networking & Server-Side Security Enforcement**:
+  - `CaptureSpatialBlueprintPayload` carries `Map<Identifier, Identifier> blockReplacements` with custom VarInt count and Identifier packet codecs.
+  - Server validation in `ModNetworking.handleCaptureSpatialBlueprint` strictly verifies all replacement targets resolve to registered `BlockItem` instances or `minecraft:air`, dropping any illegal non-block submissions.
+- **Dynamic Survival Bill of Materials (BOM) Recalculation**:
+  - Substituted blocks dynamically recalculate `requiredItems`, immediately updating survival mode builder resource requirements and the Material Bill of Materials (BOM) in `BlueprintResourceEstimatorModalScreen`.
+
+#### 🛡 Sentinel Wall-Penetrating "Hearing" & Sentry Senses (`MinionActiveTargetGoal`, `MinionEntity`)
+- **Exclusive Wall-Penetrating Echolocation for Sentinels**:
+  - Sentinels (and `AUTO` minions dynamically adapted as Sentinels) gain supernatural sentry senses (`MinionEntity.hasSentrySense()`), autonomously detecting and targeting allowed hostile mobs through solid walls, closed doors, floors, and ceilings within their 24-block horizontal and expanded 128-block perimeter guard zone.
+  - **Expanded Vertical Sentry Search Box**: Vertical detection expanded from `4.0D` to `12.0D` (`±12.0D` vertical search box) exclusively for Sentinels, allowing sentries on bastion towers or elevated battlements to detect intruders infiltrating beneath them or underground.
+  - **Dual Predicate Architecture**: `MinionActiveTargetGoal.warriorPredicate` retains standard strict line-of-sight visibility checks (`canSee == true`), while `sentinelSentryPredicate` applies `TargetPredicate.createAttackable().ignoreVisibility()`.
+  - **Strict Role Isolation**: Warriors, Builders, and all other non-Sentinel roles strictly require direct line of sight to acquire targets and drop aggro if an enemy remains obscured behind walls for >60 ticks (`unseenMemoryTicks`).
+  - **Atmospheric Echolocation Alerts & VFX/SFX**:
+    - The instant a Sentinel senses an enemy behind a wall, it triggers `triggerSentinelSentrySenseAlert()`, snapping its gaze toward the vibration vector.
+    - Emits teal soul vibration particles (`ParticleTypes.SCULK_SOUL`) and arcane glyphs (`ParticleTypes.ENCHANT`), accompanied by sculk clicking (`SoundEvents.BLOCK_SCULK_SENSOR_CLICKING`) and resonant crystal vibrations (`SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE`).
+    - Periodic echolocation pulses repeat every 20 ticks (1.0s) while actively tracking an obscured target.
+  - **Allied Outpost Tactical Mobilization**:
+    - Upon sensing an obstructed hostile, the Sentinel emits an outpost alert dispatching nearby allied combat minions (Warriors and Sentinels within 16 blocks without an active target) to investigate and intercept the enemy.
+  - **Pathfinding & Weapon Engagement Coordination**:
+    - When locked onto a target behind cover, Sentinels navigate using pathfinding toward the hostile or flank around obstructions. If equipped with ranged weapons (`MinionRangedAttackGoal`), they maneuver around walls until line of sight is achieved before releasing arrows, fireworks, or tridents.
+
+### Fixed
+
+#### ⛏ Seamless Building & Mining Session Chaining & Egress Prevention
+- **Eliminated Egress Traps & Forced Ground Landings for Builders & Miners**:
+  - `ConstructionManager.completeSession` now completely bypasses `startEgressFromStructure` when chaining to an active adjacent session (`nextSession.isPresent()`) for both construction and mining. Minions never trigger building egress or perimeter wall sweeps when another job is ready.
+  - Added `MinionEntity.clearBuildingEgress()`, which immediately purges egress state without commanding downward glide descent (`-0.22D`) or disabling Arcane Levitation.
+  - In `MinionBuildGoal.setupTaskKinematics`, replaced `finishBuildingEgress` with `clearBuildingEgress()`, ensuring workers flying between distant or lower-elevation tasks remain in permanent 3D Arcane Levitation without falling back to ground navigation.
+- **Immediate Session Completion State (`markCompleted`)**:
+  - `ConstructionSession.markCompleted()` updates `status` to `COMPLETED` immediately during `completeSession()`, ensuring `session.isActive()` evaluates to `false` without tick delay.
+- **Instant Goal Chaining & Removed Session Purging (`MinionBuildGoal`)**:
+  - In `tryClaimTaskOrChainNextSession`, actively verifies session presence in `ConstructionManager.getSession(id)` to immediately discard completed sessions and claim chained tasks.
+  - Extended flight stall tolerance to 160 ticks (8.0s) so minions flying between distant sites remain in uninterrupted Arcane Levitation.
+  - Gated `startEgressFromStructure` in `MinionBuildGoal.stop()` and `tick()` behind `!hasChainedSession`.
+- **Synchronized 128-Block Construction Engagement**:
+  - Expanded default `isMinionEngagedInConstruction` radius to 128.0 blocks to match builder chaining and operational search radius.
+
+#### 🔨 Absolute Builder Combat Immunity & Non-Combatant Enforcement (`MinionEntity`, `MinionBuildGoal`, `MinionActiveTargetGoal`, `CommandScepterItem`)
+- **Strict Target Acquisition Lockdown**:
+  - `MinionEntity.setTarget(LivingEntity)` and `MinionEntity.isTargetAllowed(LivingEntity)` immediately reject and discard any hostile target when the minion's role is `MinionRole.BUILDER`.
+  - Switching to `BUILDER` (manually via `setRole` or dynamically via `setAdaptiveRole`) immediately purges active targets (`setTarget(null)`) and clears all queued assault targets (`clearAssaultTargets()`).
+  - Added continuous tick validation in `MinionEntity.tick()` to instantly nullify any assigned targets if a builder somehow receives one.
+- **Complete AI Combat Goal Suppression**:
+  - Builder minions strictly bypass melee attack (`MeleeAttackGoal`), ranged attack (`MinionRangedAttackGoal`), retaliation (`RevengeGoal`), owner combat tracking (`TrackOwnerAttackerGoal`, `AttackWithOwnerGoal`), and squad leader combat tracking (`TrackLeaderAttackerGoal`, `AttackWithLeaderGoal`).
+  - Minion attack methods (`tryAttack` and `shootAt`) immediately return `false`/no-op if invoked on a builder, ensuring builders never swing weapons or fire projectiles.
+- **Scepter Command & Tactical Signal Exclusion**:
+  - Command Scepter mass assault cone sweeps, single-target attack clicks, and `ATTACK` mode broadcasts strictly filter out Builder minions, preventing commanders from commanding builders into combat.
+  - Sentinel echolocation sentry pings and Patrol Route breach alerts exclude builders from allied combat dispatch alarms, ensuring builders never mobilize to investigate or engage detected hostiles.
+- **Dynamic Adaptation in `AUTO` Mode**:
+  - Minions operating under `MinionRole.AUTO` dynamically adapt:
+    - If the minion itself, commander, or any nearby ally/golem needs healing (< 70% max HP), they adapt to **`MinionRole.SENTINEL`** (medic).
+    - If actively attacked, targeting an enemy, or hostiles enter within 16m, they adapt to **`MinionRole.WARRIOR`** (combat vanguard) to defend and eliminate threats.
+    - If peaceful with construction tasks available, they adapt to **`MinionRole.BUILDER`**.
+    - Taking damage immediately triggers `evaluateAutoRole()` without waiting for tick intervals.
+  - Dedicated `MinionRole.BUILDER` minions strictly remain non-combatants and never fight or adapt under any circumstances.
+- **Zero Solo Mob Hunting Fallback (`MinionHarvestingHelper`)**:
+  - Completely eradicated solo mob hunting fallback for builders. When organic/mob materials are required, builders commission nearby Warriors on tactical hunting contracts; if no warrior is available, the builder cleanly pauses and waits for assistance instead of attempting to hunt hostiles solo.
+
+#### 🚶 Autonomous Free Roaming on Construction & Mining Completion
+- **Eliminated Hold Position Lock on Build/Mine Finish**:
+  - `ConstructionManager.completeSession` now releases minions to roam freely upon concluding construction or mining sessions when no chained blueprint is queued (`minion.setSitting(false); minion.setGuardAnchorPos(null); minion.setSelected(false);`).
+  - Minions safely egress from completed structures/quarries onto solid ground, land cleanly from Arcane Levitation, and naturally engage `WanderAroundFarGoal` on foot without displaying `[HOLD]` or `[Stationed]` overhead badges.
+  - Placing down a subsequent blueprint or mining area within 128 blocks immediately mobilizes the wandering minions via `MinionBuildGoal.canStart()` (AI priority 4) without requiring manual interaction.
+
+---
+
 ## [1.0.1] - 2026-10-11
 
 ### 🔍 3D Blueprint Clarity Overhaul, Tactical Target Filtering & Autonomous Construction

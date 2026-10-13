@@ -140,6 +140,28 @@ public class SpatialBlueprintCaptureAndSortingTest {
 	}
 
 	@Test
+	@DisplayName("transferBlockStateProperties safely handles null and mock states without throwing")
+	void testTransferBlockStatePropertiesSafeNulls() {
+		Assertions.assertNull(StructureBlueprint.transferBlockStateProperties(null, null));
+		if (dummyState != null) {
+			Assertions.assertEquals(dummyState, StructureBlueprint.transferBlockStateProperties(dummyState, null));
+		}
+	}
+
+	@Test
+	@DisplayName("Spatial capture respects empty replacements map and preserves blocks")
+	void testSpatialCaptureWithEmptyReplacements() {
+		if (dummyState == null) return;
+		MockWorldBlockView world = new MockWorldBlockView();
+		BlockPos c1 = new BlockPos(10, 64, 10);
+		BlockPos c2 = new BlockPos(10, 64, 10);
+		world.setBlock(c1, dummyState);
+
+		List<BlueprintBlock> blocks = StructureBlueprint.captureBlocks(world, c1, c2, java.util.Collections.emptyMap());
+		Assertions.assertEquals(1, blocks.size());
+	}
+
+	@Test
 	@DisplayName("Corner normalization produces identical normalized blueprints regardless of selection order (pos1 vs pos2)")
 	void testCornerNormalizationInvariance() {
 		if (dummyState == null) return;

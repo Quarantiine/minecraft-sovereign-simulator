@@ -91,7 +91,7 @@ public class MinionRangedAttackGoal extends Goal {
 
 	@Override
 	public boolean canStart() {
-		if (!this.minion.isAlive() || !this.minion.isTamed() || this.minion.isSitting()) {
+		if (!this.minion.isAlive() || !this.minion.isTamed() || this.minion.isSitting() || this.minion.matchesRole(MinionRole.BUILDER)) {
 			return false;
 		}
 		boolean isWarrior = this.minion.matchesRole(MinionRole.WARRIOR);

@@ -148,6 +148,10 @@ public class MinionBuildGoal extends Goal {
 			return false;
 		}
 
+		if (!this.minion.matchesRole(MinionRole.BUILDER)) {
+			return false;
+		}
+
 		// Continue goal while floating down from levitation to safely land on solid ground
 		if (this.minion.isArcaneLevitating() && !this.minion.isOnGround()) {
 			return true;
@@ -257,12 +261,24 @@ public class MinionBuildGoal extends Goal {
 		// For DISMANTLE (mining) sessions: skip wall-phasing egress entirely — the "exterior" of a
 		// mined cave may be solid rock. Just let tickGentleDescent float them to the cave floor.
 		boolean isBuilder = this.currentSession != null && !this.currentSession.isDismantle();
-		if (this.minion.isSitting()) {
+		boolean hasChainedSession = false;
+		if (this.minion.getWorld() instanceof ServerWorld sw && this.minion.getOwnerUuid() != null) {
+			hasChainedSession = ConstructionManager.getInstance().findNearestSessionForMinion(
+				sw, this.minion.getBlockPos(), this.minion.getOwnerUuid(), 128.0D, this.minion.getEffectiveRole()
+			).filter(ConstructionSession::isActive).isPresent();
+		}
+		if (!this.minion.matchesRole(MinionRole.BUILDER)) {
+			this.minion.clearBuildingEgress();
 			if (this.minion.isArcaneLevitating()) {
 				this.minion.setArcaneLevitating(false);
 			}
 			this.minion.setNoGravity(false);
-		} else if (isBuilder && sessionBox != null && sessionAnchor != null && this.minion.isInsideStructure(sessionBox)) {
+		} else if (this.minion.isSitting()) {
+			if (this.minion.isArcaneLevitating()) {
+				this.minion.setArcaneLevitating(false);
+			}
+			this.minion.setNoGravity(false);
+		} else if (!hasChainedSession && isBuilder && sessionBox != null && sessionAnchor != null && this.minion.isInsideStructure(sessionBox)) {
 			this.minion.startEgressFromStructure(sessionBox, sessionAnchor, null);
 		} else if (!this.minion.isExitingBuilding()) {
 			// Miner or already outside: keep levitation active if airborne so tickGentleDescent glides them down.
@@ -297,7 +313,13 @@ public class MinionBuildGoal extends Goal {
 			// For BUILD sessions: phase through walls to get outside the completed structure.
 			// For DISMANTLE (mining) sessions: skip wall-phasing — go straight to gentle descent.
 			// Underground miners would otherwise try to phase toward a "perimeter" that is solid rock.
-			if (this.currentSession != null && !this.currentSession.isDismantle()
+			boolean hasChainedSession = false;
+			if (this.minion.getOwnerUuid() != null) {
+				hasChainedSession = ConstructionManager.getInstance().findNearestSessionForMinion(
+					serverWorld, this.minion.getBlockPos(), this.minion.getOwnerUuid(), 128.0D, this.minion.getEffectiveRole()
+				).filter(ConstructionSession::isActive).isPresent();
+			}
+			if (!hasChainedSession && this.currentSession != null && !this.currentSession.isDismantle()
 					&& !this.minion.isExitingBuilding()) {
 				BlockBox sessionBox = this.currentSession.getWorldBoundingBox();
 				BlockPos sessionAnchor = this.currentSession.getAnchorPos();
@@ -474,7 +496,7 @@ public class MinionBuildGoal extends Goal {
 				}
 
 				// If stalled or colliding for 12+ ticks, fallback to ground navigation or phase-shift if persistent
-				if (this.stallCollisionTicks >= 12 || this.ticksNavigating > 40) {
+				if (this.stallCollisionTicks >= 12 || (this.stallCollisionTicks > 0 && this.ticksNavigating > 40) || this.ticksNavigating > 160) {
 					// Miners in dismantle sessions never drop to ground navigation in a pit; they phase-shift directly to their hover station.
 					if (isDismantle || this.minion.isPhasingBlocks() || this.ticksNavigating > 40 || this.stallCollisionTicks >= 80) {
 						Vec3d phaseDest = (this.hoverStationVec != null)
@@ -1795,18 +1817,22 @@ public class MinionBuildGoal extends Goal {
 	 * Configures kinematics, levitation, or ground navigation towards the target task position.
 	 */
 	private void setupTaskKinematics(ServerWorld serverWorld, BlockPos nextPos) {
+		if (this.minion.isExitingBuilding()) {
+			this.minion.clearBuildingEgress();
+		}
+		this.ticksNavigating = 0;
+		this.stallCollisionTicks = 0;
+		this.groundNavigationForced = false;
+
 		boolean isDismantle = this.currentSession != null && this.currentSession.isDismantle();
 		boolean nextCeiling = hasCeilingAboveMinion(serverWorld, 3);
-		if (isDismantle || nextPos.getY() > this.minion.getBlockY() + 1 || this.minion.isArcaneLevitating()) {
-			Vec3d nextStation = findOptimalHoverStation(serverWorld, nextPos);
-			if (isDismantle || hasLineOfSightToStation(serverWorld, nextStation)) {
-				this.minion.setArcaneLevitating(true);
-				this.hoverStationVec = nextStation;
-			} else {
-				this.groundNavigationForced = true;
-				setupNavigationForTask(serverWorld);
-			}
+		Vec3d nextStation = findOptimalHoverStation(serverWorld, nextPos);
+		if (isDismantle || !nextCeiling || hasLineOfSightToStation(serverWorld, nextStation) || this.minion.isPhasingBlocks()) {
+			this.minion.setArcaneLevitating(true);
+			this.minion.setNoGravity(true);
+			this.hoverStationVec = nextStation;
 		} else {
+			this.groundNavigationForced = true;
 			setupNavigationForTask(serverWorld);
 		}
 	}
@@ -1836,7 +1862,8 @@ public class MinionBuildGoal extends Goal {
 
 	private boolean tryClaimTaskOrChainNextSession(ServerWorld serverWorld) {
 		// 1. Try to claim the next task from the current session if still active
-		if (this.currentSession != null && this.currentSession.isActive()) {
+		if (this.currentSession != null && this.currentSession.isActive()
+				&& ConstructionManager.getInstance().getSession(this.currentSession.getId()).isPresent()) {
 			ConstructionTask nextTask = this.currentSession.claimNextTask(this.minion.getUuid(), serverWorld.getTime(), serverWorld);
 			if (nextTask != null) {
 				this.currentTask = nextTask;
@@ -1852,6 +1879,10 @@ public class MinionBuildGoal extends Goal {
 			// - claimed by other minions, or waiting on block-placement dependencies.
 			// Stay committed to this session — do NOT abandon it for a nearer one.
 			return false;
+		} else if (this.currentSession != null && (!this.currentSession.isActive()
+				|| ConstructionManager.getInstance().getSession(this.currentSession.getId()).isEmpty())) {
+			this.currentSession = null;
+			this.currentTask = null;
 		}
 
 		// 2. Current session is fully done (completed/cancelled) or never assigned.

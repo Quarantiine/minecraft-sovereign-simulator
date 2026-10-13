@@ -281,18 +281,18 @@ public class MinerAreaAndAirSafeguardTest {
 			"ConstructionManager.completeSession must station all minions when perimeter waypoints are available"
 		);
 
-		// 3. Teleportation and hold position (sitting + guard anchor + deselect) applied to minions
+		// 3. Teleportation and release to roam freely (sitting=false, guardAnchor=null, deselect) applied to minions
 		Assertions.assertTrue(
 			managerContent.contains("minion.requestTeleport(wx, waypoint.getY(), wz);"),
 			"ConstructionManager.completeSession must teleport minions to assigned perimeter waypoints"
 		);
 		Assertions.assertTrue(
-			managerContent.contains("minion.setSitting(true);"),
-			"ConstructionManager.completeSession must set sitting=true (hold position) for completed minions"
+			managerContent.contains("minion.setSitting(false);"),
+			"ConstructionManager.completeSession must set sitting=false (roam freely) for completed minions"
 		);
 		Assertions.assertTrue(
-			managerContent.contains("minion.setGuardAnchorPos(waypoint);"),
-			"ConstructionManager.completeSession must set guard anchor to perimeter waypoint for completed minions"
+			managerContent.contains("minion.setGuardAnchorPos(null);"),
+			"ConstructionManager.completeSession must set guard anchor to null (roam freely) for completed minions"
 		);
 		Assertions.assertTrue(
 			managerContent.contains("minion.setSelected(false);"),

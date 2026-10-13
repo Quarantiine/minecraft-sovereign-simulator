@@ -12,6 +12,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
 import net.minecraft.world.PersistentStateManager;
 
 /**
@@ -117,6 +118,31 @@ public class CustomBlueprintManager {
 		String name,
 		String description
 	) {
+		return captureSpatialBlueprint(world, pos1, pos2, id, name, description, Collections.emptyMap());
+	}
+
+	/**
+	 * Captures an in-world spatial volume with optional block replacements, normalizes and compiles it
+	 * into a {@link StructureBlueprint}.
+	 *
+	 * @param world        World/BlockView instance to sample blocks from.
+	 * @param pos1         First corner position.
+	 * @param pos2         Second corner position.
+	 * @param id           Unique blueprint identifier.
+	 * @param name         User-facing display name.
+	 * @param description  User-facing description.
+	 * @param replacements Configured map of source block IDs to replacement block IDs (or minecraft:air).
+	 * @return Compiled StructureBlueprint.
+	 */
+	public StructureBlueprint captureSpatialBlueprint(
+		ServerWorld world,
+		net.minecraft.util.math.BlockPos pos1,
+		net.minecraft.util.math.BlockPos pos2,
+		String id,
+		String name,
+		String description,
+		Map<Identifier, Identifier> replacements
+	) {
 		Objects.requireNonNull(world, "world cannot be null");
 		Objects.requireNonNull(pos1, "pos1 cannot be null");
 		Objects.requireNonNull(pos2, "pos2 cannot be null");
@@ -125,7 +151,7 @@ public class CustomBlueprintManager {
 		String cleanName = (name != null && !name.isBlank()) ? name.trim() : "Captured Structure";
 		String cleanDesc = (description != null && !description.isBlank()) ? description.trim() : "";
 
-		return StructureBlueprint.captureFromWorld(world, pos1, pos2, cleanId, cleanName, cleanDesc);
+		return StructureBlueprint.captureFromWorld(world, pos1, pos2, cleanId, cleanName, cleanDesc, replacements);
 	}
 
 	/**
@@ -152,7 +178,37 @@ public class CustomBlueprintManager {
 		String name,
 		String description
 	) {
-		StructureBlueprint blueprint = captureSpatialBlueprint(world, pos1, pos2, id, name, description);
+		return captureAndSaveBlueprint(server, world, player, pos1, pos2, id, name, description, Collections.emptyMap());
+	}
+
+	/**
+	 * Captures an in-world spatial volume with block replacements, normalizes and compiles it into
+	 * a {@link StructureBlueprint}, saves and registers it dynamically into world persistent state,
+	 * and broadcasts to all clients.
+	 *
+	 * @param server       The MinecraftServer instance.
+	 * @param world        The ServerWorld instance.
+	 * @param player       The commanding player initiating the capture.
+	 * @param pos1         First corner position.
+	 * @param pos2         Second corner position.
+	 * @param id           Unique blueprint identifier.
+	 * @param name         User-facing display name.
+	 * @param description  User-facing description.
+	 * @param replacements Configured map of source block IDs to replacement block IDs (or minecraft:air).
+	 * @return Saved StructureBlueprint.
+	 */
+	public StructureBlueprint captureAndSaveBlueprint(
+		MinecraftServer server,
+		ServerWorld world,
+		ServerPlayerEntity player,
+		net.minecraft.util.math.BlockPos pos1,
+		net.minecraft.util.math.BlockPos pos2,
+		String id,
+		String name,
+		String description,
+		Map<Identifier, Identifier> replacements
+	) {
+		StructureBlueprint blueprint = captureSpatialBlueprint(world, pos1, pos2, id, name, description, replacements);
 		saveBlueprint(server, blueprint);
 		return blueprint;
 	}

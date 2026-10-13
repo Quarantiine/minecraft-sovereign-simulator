@@ -1,6 +1,7 @@
 package com.example.entity.ai.goal;
 
 import com.example.entity.custom.MinionEntity;
+import com.example.entity.custom.MinionRole;
 import com.example.patrol.PatrolRoute;
 import com.example.patrol.PatrolRouteManager;
 import java.util.EnumSet;
@@ -156,7 +157,8 @@ public class MinionPatrolGoal extends Goal {
 				List<MinionEntity> nearbyAllies = serverWorld.getEntitiesByClass(
 					MinionEntity.class,
 					this.minion.getBoundingBox().expand(16.0D),
-					ally -> ally.isAlive() && ally != this.minion && java.util.Objects.equals(ally.getOwnerUuid(), this.minion.getOwnerUuid()) && !ally.isActivelyBuilding()
+					ally -> ally.isAlive() && ally != this.minion && java.util.Objects.equals(ally.getOwnerUuid(), this.minion.getOwnerUuid())
+						&& !ally.matchesRole(MinionRole.BUILDER) && !ally.isActivelyBuilding()
 				);
 
 				for (MinionEntity ally : nearbyAllies) {

@@ -383,7 +383,36 @@ public class ModClientNetworking {
 	 * @param pos2        Second corner position.
 	 */
 	public static void sendCaptureSpatialBlueprint(String id, String name, String description, net.minecraft.util.math.BlockPos pos1, net.minecraft.util.math.BlockPos pos2) {
-		com.example.network.CaptureSpatialBlueprintPayload payload = new com.example.network.CaptureSpatialBlueprintPayload(id, name, description, pos1, pos2);
+		sendCaptureSpatialBlueprint(id, name, description, pos1, pos2, java.util.Collections.emptyMap());
+	}
+
+	/**
+	 * Dispatches a {@link com.example.network.CaptureSpatialBlueprintPayload} to trigger server-side
+	 * spatial area capture and dynamic blueprint compilation with custom block replacements.
+	 *
+	 * @param id                Unique custom blueprint identifier.
+	 * @param name              Display name.
+	 * @param description       Description.
+	 * @param pos1              First corner position.
+	 * @param pos2              Second corner position.
+	 * @param blockReplacements Configured source-to-target block replacement mappings.
+	 */
+	public static void sendCaptureSpatialBlueprint(
+		String id,
+		String name,
+		String description,
+		net.minecraft.util.math.BlockPos pos1,
+		net.minecraft.util.math.BlockPos pos2,
+		java.util.Map<net.minecraft.util.Identifier, net.minecraft.util.Identifier> blockReplacements
+	) {
+		com.example.network.CaptureSpatialBlueprintPayload payload = new com.example.network.CaptureSpatialBlueprintPayload(
+			id,
+			name,
+			description,
+			pos1,
+			pos2,
+			blockReplacements
+		);
 		ClientPlayNetworking.send(payload);
 	}
 

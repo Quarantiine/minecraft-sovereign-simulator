@@ -273,6 +273,10 @@ public class ConstructionSession {
 		return this.status == SessionStatus.COMPLETED;
 	}
 
+	public void markCompleted() {
+		this.status = SessionStatus.COMPLETED;
+	}
+
 	public int getTotalBlocks() {
 		return this.tasks.size();
 	}

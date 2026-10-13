@@ -4,7 +4,7 @@
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-622%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-645%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -74,20 +74,22 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 2. **🛡 Sentinel (`MinionRole.SENTINEL`)**:
    - **Perimeter Guard & Combat Medic**: Guards designated anchor posts with an 8-block perimeter and 128-block leash, prioritizing shields in offhand. Deals baseline `5.0` physical damage (unaffected by warrior damage bonuses) to focus role attributes strictly on defensive endurance and squad sustain.
+   - **Wall-Penetrating Sentry Senses & Echolocation**: Detects and locks onto allowed hostiles through solid walls, closed doors, ceilings, and floors within 24m horizontal and an expanded 12m vertical reach (`ignoreVisibility`). Obstruction detection triggers soul vibration particles (`SCULK_SOUL`), sculk sensor clicking, and resonant amethyst chimes, snapping gaze toward vibrations and mobilizing idle combat allies within 16m to intercept.
    - **Aegis of Restoration**: Autonomously channels healing beams to wounded player commanders, allied minions, and friendly **Iron Golems** under 70% HP within 10 blocks (restoring 6.0 HP + Regeneration II for 5s with heart VFX and amethyst resonance).
    - **Warrior Combat Dual-Mode**: Sentinels fight aggressively like Warriors (active hostile target scanning, melee charge at $1.35\text{D}$, and ranged weapon skirmishing) **strictly when all nearby minions, Iron Golems, and commanders need zero healing** (100% full health). The instant an ally takes damage, the Sentinel disengages immediately (`setTarget(null)`) to prioritize medical protection.
 
 3. **🔨 Builder (`MinionRole.BUILDER`)**:
    - **Master Architect & Demolition Specialist**: Autonomously constructs captured blueprints, deconstructs designated volumes, and quarries stone top-to-bottom.
+   - **Absolute Non-Combatant & Combat Immunity**: Builders strictly never engage in combat, acquire targets, or retaliate when struck. They are immune to assault commands, Sentinel echolocation alarms, and patrol breach alerts, and actively building minions never drop tools to fight.
    - **Builder Block Phasing & Anti-Entombment**: Seamlessly passes through blocks (`noClip = true`) while actively building or evacuating completed structures. Continuous server-side anti-suffocation safeguards guarantee minions are never trapped inside solid blocks or stranded underground.
    - **Logistics Autonomy**: Agro-forestry timber harvesting (using bone meal for instant sapling maturation), tool self-crafting, supply depot chest drops, and peer-to-peer wireless block transfers.
-   - **Intelligent Post-Work Evacuation & Perimeter Stationing**: Automatically evacuates to the surface rim on surface quarries, cleared interior room floors on underground mines, and exterior safe ground around buildings, deploying defensive hold-position waypoints with beacon beams and fanfare chimes.
+   - **Intelligent Post-Work Evacuation & Free Roaming Relocation**: Automatically evacuates to the surface rim on surface quarries, cleared interior room floors on underground mines, and exterior safe ground around buildings with beacon beams and fanfare chimes, releasing minions to roam freely on foot until the next blueprint is placed.
 
 4. **⚙ Auto (`MinionRole.AUTO`)**:
-   - **The Default Dynamic Archetype**: Newly summoned or recruited minions start in `AUTO` mode, evaluating their tactical environment every second:
-     - Morphs to **Sentinel** if an ally drops below 70% HP or when holding a guard post (reverting to baseline damage and prioritizing shields/healing).
-     - Morphs to **Warrior** if hostile mobs enter 16m or when escorting during peacetime (dynamically gaining the `+4.0` frontline Attack Damage bonus and aggressive assault AI).
-     - Morphs to **Builder** if an active blueprint or quarry task requires engineering hands.
+   - **The Default Dynamic Archetype**: Newly summoned or recruited minions start in `AUTO` mode, evaluating their tactical environment dynamically and reacting instantly when taking damage:
+     - Morphs to **Sentinel** if this minion itself, the commander, or any nearby ally drops below 70% HP (equipping shield and channeling restorative healing) or when holding a guard post.
+     - Morphs to **Warrior** if actively attacked, targeting an enemy, or hostile mobs enter within 16m (dynamically gaining the `+4.0` frontline Attack Damage bonus and aggressive assault AI).
+     - Morphs to **Builder** if peaceful and an active blueprint or quarry task requires engineering hands within 128 blocks.
 
 ---
 
@@ -121,6 +123,7 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - Select two corners with left-clicks to enclose any building in a 3D holographic ghost prism.
   - Adjust height in real time with `Ctrl` + Scroll.
   - Name and save the structure directly to world data without destroying the original building. Minion builders can then replicate it anywhere with 100% exact block fidelity!
+  - **Granular Palette Remapping & Material Replacement (`[ 🎨 Remap ]`)**: Directly within the save dialog, inspect the full block tally of the captured structure. Swap any block for another placeable block via the searchable `BlockPickerModalScreen` (with strict placeable-only guardrails preventing non-block items) or erase unwanted blocks into `minecraft:air`. Preserves directional blockstate properties (stairs, slabs, logs, pillars) and recalculates the survival Bill of Materials dynamically.
   - **Newest-First Catalog Ordering**: Newly captured blueprints immediately appear at Slot 1 on Slide 1 by default, automatically armed on your held Scepter.
   - **3D Blueprint Explorer & Clarity Viewport GUI**: Click `[ 🔍 3D View ]` in the Command Hub to open `BlueprintExplorerScreen`, featuring true 3D rotated quad rendering, 6-directional interior occlusion culling, authentic botanical flora and multi-face textures (flowers, crops, tree bark/rings, workstations, 16-color dyes), directional sunlight ($N \cdot L$), Fullscreen/Maximize mode (`[ ⛶ ]` / `Tab` / `F`), an Architectural Floor Slicer (`▲` / `▼`), full mouse-click and keybind toolbar controls, 2D camera panning, $0.25\times$ to $8.0\times$ zoom, ground pedestal, real-time cardinal compass, and zero text cut-off across all resolutions.
 - **Visual Pathway Patrols**:
@@ -186,6 +189,7 @@ The mod follows an event-driven, server-authoritative architecture built on Fabr
 src/main/java/com/example/
 ├── ExampleMod.java                   # Mod initialization, lifecycle events, item registration
 ├── block/                            # Custom blocks and interactive multiblock stations
+├── blueprint/                        # Spatial blueprint capture, CustomBlueprintManager & StructureBlueprint
 ├── construction/
 │   ├── ConstructionManager.java      # Server-authoritative build session manager & voxel iterator
 │   ├── ConstructionSession.java      # Active blueprint/mining session state machine
@@ -239,7 +243,7 @@ All builds and runtime tasks are managed via the included Gradle wrapper (`./gra
 # Launch a standalone dedicated server for network/multiplayer debugging
 ./gradlew runServer
 
-# Run the complete automated test suite (622 tests)
+# Run the complete automated test suite (639 tests)
 ./gradlew test
 
 # Compile and package the production mod JAR (outputs to build/libs/)
@@ -284,9 +288,10 @@ Sovereign explicitly permits independent third-party mods to compile against its
 
 We maintain an extensive automated unit and invariant test suite located in `src/test/java/com/example/`. Tests execute in headless Java without launching a full graphical client:
 
-- **Entity & AI Goals**: `SentinelHealGoalTest`, `MinionFormationAndEquipTest`, `MinionSquadAndRoleTest`
+- **Entity & AI Goals**: `SentinelHealGoalTest`, `SentinelSentrySenseTest`, `BuilderNoCombatTest`, `MinionFormationAndEquipTest`, `MinionSquadAndRoleTest`
 - **Logistics & Harvesting**: `MinionLogisticsAndHarvestingTest`, `MinionAntiJitterAndLevitationSafetyTest`
-- **Construction & Dismantling**: `StructureDismantlingTest`, `BedrockAndCeilingSafeguardTest`
+- **Construction & Dismantling**: `StructureDismantlingTest`, `MiningChainingEgressTest`, `BedrockAndCeilingSafeguardTest`, `SpatialBlueprintCaptureAndSortingTest`
+- **Blueprint UI & Palette Remapping**: `BlueprintPaletteRemapModalTest`, `BlueprintCaptureModalScreenTest`, `GuiBlurRemovalTest`
 - **Ordnance & Physics**: `FrostGrenadeTest`
 - **Recipes & Multi-Version Compatibility**: `ModRecipeJsonValidationTest`, `CommandScepterTooltipAndComponentsTest`, `FabricVersionPredicateTest`
 

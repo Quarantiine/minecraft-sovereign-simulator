@@ -7,11 +7,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.item.Item;
 import net.minecraft.util.BlockRotation;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 
@@ -323,6 +325,31 @@ public class StructureBlueprint {
 		String name,
 		String description
 	) {
+		return captureFromWorld(world, pos1, pos2, id, name, description, Collections.emptyMap());
+	}
+
+	/**
+	 * Captures non-air blocks within the spatial bounds [pos1, pos2], applies optional block replacements,
+	 * normalizes coordinates relative to the minimum corner, and compiles a {@link StructureBlueprint}.
+	 *
+	 * @param world        World/BlockView instance to sample blocks from.
+	 * @param pos1         First corner position of the bounding volume.
+	 * @param pos2         Second corner position of the bounding volume.
+	 * @param id           Unique blueprint identifier.
+	 * @param name         User-facing blueprint display name.
+	 * @param description  User-facing blueprint description.
+	 * @param replacements Configured map of source block IDs to replacement block IDs (or minecraft:air).
+	 * @return Topologically sorted and normalized StructureBlueprint.
+	 */
+	public static StructureBlueprint captureFromWorld(
+		net.minecraft.world.BlockView world,
+		BlockPos pos1,
+		BlockPos pos2,
+		String id,
+		String name,
+		String description,
+		Map<Identifier, Identifier> replacements
+	) {
 		Objects.requireNonNull(world, "world cannot be null");
 		Objects.requireNonNull(pos1, "pos1 cannot be null");
 		Objects.requireNonNull(pos2, "pos2 cannot be null");
@@ -331,7 +358,7 @@ public class StructureBlueprint {
 		String cleanName = name != null && !name.isBlank() ? name : "Captured Structure";
 		String cleanDesc = (description != null && !description.isBlank()) ? description.trim() : "";
 
-		List<BlueprintBlock> normalizedBlocks = captureBlocks(world, pos1, pos2);
+		List<BlueprintBlock> normalizedBlocks = captureBlocks(world, pos1, pos2, replacements);
 
 		Builder builder = builder(cleanId, cleanName).description(cleanDesc);
 		for (BlueprintBlock block : normalizedBlocks) {
@@ -416,6 +443,25 @@ public class StructureBlueprint {
 		BlockPos pos1,
 		BlockPos pos2
 	) {
+		return captureBlocks(world, pos1, pos2, Collections.emptyMap());
+	}
+
+	/**
+	 * Captures non-air blocks within the specified spatial volume with optional block replacements,
+	 * normalizes coordinates relative to the minimum corner, and sorts in bottom-up topological order.
+	 *
+	 * @param world        World/BlockView to sample from.
+	 * @param pos1         First corner position.
+	 * @param pos2         Second corner position.
+	 * @param replacements Configured map of source block IDs to replacement block IDs (or minecraft:air).
+	 * @return List of normalized, topologically sorted BlueprintBlock entries.
+	 */
+	public static List<BlueprintBlock> captureBlocks(
+		net.minecraft.world.BlockView world,
+		BlockPos pos1,
+		BlockPos pos2,
+		Map<Identifier, Identifier> replacements
+	) {
 		int minX = Math.min(pos1.getX(), pos2.getX());
 		int maxX = Math.max(pos1.getX(), pos2.getX());
 		int minY = Math.min(pos1.getY(), pos2.getY());
@@ -453,6 +499,27 @@ public class StructureBlueprint {
 					mutablePos.set(x, y, z);
 					BlockState state = world.getBlockState(mutablePos);
 					if (state != null && !state.isAir()) {
+						if (replacements != null && !replacements.isEmpty()) {
+							try {
+								if (state.getBlock() != null && net.minecraft.registry.Registries.BLOCK != null) {
+									Identifier originalId = net.minecraft.registry.Registries.BLOCK.getId(state.getBlock());
+									if (originalId != null && replacements.containsKey(originalId)) {
+										Identifier targetId = replacements.get(originalId);
+										if (targetId != null && targetId.equals(Identifier.of("minecraft", "air"))) {
+											// Erased with Air -> omit completely from blueprint
+											continue;
+										}
+										if (targetId != null && net.minecraft.registry.Registries.BLOCK.containsId(targetId)) {
+											Block targetBlock = net.minecraft.registry.Registries.BLOCK.get(targetId);
+											if (targetBlock != null) {
+												state = transferBlockStateProperties(state, targetBlock);
+											}
+										}
+									}
+								}
+							} catch (Throwable ignored) {
+							}
+						}
 						BlockPos normalizedOffset = new BlockPos(x - minX, y - minY, z - minZ);
 						captured.add(new BlueprintBlock(normalizedOffset, state));
 					}
@@ -462,6 +529,40 @@ public class StructureBlueprint {
 
 		Collections.sort(captured);
 		return Collections.unmodifiableList(captured);
+	}
+
+	/**
+	 * Safely transfers compatible BlockState properties (facing, axis, shape, half, waterlogged, etc.)
+	 * from a source block state to a target replacement block.
+	 *
+	 * @param sourceState The original block state being replaced.
+	 * @param targetBlock The target replacement block.
+	 * @return The target block state with compatible properties transferred, or default target state.
+	 */
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	public static BlockState transferBlockStateProperties(BlockState sourceState, Block targetBlock) {
+		if (targetBlock == null) {
+			return sourceState;
+		}
+		BlockState targetState = targetBlock.getDefaultState();
+		if (targetState == null || sourceState == null) {
+			return targetState;
+		}
+		try {
+			for (net.minecraft.state.property.Property prop : sourceState.getProperties()) {
+				if (targetState.contains(prop)) {
+					try {
+						Comparable value = sourceState.get(prop);
+						if (prop.getValues().contains(value)) {
+							targetState = targetState.with(prop, value);
+						}
+					} catch (Throwable ignored) {
+					}
+				}
+			}
+		} catch (Throwable ignored) {
+		}
+		return targetState;
 	}
 
 	/**

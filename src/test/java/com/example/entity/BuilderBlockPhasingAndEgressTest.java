@@ -260,9 +260,9 @@ public class BuilderBlockPhasingAndEgressTest {
 		Assertions.assertTrue(content.contains("minion.startEgressFromStructure(box, anchor, Vec3d.ofBottomCenter(waypoint));"),
 			"ConstructionManager must dispatch builder minions to perimeter waypoints via startEgressFromStructure");
 
-		// Builder stationing at waypoint
-		Assertions.assertTrue(content.contains("minion.setSitting(true);") && content.contains("minion.setGuardAnchorPos(waypoint);"),
-			"ConstructionManager must station builder minions at perimeter waypoints holding position");
+		// Builder released to roam freely at perimeter waypoint (no hold position)
+		Assertions.assertTrue(content.contains("minion.setSitting(false);") && content.contains("minion.setGuardAnchorPos(null);"),
+			"ConstructionManager must release builder minions to roam freely instead of locking in hold position");
 	}
 
 	@Test

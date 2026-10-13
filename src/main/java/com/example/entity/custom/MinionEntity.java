@@ -249,6 +249,13 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		return this.isSitting() || this.isGuarding();
 	}
 
+	/**
+	 * @return true if this minion possesses wall-penetrating sentry senses / hearing (Sentinel archetype).
+	 */
+	public boolean hasSentrySense() {
+		return this.matchesRole(MinionRole.SENTINEL);
+	}
+
 	public int getPatrolRouteId() {
 		return this.dataTracker.get(PATROL_ROUTE_ID);
 	}
@@ -282,6 +289,10 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	@Override
 	public void setTarget(@org.jetbrains.annotations.Nullable LivingEntity target) {
 		if (target != null && this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
+			super.setTarget(null);
+			return;
+		}
+		if (target != null && this.matchesRole(MinionRole.BUILDER)) {
 			super.setTarget(null);
 			return;
 		}
@@ -356,7 +367,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 * @return True if permitted to attack.
 	 */
 	public boolean isTargetAllowed(EntityType<?> type) {
-		if (type == null) {
+		if (type == null || this.matchesRole(MinionRole.BUILDER)) {
 			return false;
 		}
 		MinionCombatPolicy policy = getCombatPolicy();
@@ -432,6 +443,10 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 	public void setAdaptiveRole(MinionRole role) {
 		this.dataTracker.set(ADAPTIVE_ROLE_ID, role != null ? role.getId() : MinionRole.WARRIOR.getId());
+		if (role == MinionRole.BUILDER) {
+			this.setTarget(null);
+			this.clearAssaultTargets();
+		}
 	}
 
 	public boolean matchesRole(MinionRole expectedRole) {
@@ -688,6 +703,21 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			}
 		} else {
 			finishBuildingEgress(serverWorld);
+		}
+	}
+
+	/**
+	 * Immediately clears structure egress state without forcing ground descent or cancelling levitation.
+	 * Used when chaining directly to another active construction or mining session.
+	 */
+	public void clearBuildingEgress() {
+		this.exitingBuilding = false;
+		this.lastStructureBox = null;
+		this.structureExitVec = null;
+		this.egressTicks = 0;
+		this.noClip = false;
+		if (!this.getWorld().isClient()) {
+			this.dataTracker.set(PHASING_BLOCKS, false);
 		}
 	}
 
@@ -1220,6 +1250,10 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 */
 	public void setRole(MinionRole role) {
 		this.dataTracker.set(ROLE_ID, role != null ? role.getId() : MinionRole.AUTO.getId());
+		if (role == MinionRole.BUILDER) {
+			this.setTarget(null);
+			this.clearAssaultTargets();
+		}
 	}
 
 	/**
@@ -1266,6 +1300,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 */
 	public void setAssaultTargets(Collection<? extends LivingEntity> targets) {
 		this.assaultTargets.clear();
+		if (this.matchesRole(MinionRole.BUILDER)) {
+			return;
+		}
 		if (targets != null) {
 			for (LivingEntity target : targets) {
 				if (target != null && target.isAlive() && !target.isRemoved() && target.getWorld() == this.getWorld()) {
@@ -1368,6 +1405,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		this.goalSelector.add(5, new MeleeAttackGoal(this, 1.35D, true) {
 			@Override
 			public boolean canStart() {
+				if (MinionEntity.this.matchesRole(MinionRole.BUILDER)) {
+					return false;
+				}
 				ItemStack held = MinionEntity.this.getMainHandStack();
 				// If holding a pure ranged/thrown weapon (bow, crossbow, grenade stick, tnt stick), suppress melee goal
 				if (MinionEntity.isRangedWeapon(held) && !MinionEntity.isMeleeWeapon(held)) {
@@ -1382,6 +1422,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 			@Override
 			public boolean shouldContinue() {
+				if (MinionEntity.this.matchesRole(MinionRole.BUILDER)) {
+					return false;
+				}
 				ItemStack held = MinionEntity.this.getMainHandStack();
 				if (MinionEntity.isRangedWeapon(held) && !MinionEntity.isMeleeWeapon(held)) {
 					return false;
@@ -1412,7 +1455,8 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		this.targetSelector.add(1, new TrackOwnerAttackerGoal(this) {
 			@Override
 			public boolean canStart() {
-				if (MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
+				if (MinionEntity.this.matchesRole(MinionRole.BUILDER)
+						|| MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
 					return false;
 				}
 				if (MinionEntity.this.hasLeader() || MinionEntity.this.isActivelyBuilding()
@@ -1429,7 +1473,8 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		this.targetSelector.add(2, new AttackWithOwnerGoal(this) {
 			@Override
 			public boolean canStart() {
-				if (MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE
+				if (MinionEntity.this.matchesRole(MinionRole.BUILDER)
+						|| MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE
 						|| MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.DEFENSIVE) {
 					return false;
 				}
@@ -1450,7 +1495,8 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		this.targetSelector.add(3, new RevengeGoal(this) {
 			@Override
 			public boolean canStart() {
-				if (MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
+				if (MinionEntity.this.matchesRole(MinionRole.BUILDER)
+						|| MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
 					return false;
 				}
 				if (MinionEntity.this.isActivelyBuilding()
@@ -1509,6 +1555,12 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			}
 
 			LivingEntity currentTarget = this.getTarget();
+
+			// Builders do not fight
+			if (this.matchesRole(MinionRole.BUILDER) && currentTarget != null) {
+				this.setTarget(null);
+				currentTarget = null;
+			}
 
 			// Sentinels fight like warriors ONLY if no minions or iron golems near them need zero healing
 			if (this.matchesRole(MinionRole.SENTINEL) && currentTarget != null && this.hasNearbyAlliesNeedingHealing()) {
@@ -2165,6 +2217,15 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 * - Priority 1 (Medic / Sentinel): Commander or nearby allied minion wounded below 70% HP.
 	 * - Priority 2 (Combat / Warrior): Target engaged or hostile mobs within 16m.
 	 * - Priority 3 (Architect / Builder): Active construction session or peaceful base operations.
+	/**
+	 * Dynamically updates the adaptive role of minions operating under {@link MinionRole#AUTO}.
+	 * <p>
+	 * Priority order:
+	 * 1. {@link MinionRole#SENTINEL}: If this minion itself, the commander, or any nearby ally/golem needs healing (< 70% max HP).
+	 * 2. {@link MinionRole#WARRIOR}: If targeting a hostile, actively attacked, or hostile mobs are within 16m.
+	 * 3. {@link MinionRole#BUILDER}: If peaceful and an active construction or deconstruction session is nearby or engaged.
+	 * 4. {@link MinionRole#SENTINEL}: If placed on hold position / stationed at a guard post.
+	 * 5. {@link MinionRole#WARRIOR}: Default peacetime vanguard escort role.
 	 */
 	public void evaluateAutoRole() {
 		if (this.getRole() != MinionRole.AUTO || !(this.getWorld() instanceof ServerWorld serverWorld)) {
@@ -2173,9 +2234,12 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 		MinionRole targetAdaptiveRole;
 
-		// 1. Check if owner or any nearby allied minion within 16m has health < 70%
+		// 1. Check if this minion itself, commander, or any nearby allied minion/golem within 16m needs healing (< 70% max health)
 		boolean needsMedic = false;
-		if (this.getOwner() instanceof LivingEntity owner && owner.isAlive() && this.squaredDistanceTo(owner) <= 256.0D) {
+		if (this.getHealth() < this.getMaxHealth() * 0.70F) {
+			needsMedic = true;
+		}
+		if (!needsMedic && this.getOwner() instanceof LivingEntity owner && owner.isAlive() && this.squaredDistanceTo(owner) <= 256.0D) {
 			if (owner.getHealth() < owner.getMaxHealth() * 0.70F) {
 				needsMedic = true;
 			}
@@ -2190,10 +2254,22 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 				needsMedic = true;
 			}
 		}
+		if (!needsMedic) {
+			List<IronGolemEntity> woundedGolems = serverWorld.getEntitiesByClass(
+				IronGolemEntity.class,
+				this.getBoundingBox().expand(16.0D),
+				golem -> golem.isAlive() && isAlliedTeammate(golem) && golem.getHealth() < golem.getMaxHealth() * 0.70F
+			);
+			if (!woundedGolems.isEmpty()) {
+				needsMedic = true;
+			}
+		}
 
 		if (needsMedic) {
 			targetAdaptiveRole = MinionRole.SENTINEL;
 		} else if (this.getTarget() != null && this.getTarget().isAlive()) {
+			targetAdaptiveRole = MinionRole.WARRIOR;
+		} else if (this.getAttacker() != null && this.getAttacker().isAlive()) {
 			targetAdaptiveRole = MinionRole.WARRIOR;
 		} else {
 			List<LivingEntity> nearbyHostiles = serverWorld.getEntitiesByClass(
@@ -2204,7 +2280,8 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			);
 			if (!nearbyHostiles.isEmpty()) {
 				targetAdaptiveRole = MinionRole.WARRIOR;
-			} else if (this.isActivelyBuilding() || this.isPhasingBlocks()) {
+			} else if (this.isActivelyBuilding() || this.isPhasingBlocks()
+					|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(this)) {
 				targetAdaptiveRole = MinionRole.BUILDER;
 			} else if (this.getOwnerUuid() != null && com.example.construction.ConstructionManager.getInstance().findNearestSessionForMinion(serverWorld, this.getBlockPos(), this.getOwnerUuid(), 128.0D, MinionRole.BUILDER).isPresent()) {
 				targetAdaptiveRole = MinionRole.BUILDER;
@@ -2223,6 +2300,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 	@Override
 	public void shootAt(LivingEntity target, float pullProgress) {
+		if (this.matchesRole(MinionRole.BUILDER)) {
+			return;
+		}
 		ItemStack weapon = this.getMainHandStack();
 		if (!isRangedWeapon(weapon)) {
 			ItemStack offhand = this.getOffHandStack();
@@ -2463,6 +2543,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 */
 	@Override
 	public boolean tryAttack(Entity target) {
+		if (this.matchesRole(MinionRole.BUILDER)) {
+			return false;
+		}
 		this.swingHand(Hand.MAIN_HAND);
 		boolean attacked = super.tryAttack(target);
 		if (attacked) {
@@ -2726,7 +2809,11 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 				return false;
 			}
 		}
-		return super.damage(source, amount);
+		boolean result = super.damage(source, amount);
+		if (result && !this.getWorld().isClient() && this.getRole() == MinionRole.AUTO && this.isAlive()) {
+			this.evaluateAutoRole();
+		}
+		return result;
 	}
 
 	/**
