@@ -644,7 +644,7 @@ public final class MinionHarvestingHelper {
 		return false;
 	}
 
-	private static void giveOrDropItem(MinionEntity minion, ItemStack stack) {
+	public static void giveOrDropItem(MinionEntity minion, ItemStack stack) {
 		if (stack.isEmpty()) return;
 		ItemStack leftover = minion.getInventory().addStack(stack);
 		if (!leftover.isEmpty()) {
@@ -813,6 +813,7 @@ public final class MinionHarvestingHelper {
 				if (state.isOf(Blocks.WATER) && world.getFluidState(pos).isStill()) {
 					consumeItemFromInventory(minion.getInventory(), Items.BUCKET, 1);
 					giveOrDropItem(minion, new ItemStack(Items.WATER_BUCKET, 1));
+					world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 					world.playSound(null, pos, SoundEvents.ITEM_BUCKET_FILL, SoundCategory.BLOCKS, 1.0F, 1.0F);
 					world.spawnParticles(ParticleTypes.SPLASH, pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.1D);
 					return true;
@@ -1438,7 +1439,7 @@ public final class MinionHarvestingHelper {
 		return -1;
 	}
 
-	private static boolean hasItemInInventory(MinionEntity minion, Item item) {
+	public static boolean hasItemInInventory(MinionEntity minion, Item item) {
 		SimpleInventory inv = minion.getInventory();
 		for (int i = 0; i < inv.size(); i++) {
 			ItemStack stack = inv.getStack(i);
@@ -1449,7 +1450,7 @@ public final class MinionHarvestingHelper {
 		return false;
 	}
 
-	private static int countItemInInventory(SimpleInventory inv, Item item) {
+	public static int countItemInInventory(SimpleInventory inv, Item item) {
 		int count = 0;
 		for (int i = 0; i < inv.size(); i++) {
 			ItemStack stack = inv.getStack(i);
@@ -1460,7 +1461,7 @@ public final class MinionHarvestingHelper {
 		return count;
 	}
 
-	private static int countItemInInventory(SimpleInventory inv, net.minecraft.registry.tag.TagKey<Item> tag) {
+	public static int countItemInInventory(SimpleInventory inv, net.minecraft.registry.tag.TagKey<Item> tag) {
 		int count = 0;
 		for (int i = 0; i < inv.size(); i++) {
 			ItemStack stack = inv.getStack(i);
@@ -1471,7 +1472,7 @@ public final class MinionHarvestingHelper {
 		return count;
 	}
 
-	private static void consumeItemFromInventory(SimpleInventory inv, Item item, int amount) {
+	public static void consumeItemFromInventory(SimpleInventory inv, Item item, int amount) {
 		for (int i = 0; i < inv.size() && amount > 0; i++) {
 			ItemStack stack = inv.getStack(i);
 			if (!stack.isEmpty() && stack.isOf(item)) {
@@ -1483,7 +1484,7 @@ public final class MinionHarvestingHelper {
 		inv.markDirty();
 	}
 
-	private static void consumeItemFromInventory(SimpleInventory inv, net.minecraft.registry.tag.TagKey<Item> tag, int amount) {
+	public static void consumeItemFromInventory(SimpleInventory inv, net.minecraft.registry.tag.TagKey<Item> tag, int amount) {
 		for (int i = 0; i < inv.size() && amount > 0; i++) {
 			ItemStack stack = inv.getStack(i);
 			if (!stack.isEmpty() && stack.isIn(tag)) {

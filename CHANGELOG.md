@@ -28,10 +28,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - When a builder minion needs a water bucket in Survival mode, it can autonomously scoop nearby water sources within 16 blocks using an empty bucket.
   - If the minion lacks an empty bucket but carries at least 3 iron ingots, it autonomously crafts a bucket on demand and scoops the water source.
 
-#### ⛏️ Mining & Dismantle Fluid Immunity
-- **Liquid Block Ignoring (`ConstructionSession`, `MinionBuildGoal.executeDismantleWork`)**:
+#### ⛏️ Mining & Dismantle Fluid Mechanics & Water Source Removal
+- **Liquid Block Tool Immunity (`ConstructionSession`, `MinionBuildGoal.executeDismantleWork`)**:
   - In both Survival and Creative modes, minions mining or dismantling structures strictly ignore water, lava, and any fluids (`isLiquid()` / `FluidBlock`).
   - Minions will never swing tools at water/lava or attempt to clear fluids with pickaxes.
+- **Builder Minion Water & Fluid Source Removal (`MinionBuildGoal.removeFluidSource`)**:
+  - Builder minions dismantling or clearing water/lava features (e.g. fountains, canals, moats) can actively remove true fluid source blocks (`isStill()`):
+    - **Creative Mode**: Instantly cleared to `Blocks.AIR` with bucket scoop SFX and splash particles.
+    - **Survival Mode**: Scooped with an empty `Items.BUCKET` and stored as `Items.WATER_BUCKET` in the minion's inventory. If lacking a bucket, minions autonomously craft one from 3 iron ingots, scavenge one from nearby containers within 32 blocks, or displace the source block with solid blocks (cobblestone, dirt, sponge) before breaking.
+  - Flowing fluids (`!isStill()`) are never scooped or mined; they naturally recede as the controlling source blocks are removed.
 - **Mining Area Blueprint Filtration (`StructureBlueprint.createAreaBlueprint`)**:
   - Volumetric area mining blueprints automatically exclude all liquid and fluid blocks during creation, ensuring task queues only contain real destructible blocks.
 - **Fluid Clearance Non-Blocking (`ConstructionSession.isDismantleTaskReady`, `hasRemainingBlocksInWorld`)**:

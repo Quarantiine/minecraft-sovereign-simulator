@@ -132,4 +132,39 @@ public class FluidHandlingAndWaterBucketTest {
 		Assertions.assertTrue(managerSource.contains("session.getBlueprint().getId().startsWith(\"build_area_\")"),
 			"ConstructionManager.renderHologramParticles must skip Area Fill sessions");
 	}
+
+	@Test
+	@DisplayName("Builder minions remove water source blocks with empty buckets or during dismantling")
+	void testBuilderMinionWaterSourceRemovalContract() throws IOException {
+		String goalSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java"));
+		String sessionSource = Files.readString(Path.of("src/main/java/com/example/construction/ConstructionSession.java"));
+		String helperSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+
+		// MinionBuildGoal must detect still water and still lava sources
+		Assertions.assertTrue(goalSource.contains("boolean isStillWater = currentState.isOf(Blocks.WATER) && serverWorld.getFluidState(targetPos).isStill()"),
+			"MinionBuildGoal must check isStillWater for source block detection");
+		Assertions.assertTrue(goalSource.contains("boolean isFlowingFluid = isFluid && !isStillWater && !isStillLava"),
+			"MinionBuildGoal must differentiate flowing fluids from source blocks");
+
+		// MinionBuildGoal must have removeFluidSource method
+		Assertions.assertTrue(goalSource.contains("removeFluidSource(ServerWorld serverWorld, BlockPos targetPos, BlockState currentState, boolean isWater)"),
+			"MinionBuildGoal must implement removeFluidSource for removing fluid source blocks");
+
+		// removeFluidSource must scoop with empty bucket and convert to filled bucket
+		Assertions.assertTrue(goalSource.contains("SoundEvents.ITEM_BUCKET_FILL"),
+			"removeFluidSource must play bucket fill sound");
+		Assertions.assertTrue(goalSource.contains("withdrawBucketFromNearbyContainer"),
+			"removeFluidSource must be capable of retrieving buckets from nearby containers");
+		Assertions.assertTrue(goalSource.contains("tryDisplaceFluidWithSolidBlock"),
+			"removeFluidSource must be capable of displacing fluids with solid blocks");
+
+		// ConstructionSession claimNextTask must only auto-complete flowing fluids, leaving source blocks for builders
+		Assertions.assertTrue(sessionSource.contains("boolean isFlowing = isFluid(worldState) && !worldState.getFluidState().isStill()"),
+			"ConstructionSession must only auto-complete flowing fluids in DISMANTLE mode");
+
+		// MinionHarvestingHelper.gatherWaterBucket must set scooped water block to air
+		Assertions.assertTrue(helperSource.contains("world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL)"),
+			"MinionHarvestingHelper.gatherWaterBucket must remove scooped water source block from the world");
+	}
 }
+

@@ -386,7 +386,8 @@ public class ConstructionSession {
 					BlockPos targetPos = task.getWorldPos();
 					if (world != null) {
 						BlockState worldState = world.getBlockState(targetPos);
-						if (worldState.isAir() || isFluid(worldState) || isIndestructible(worldState, world, targetPos)) {
+						boolean isFlowing = isFluid(worldState) && !worldState.getFluidState().isStill();
+						if (worldState.isAir() || isFlowing || isIndestructible(worldState, world, targetPos)) {
 							task.complete();
 							this.completedCount++;
 							if (this.completedCount >= this.tasks.size() || !hasRemainingBlocksInWorld(world)) {
@@ -398,7 +399,7 @@ public class ConstructionSession {
 							}
 							continue;
 						}
-					} else if (isIndestructible(bpBlock.state(), null, targetPos) || isFluid(bpBlock.state())) {
+					} else if (isIndestructible(bpBlock.state(), null, targetPos) || (isFluid(bpBlock.state()) && !bpBlock.state().getFluidState().isStill())) {
 						task.complete();
 						this.completedCount++;
 						if (this.completedCount >= this.tasks.size()) {
@@ -640,13 +641,15 @@ public class ConstructionSession {
 		BlueprintBlock bpBlock = task.getBlueprintBlock();
 		BlockPos targetPos = task.getWorldPos();
 
-		// Safeguard: Indestructible blocks (hardness < 0.0F or Blocks.BEDROCK) and fluids (water, lava) must never be marked ready for dismantling
-		if (isIndestructible(bpBlock.state(), world, targetPos) || isFluid(bpBlock.state())) {
+		// Safeguard: Indestructible blocks (hardness < 0.0F or Blocks.BEDROCK) and flowing fluids must never be marked ready for dismantling
+		boolean isFlowingBp = isFluid(bpBlock.state()) && !bpBlock.state().getFluidState().isStill();
+		if (isIndestructible(bpBlock.state(), world, targetPos) || isFlowingBp) {
 			return false;
 		}
 		if (world != null) {
 			BlockState worldState = world.getBlockState(targetPos);
-			if (isIndestructible(worldState, world, targetPos) || isFluid(worldState)) {
+			boolean isFlowingWorld = isFluid(worldState) && !worldState.getFluidState().isStill();
+			if (isIndestructible(worldState, world, targetPos) || isFlowingWorld) {
 				return false;
 			}
 		}
@@ -686,10 +689,14 @@ public class ConstructionSession {
 		int targetEffectiveY = bpBlock.getEffectiveY();
 		for (ConstructionTask other : this.tasks) {
 			if (!other.isCompleted() && other.getBlueprintBlock().getEffectiveY() > targetEffectiveY) {
-				if (world != null && (world.getBlockState(other.getWorldPos()).isAir() || isFluid(world.getBlockState(other.getWorldPos())) || isIndestructible(world, other.getWorldPos()))) {
-					other.complete();
-					this.completedCount++;
-					continue;
+				if (world != null) {
+					BlockState otherState = world.getBlockState(other.getWorldPos());
+					boolean isFlowingOther = isFluid(otherState) && !otherState.getFluidState().isStill();
+					if (otherState.isAir() || isFlowingOther || isIndestructible(world, other.getWorldPos())) {
+						other.complete();
+						this.completedCount++;
+						continue;
+					}
 				}
 				return false;
 			}

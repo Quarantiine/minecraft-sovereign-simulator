@@ -1146,7 +1146,9 @@ public class MinionBuildGoal extends Goal {
 			return;
 		}
 
-		if (state.getBlock() instanceof TallPlantBlock) {
+		if (state.isOf(Blocks.WATER) || state.isOf(Blocks.LAVA)) {
+			world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
+		} else if (state.getBlock() instanceof TallPlantBlock) {
 			DoubleBlockHalf half = state.get(TallPlantBlock.HALF);
 			BlockPos otherHalf = (half == DoubleBlockHalf.LOWER) ? pos.up() : pos.down();
 			world.setBlockState(otherHalf, Blocks.AIR.getDefaultState(), Block.NOTIFY_LISTENERS);
@@ -1758,9 +1760,31 @@ public class MinionBuildGoal extends Goal {
 
 		BlockState currentState = serverWorld.getBlockState(targetPos);
 		boolean alreadyAir = currentState.isAir();
+		boolean isStillWater = currentState.isOf(Blocks.WATER) && serverWorld.getFluidState(targetPos).isStill();
+		boolean isStillLava = currentState.isOf(Blocks.LAVA) && serverWorld.getFluidState(targetPos).isStill();
 		boolean isFluid = currentState.isLiquid() || currentState.getBlock() instanceof net.minecraft.block.FluidBlock || !serverWorld.getFluidState(targetPos).isEmpty();
+		boolean isFlowingFluid = isFluid && !isStillWater && !isStillLava;
 
-		if (alreadyAir || isFluid) {
+		if (alreadyAir || isFlowingFluid) {
+			this.currentSession.completeTask(this.currentTask, serverWorld);
+			this.workTicks = 0;
+			this.ticksNavigating = 0;
+			this.stallCollisionTicks = 0;
+			this.groundNavigationForced = false;
+			this.hoverStationVec = null;
+
+			if (!tryClaimTaskOrChainNextSession(serverWorld)) {
+				this.currentTask = null;
+				this.hoverStationVec = null;
+				if (!this.minion.isArcaneLevitating()) {
+					restoreHeldWeapon();
+				}
+			}
+			return;
+		}
+
+		if (isStillWater || isStillLava) {
+			removeFluidSource(serverWorld, targetPos, currentState, isStillWater);
 			this.currentSession.completeTask(this.currentTask, serverWorld);
 			this.workTicks = 0;
 			this.ticksNavigating = 0;
@@ -1926,6 +1950,104 @@ public class MinionBuildGoal extends Goal {
 				restoreHeldWeapon();
 			}
 		}
+	}
+
+	/**
+	 * Removes a fluid source block (water or lava).
+	 * In Creative mode, instantly clears the block to Air.
+	 * In Survival mode, scoops the source with an empty bucket into a water/lava bucket (or crafts/withdraws/displaces).
+	 */
+	public void removeFluidSource(ServerWorld serverWorld, BlockPos targetPos, BlockState currentState, boolean isWater) {
+		Item bucketItem = Items.BUCKET;
+		Item filledItem = isWater ? Items.WATER_BUCKET : Items.LAVA_BUCKET;
+		SoundEvent fillSound = isWater ? SoundEvents.ITEM_BUCKET_FILL : SoundEvents.ITEM_BUCKET_FILL_LAVA;
+
+		if (this.currentSession.isCreative()) {
+			serverWorld.setBlockState(targetPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+			serverWorld.playSound(null, targetPos, fillSound, SoundCategory.BLOCKS, 1.0F, 1.0F);
+			serverWorld.spawnParticles(
+				isWater ? ParticleTypes.SPLASH : ParticleTypes.LAVA,
+				targetPos.getX() + 0.5D, targetPos.getY() + 0.5D, targetPos.getZ() + 0.5D,
+				12, 0.25D, 0.25D, 0.25D, 0.1D
+			);
+			this.minion.swingHand(Hand.MAIN_HAND);
+			return;
+		}
+
+		// Survival mode: Try to scoop with empty bucket
+		if (!com.example.entity.ai.logistics.MinionHarvestingHelper.hasItemInInventory(this.minion, bucketItem)) {
+			// Try to craft an empty bucket from 3 iron ingots if available
+			if (com.example.entity.ai.logistics.MinionHarvestingHelper.countItemInInventory(this.minion.getInventory(), Items.IRON_INGOT) >= 3) {
+				com.example.entity.ai.logistics.MinionHarvestingHelper.consumeItemFromInventory(this.minion.getInventory(), Items.IRON_INGOT, 3);
+				com.example.entity.ai.logistics.MinionHarvestingHelper.giveOrDropItem(this.minion, new ItemStack(bucketItem, 1));
+				serverWorld.playSound(null, this.minion.getBlockPos(), SoundEvents.ENTITY_VILLAGER_WORK_TOOLSMITH, SoundCategory.NEUTRAL, 1.0F, 1.0F);
+			} else {
+				// Search nearby container within 32 blocks for an empty bucket
+				withdrawBucketFromNearbyContainer(serverWorld, 32);
+			}
+		}
+
+		if (com.example.entity.ai.logistics.MinionHarvestingHelper.hasItemInInventory(this.minion, bucketItem)) {
+			com.example.entity.ai.logistics.MinionHarvestingHelper.consumeItemFromInventory(this.minion.getInventory(), bucketItem, 1);
+			com.example.entity.ai.logistics.MinionHarvestingHelper.giveOrDropItem(this.minion, new ItemStack(filledItem, 1));
+			serverWorld.setBlockState(targetPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+			serverWorld.playSound(null, targetPos, fillSound, SoundCategory.BLOCKS, 1.0F, 1.0F);
+			serverWorld.spawnParticles(
+				isWater ? ParticleTypes.SPLASH : ParticleTypes.LAVA,
+				targetPos.getX() + 0.5D, targetPos.getY() + 0.5D, targetPos.getZ() + 0.5D,
+				12, 0.25D, 0.25D, 0.25D, 0.1D
+			);
+			this.minion.swingHand(Hand.MAIN_HAND);
+		} else {
+			// Displace fluid with solid block if minion carries cobblestone, dirt, or sponge
+			if (tryDisplaceFluidWithSolidBlock(serverWorld, targetPos)) {
+				// Displaced with solid block and broken
+			} else {
+				// Ultimate fallback: Clear to air so session never gets stuck
+				serverWorld.setBlockState(targetPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+				serverWorld.playSound(null, targetPos, fillSound, SoundCategory.BLOCKS, 1.0F, 1.0F);
+				this.minion.swingHand(Hand.MAIN_HAND);
+			}
+		}
+	}
+
+	private boolean withdrawBucketFromNearbyContainer(ServerWorld world, int radius) {
+		BlockPos center = this.minion.getBlockPos();
+		int verticalRadius = 8;
+		for (BlockPos pos : BlockPos.iterateOutwards(center, radius, verticalRadius, radius)) {
+			BlockState state = world.getBlockState(pos);
+			if (state.isOf(Blocks.CHEST) || state.isOf(Blocks.BARREL) || state.isOf(Blocks.TRAPPED_CHEST)) {
+				BlockEntity be = world.getBlockEntity(pos);
+				if (be instanceof Inventory containerInv) {
+					for (int i = 0; i < containerInv.size(); i++) {
+						ItemStack stack = containerInv.getStack(i);
+						if (!stack.isEmpty() && stack.isOf(Items.BUCKET)) {
+							containerInv.removeStack(i, 1);
+							containerInv.markDirty();
+							com.example.entity.ai.logistics.MinionHarvestingHelper.giveOrDropItem(this.minion, new ItemStack(Items.BUCKET, 1));
+							world.playSound(null, pos, SoundEvents.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.5F, 1.2F);
+							world.spawnParticles(ParticleTypes.CLOUD, pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D, 4, 0.1D, 0.1D, 0.1D, 0.02D);
+							return true;
+						}
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	private boolean tryDisplaceFluidWithSolidBlock(ServerWorld serverWorld, BlockPos targetPos) {
+		Item[] candidates = new Item[] { Items.COBBLESTONE, Items.DIRT, Items.STONE, Items.NETHERRACK, Items.SPONGE };
+		for (Item candidate : candidates) {
+			if (com.example.entity.ai.logistics.MinionHarvestingHelper.hasItemInInventory(this.minion, candidate)) {
+				BlockState solidState = Block.getBlockFromItem(candidate).getDefaultState();
+				serverWorld.setBlockState(targetPos, solidState, Block.NOTIFY_ALL);
+				serverWorld.breakBlock(targetPos, true, this.minion);
+				this.minion.swingHand(Hand.MAIN_HAND);
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
