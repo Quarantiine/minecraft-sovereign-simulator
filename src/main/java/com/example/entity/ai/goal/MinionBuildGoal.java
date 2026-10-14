@@ -693,6 +693,17 @@ public class MinionBuildGoal extends Goal {
 				minionInv.removeStack(minionSlot, 1);
 				hasResources = true;
 			} else {
+				// 1.5 Craft on-demand from existing blocks in minion inventory (e.g. planks -> stairs, logs -> planks, stone -> stone bricks)
+				if (com.example.entity.ai.logistics.MinionHarvestingHelper.tryCraftBlockFromInventory(this.minion, serverWorld, requiredItem, this.currentSession)) {
+					int craftedSlot = findItemSlot(minionInv, requiredItem);
+					if (craftedSlot != -1) {
+						minionInv.removeStack(craftedSlot, 1);
+						hasResources = true;
+					}
+				}
+			}
+
+			if (!hasResources) {
 				// 2. Scavenge nearby containers (chests, barrels, shulkers) within 32 blocks
 				hasResources = scavengeNearbyContainers(serverWorld, requiredItem);
 			}
@@ -921,6 +932,69 @@ public class MinionBuildGoal extends Goal {
 									1.3F
 								);
 								return true;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Fallback: Scavenge base crafting ingredients from nearby containers and craft into requiredItem
+		List<Item> ingredients = com.example.entity.ai.logistics.MinionHarvestingHelper.getCraftingIngredients(requiredItem);
+		if (!ingredients.isEmpty()) {
+			for (Item ing : ingredients) {
+				for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+					for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+						if (!world.isChunkLoaded(cx, cz)) continue;
+						net.minecraft.world.chunk.WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, center.getY(), cz << 4));
+						if (chunk == null) continue;
+						for (BlockEntity be : chunk.getBlockEntities().values()) {
+							if (be instanceof Inventory containerInv) {
+								BlockPos pos = be.getPos();
+								if (Math.abs(pos.getX() - center.getX()) <= radius
+									&& Math.abs(pos.getY() - center.getY()) <= verticalRadius
+									&& Math.abs(pos.getZ() - center.getZ()) <= radius) {
+									int ingSlot = findItemSlot(containerInv, ing);
+									if (ingSlot != -1) {
+										ItemStack stack = containerInv.getStack(ingSlot);
+										int withdrawCount = Math.min(6, stack.getCount());
+										ItemStack withdrawn = containerInv.removeStack(ingSlot, withdrawCount);
+										be.markDirty();
+
+										this.minion.getInventory().addStack(withdrawn);
+										this.minion.getInventory().markDirty();
+
+										// Attempt craft with acquired ingredients
+										if (com.example.entity.ai.logistics.MinionHarvestingHelper.tryCraftBlockFromInventory(this.minion, world, requiredItem, this.currentSession)) {
+											int slot = findItemSlot(this.minion.getInventory(), requiredItem);
+											if (slot != -1) {
+												this.minion.getInventory().removeStack(slot, 1);
+												this.minion.getInventory().markDirty();
+
+												world.spawnParticles(
+													ParticleTypes.CLOUD,
+													pos.getX() + 0.5,
+													pos.getY() + 0.8,
+													pos.getZ() + 0.5,
+													4,
+													0.1,
+													0.1,
+													0.1,
+													0.02
+												);
+												world.playSound(
+													null,
+													pos,
+													SoundEvents.BLOCK_CHEST_OPEN,
+													SoundCategory.BLOCKS,
+													0.4F,
+													1.3F
+												);
+												return true;
+											}
+										}
+									}
+								}
 							}
 						}
 					}

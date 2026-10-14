@@ -265,7 +265,7 @@ All builds and runtime tasks are managed via the included Gradle wrapper (`./gra
 To bump the version, commit, build, and publish a GitHub release with the compiled mod `.jar` in a single command:
 
 ```bash
-VERSION="1.1.0"
+VERSION="1.1.1"
 TITLE="v${VERSION} - Title"
 NOTES="Description here..."
 

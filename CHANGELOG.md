@@ -5,6 +5,34 @@ All notable changes to **Sovereign Simulator: Arcane Strategy & Engineering** wi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [1.1.1] - 2026-10-14
+
+### 🔨 Builder Minion Survival On-Demand Block Crafting & Multi-Block Transformations
+
+### Added
+
+#### 🔨 Builder Minion Survival On-Demand Block Crafting & Multi-Block Transformations
+- **On-Demand Block-to-Block Crafting (`MinionHarvestingHelper.tryCraftBlockFromInventory`)**:
+  - Builder minions in survival mode can now craft architectural, masonry, utility, and decorative blocks on demand directly from base materials in their own 9-slot inventory (functioning like a player using a crafting table).
+  - Evaluated immediately before container scavenging and world harvesting, preventing minions from stalling or felling trees when holding base materials (e.g., crafting planks into stairs or logs into planks).
+- **Wood Type Fidelity & Proportional Crafting**:
+  - **Full Species Fidelity (`resolvePlanksForWoodenItem`, `resolveLogForWoodenItem`)**: Preserves exact wood species across transformations (e.g., birch log $\to$ birch planks $\to$ birch stairs/slabs/doors/fences/gates/buttons/signs).
+  - **Proportional Crafting**: When minions hold fewer than the standard full recipe batch (e.g. holding 1–5 planks when a standard recipe requires 6), minions craft derivative blocks proportionally (1 plank $\to$ 1 stair/slab/button) so construction never stalls on partial stacks.
+  - **Automatic Stick Generation (`ensureSticks`)**: Automatically converts available planks or logs into sticks when crafting fences, gates, signs, ladders, and tools.
+  - **In-Inventory Log Conversion**: Automatically converts raw logs into matching planks before attempting to fell wild trees or perform agro-forestry.
+- **Architectural & Masonry Transformations**:
+  - **Blackstone Architecture (`craftBlackstoneDerivative`)**: Blackstone $\to$ Polished Blackstone $\to$ Polished Blackstone Bricks $\to$ Stairs, Slabs, Walls, Pressure Plates, and Buttons (utilizing stonecutters for 1:1 efficiency).
+  - **Tuff Masonry (`craftTuffDerivative`)**: Tuff $\to$ Polished Tuff $\to$ Tuff Bricks $\to$ Chiseled Tuff Bricks $\to$ Stairs, Slabs, and Walls.
+  - **End Stone Architecture (`craftEndStoneDerivative`)**: End Stone $\to$ End Stone Bricks $\to$ Stairs, Slabs, and Walls.
+  - **Purpur Synthetics (`craftPurpurDerivative`)**: Popped Chorus Fruit $\to$ Purpur Block $\to$ Stairs, Slabs, and Pillars.
+  - **Prismarine Architecture (`craftPrismarineDerivative`)**: Prismarine Shards $\to$ Prismarine / Dark Prismarine / Prismarine Bricks $\to$ Stairs, Slabs, and Walls.
+- **Container Ingredient Scavenging Fallback (`MinionBuildGoal.scavengeNearbyContainers`)**:
+  - When nearby containers (chests, barrels, shulker boxes within 32 blocks) do not hold the finished target block, minions scan for base crafting ingredients using `MinionHarvestingHelper.getCraftingIngredients(requiredItem)`.
+  - Minions withdraw candidate ingredients (e.g., planks, logs, cobblestone, clay) from containers, craft the target block on site, and consume it to place the blueprint block.
+- **Peer-to-Peer Cooperative Allied Crafting (`MinionLogisticsHelper.requestItemFromAllies`)**:
+  - Allied minions can now craft requested blocks on demand from their own inventory or share base crafting ingredients with requesting minions to assemble the target blocks cooperatively.
+
+---
 
 ## [1.1.0] - 2026-10-13
 

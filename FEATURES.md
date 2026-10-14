@@ -1827,7 +1827,18 @@ Builders synthesize architectural blocks on demand from raw harvested materials:
 - **Nether & Quartz Architecture**: Smelts Netherrack into Nether Brick items $\to$ Nether Bricks blocks, stairs, and fences. Converts Nether Quartz into Quartz Blocks $\to$ Smooth Quartz.
 - **Basalt Masonry**: Converts Basalt into Polished Basalt, and smelts into Smooth Basalt.
 - **Metal Structural Components**: Smelts Raw Iron / Iron Ore into Iron Ingots $\to$ crafts Iron Bars, Chains, and Iron Blocks. Smelts Raw Copper into Copper Ingots $\to$ crafts Copper Blocks $\to$ stonecuts or crafts Cut Copper, Cut Copper Stairs, and Cut Copper Slabs. Smelts Raw Gold into Gold Ingots $\to$ crafts Gold Blocks.
-- **Wooden Architectural Derivatives**: Converts timber into Planks $\to$ crafts Wooden Stairs, Slabs, Doors, Trapdoors, Fences, and Fence Gates across all wood types using vanilla tags.
+- **Wooden Architectural Derivatives & Proportional Crafting**:
+  - **Full Species Fidelity**: Preserves wood species across transformations (e.g., Birch Log $\to$ Birch Planks $\to$ Birch Stairs/Slabs/Doors/Fences/Gates/Buttons/Signs).
+  - **Proportional Crafting**: If a minion holds fewer planks than a standard crafting recipe requires (e.g., 1–5 planks instead of 6 for stairs), it crafts blocks proportionally ($1 \text{ plank} \to 1 \text{ stair/slab/button}$) so survival construction never deadlocks on partial stacks.
+  - **Automatic Stick Generation (`ensureSticks`)**: Autonomously crafts Sticks from available Planks or Logs whenever crafting Fences, Gates, Signs, Ladders, or Tools.
+  - **In-Inventory Log Conversion**: Converts raw logs into matching planks directly from inventory before attempting to fell trees or perform agro-forestry.
+- **Blackstone Architecture**: Converts Blackstone $\to$ Polished Blackstone $\to$ Polished Blackstone Bricks $\to$ Stairs, Slabs, Walls, Pressure Plates, and Buttons (utilizing stonecutters for 1:1 efficiency).
+- **Tuff Masonry**: Converts Tuff $\to$ Polished Tuff $\to$ Tuff Bricks $\to$ Chiseled Tuff Bricks $\to$ Stairs, Slabs, and Walls.
+- **End Stone Architecture**: Converts End Stone $\to$ End Stone Bricks $\to$ Stairs, Slabs, and Walls.
+- **Purpur Synthetics**: Smelts Chorus Fruit $\to$ Popped Chorus Fruit $\to$ Purpur Block $\to$ Stairs, Slabs, and Pillars.
+- **Prismarine Architecture**: Combines Prismarine Shards $\to$ Prismarine / Dark Prismarine / Prismarine Bricks $\to$ Stairs, Slabs, and Walls.
+- **Container Ingredient Scavenging Fallback**: When nearby storage containers (chests, barrels, shulkers within 32m) lack the finished target block, minions scan for base ingredients (`getCraftingIngredients`), withdraw raw materials into their inventory, craft the required block on-demand, and consume it to place the block.
+- **Peer-to-Peer Cooperative Allied Crafting**: Allied minions within sharing range can craft requested blocks on-demand from their own inventory or share base crafting ingredients with requesting minions to assemble required blocks cooperatively.
 
 ### 25.2 Block-to-Non-Block Items & Sifting Mechanics
 

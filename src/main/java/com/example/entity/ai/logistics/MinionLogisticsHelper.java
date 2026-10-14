@@ -83,7 +83,36 @@ public final class MinionLogisticsHelper {
 				}
 			}
 
-			// Second check: check if ally can synthesize the item from raw materials (e.g. bones -> bone meal, string -> wool)
+			// Second check: check if ally can craft the item from raw materials or blocks
+			if (MinionHarvestingHelper.tryCraftBlockFromInventory(ally, world, requiredItem, null)) {
+				for (int slot = 0; slot < allyInv.size(); slot++) {
+					ItemStack stack = allyInv.getStack(slot);
+					if (!stack.isEmpty() && stack.isOf(requiredItem) && stack.getCount() > 0) {
+						ItemStack transferred = stack.split(1);
+						allyInv.markDirty();
+
+						requester.getInventory().addStack(transferred);
+						requester.getInventory().markDirty();
+
+						spawnSharingBeam(world, ally.getEyePos(), requester.getEyePos());
+
+						world.playSound(
+							null,
+							requester.getX(),
+							requester.getY(),
+							requester.getZ(),
+							SoundEvents.ENTITY_ITEM_PICKUP,
+							SoundCategory.NEUTRAL,
+							0.8F,
+							1.2F + (world.random.nextFloat() * 0.2F)
+						);
+
+						return true;
+					}
+				}
+			}
+
+			// Third check: check if ally can synthesize the item from raw materials (e.g. bones -> bone meal, string -> wool)
 			if (MinionHarvestingHelper.isMobProcurementResource(requiredItem)) {
 				if (MinionHarvestingHelper.synthesizeMaterial(allyInv, requiredItem)) {
 					for (int slot = 0; slot < allyInv.size(); slot++) {
@@ -108,6 +137,40 @@ public final class MinionLogisticsHelper {
 								1.2F + (world.random.nextFloat() * 0.2F)
 							);
 
+							return true;
+						}
+					}
+				}
+			}
+
+			// Fourth check: check if ally has base crafting ingredients and can transfer them to requester
+			List<Item> ingredients = MinionHarvestingHelper.getCraftingIngredients(requiredItem);
+			for (Item ing : ingredients) {
+				for (int slot = 0; slot < allyInv.size(); slot++) {
+					ItemStack stack = allyInv.getStack(slot);
+					if (!stack.isEmpty() && stack.isOf(ing) && stack.getCount() > 0) {
+						int transferCount = Math.min(stack.getCount(), 4);
+						ItemStack transferred = stack.split(transferCount);
+						allyInv.markDirty();
+
+						requester.getInventory().addStack(transferred);
+						requester.getInventory().markDirty();
+
+						spawnSharingBeam(world, ally.getEyePos(), requester.getEyePos());
+
+						world.playSound(
+							null,
+							requester.getX(),
+							requester.getY(),
+							requester.getZ(),
+							SoundEvents.ENTITY_ITEM_PICKUP,
+							SoundCategory.NEUTRAL,
+							0.8F,
+							1.2F + (world.random.nextFloat() * 0.2F)
+						);
+
+						// Now requester can craft target item
+						if (MinionHarvestingHelper.tryCraftBlockFromInventory(requester, world, requiredItem, null)) {
 							return true;
 						}
 					}

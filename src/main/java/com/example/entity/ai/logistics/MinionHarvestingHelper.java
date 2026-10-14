@@ -73,6 +73,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -111,8 +112,17 @@ public final class MinionHarvestingHelper {
 
 		// 2. Wood / Timber / Planks Harvesting & Agro-Forestry
 		if (isWoodResource(requiredItem)) {
+			// First attempt in-inventory conversion or crafting if logs/planks are already held
+			if (isPlanksItem(requiredItem)) {
+				convertLogsToPlanks(minion, requiredItem);
+			} else if (isWoodenDerivative(requiredItem)) {
+				craftWoodenDerivative(minion, world, requiredItem, session);
+			}
+			if (hasItemInInventory(minion, requiredItem)) {
+				return true;
+			}
+			// Second attempt: harvest timber from natural trees or agro-forestry
 			if (harvestWoodOrAgroForestry(minion, world, session)) {
-				// Convert to planks if required item is planks
 				if (isPlanksItem(requiredItem)) {
 					convertLogsToPlanks(minion, requiredItem);
 				} else if (isWoodenDerivative(requiredItem)) {
@@ -996,13 +1006,62 @@ public final class MinionHarvestingHelper {
 		world.spawnParticles(ParticleTypes.CRIT, minion.getX(), minion.getY() + 0.5D, minion.getZ(), 4, 0.2D, 0.2D, 0.2D, 0.05D);
 	}
 
-	private static void convertLogsToPlanks(MinionEntity minion, Item requiredPlanks) {
+	public static boolean isLogOrStem(Item item) {
+		if (item == null) return false;
+		ItemStack stack = item.getDefaultStack();
+		return stack.isIn(ItemTags.LOGS)
+			|| item == Items.CRIMSON_STEM || item == Items.STRIPPED_CRIMSON_STEM
+			|| item == Items.WARPED_STEM || item == Items.STRIPPED_WARPED_STEM
+			|| item == Items.BAMBOO_BLOCK || item == Items.STRIPPED_BAMBOO_BLOCK;
+	}
+
+	public static Item resolvePlanksForLog(Item logItem) {
+		if (logItem == null) return Items.OAK_PLANKS;
+		String path = Registries.ITEM.getId(logItem).getPath();
+		if (path.contains("spruce")) return Items.SPRUCE_PLANKS;
+		if (path.contains("birch")) return Items.BIRCH_PLANKS;
+		if (path.contains("jungle")) return Items.JUNGLE_PLANKS;
+		if (path.contains("acacia")) return Items.ACACIA_PLANKS;
+		if (path.contains("dark_oak")) return Items.DARK_OAK_PLANKS;
+		if (path.contains("mangrove")) return Items.MANGROVE_PLANKS;
+		if (path.contains("cherry")) return Items.CHERRY_PLANKS;
+		if (path.contains("bamboo")) return Items.BAMBOO_PLANKS;
+		if (path.contains("crimson")) return Items.CRIMSON_PLANKS;
+		if (path.contains("warped")) return Items.WARPED_PLANKS;
+		return Items.OAK_PLANKS;
+	}
+
+	public static Item resolveLogForWoodenItem(Item targetItem) {
+		if (targetItem == null) return Items.OAK_LOG;
+		String path = Registries.ITEM.getId(targetItem).getPath();
+		if (path.contains("spruce")) return Items.SPRUCE_LOG;
+		if (path.contains("birch")) return Items.BIRCH_LOG;
+		if (path.contains("jungle")) return Items.JUNGLE_LOG;
+		if (path.contains("acacia")) return Items.ACACIA_LOG;
+		if (path.contains("dark_oak")) return Items.DARK_OAK_LOG;
+		if (path.contains("mangrove")) return Items.MANGROVE_LOG;
+		if (path.contains("cherry")) return Items.CHERRY_LOG;
+		if (path.contains("bamboo")) return Items.BAMBOO_BLOCK;
+		if (path.contains("crimson")) return Items.CRIMSON_STEM;
+		if (path.contains("warped")) return Items.WARPED_STEM;
+		return Items.OAK_LOG;
+	}
+
+	public static void convertLogsToPlanks(MinionEntity minion, Item requiredPlanks) {
+		if (minion == null) return;
 		SimpleInventory inv = minion.getInventory();
 		for (int i = 0; i < inv.size(); i++) {
 			ItemStack stack = inv.getStack(i);
-			if (stack.isIn(ItemTags.LOGS) && stack.getCount() > 0) {
+			if (!stack.isEmpty() && isLogOrStem(stack.getItem()) && stack.getCount() > 0) {
+				Item outputPlanks = (requiredPlanks != null && isPlanksItem(requiredPlanks))
+					? requiredPlanks
+					: resolvePlanksForLog(stack.getItem());
 				stack.decrement(1);
-				inv.addStack(new ItemStack(requiredPlanks, 4));
+				if (stack.isEmpty()) {
+					inv.setStack(i, ItemStack.EMPTY);
+				}
+				int yield = (stack.isOf(Items.BAMBOO_BLOCK) || stack.isOf(Items.STRIPPED_BAMBOO_BLOCK)) ? 2 : 4;
+				inv.addStack(new ItemStack(outputPlanks, yield));
 				inv.markDirty();
 				return;
 			}
@@ -1107,11 +1166,10 @@ public final class MinionHarvestingHelper {
 	}
 
 	public static boolean isWoodResource(Item item) {
+		if (item == null) return false;
 		return item.getDefaultStack().isIn(ItemTags.LOGS)
 			|| item.getDefaultStack().isIn(ItemTags.PLANKS)
-			|| item.getDefaultStack().isIn(ItemTags.WOODEN_STAIRS)
-			|| item.getDefaultStack().isIn(ItemTags.WOODEN_SLABS)
-			|| item.getDefaultStack().isIn(ItemTags.WOODEN_DOORS);
+			|| isWoodenDerivative(item);
 	}
 
 	/**
@@ -1159,7 +1217,10 @@ public final class MinionHarvestingHelper {
 			|| item == Items.RAW_GOLD
 			|| item == Items.NETHERRACK
 			|| item == Items.BASALT
-			|| item == Items.QUARTZ;
+			|| item == Items.QUARTZ
+			|| item == Items.BLACKSTONE
+			|| item == Items.TUFF
+			|| item == Items.END_STONE;
 	}
 
 	// =========================================================================
@@ -1337,6 +1398,11 @@ public final class MinionHarvestingHelper {
 			|| isPolishedStoneResource(item)
 			|| isMetalDerivativeResource(item)
 			|| isWoodenDerivative(item)
+			|| isBlackstoneResource(item)
+			|| isTuffResource(item)
+			|| isEndStoneResource(item)
+			|| isPurpurResource(item)
+			|| isPrismarineResource(item)
 			|| item == Items.FLINT
 			|| item == Items.CHARCOAL
 			|| item == Items.TORCH
@@ -1393,7 +1459,8 @@ public final class MinionHarvestingHelper {
 	public static boolean isBrickResource(Item item) {
 		if (item == null) return false;
 		return item == Items.BRICK || item == Items.BRICKS || item == Items.BRICK_STAIRS || item == Items.BRICK_SLAB || item == Items.BRICK_WALL
-			|| item == Items.CLAY_BALL || item == Items.CLAY || item == Items.TERRACOTTA;
+			|| item == Items.CLAY_BALL || item == Items.CLAY || item == Items.TERRACOTTA
+			|| item == Items.MUD_BRICKS || item == Items.MUD_BRICK_STAIRS || item == Items.MUD_BRICK_SLAB || item == Items.MUD_BRICK_WALL;
 	}
 
 	public static boolean isGlassResource(Item item) {
@@ -1426,6 +1493,40 @@ public final class MinionHarvestingHelper {
 			|| item == Items.POLISHED_GRANITE || item == Items.POLISHED_GRANITE_STAIRS || item == Items.POLISHED_GRANITE_SLAB;
 	}
 
+	public static boolean isBlackstoneResource(Item item) {
+		if (item == null) return false;
+		return item == Items.BLACKSTONE || item == Items.BLACKSTONE_STAIRS || item == Items.BLACKSTONE_SLAB || item == Items.BLACKSTONE_WALL
+			|| item == Items.POLISHED_BLACKSTONE || item == Items.POLISHED_BLACKSTONE_STAIRS || item == Items.POLISHED_BLACKSTONE_SLAB
+			|| item == Items.POLISHED_BLACKSTONE_WALL || item == Items.POLISHED_BLACKSTONE_BRICKS || item == Items.POLISHED_BLACKSTONE_BRICK_STAIRS
+			|| item == Items.POLISHED_BLACKSTONE_BRICK_SLAB || item == Items.POLISHED_BLACKSTONE_BRICK_WALL || item == Items.CHISELED_POLISHED_BLACKSTONE
+			|| item == Items.CRACKED_POLISHED_BLACKSTONE_BRICKS || item == Items.POLISHED_BLACKSTONE_BUTTON || item == Items.POLISHED_BLACKSTONE_PRESSURE_PLATE;
+	}
+
+	public static boolean isTuffResource(Item item) {
+		if (item == null) return false;
+		return item == Items.TUFF || item == Items.TUFF_STAIRS || item == Items.TUFF_SLAB || item == Items.TUFF_WALL
+			|| item == Items.POLISHED_TUFF || item == Items.POLISHED_TUFF_STAIRS || item == Items.POLISHED_TUFF_SLAB || item == Items.POLISHED_TUFF_WALL
+			|| item == Items.TUFF_BRICKS || item == Items.TUFF_BRICK_STAIRS || item == Items.TUFF_BRICK_SLAB || item == Items.TUFF_BRICK_WALL
+			|| item == Items.CHISELED_TUFF || item == Items.CHISELED_TUFF_BRICKS;
+	}
+
+	public static boolean isEndStoneResource(Item item) {
+		if (item == null) return false;
+		return item == Items.END_STONE || item == Items.END_STONE_BRICKS || item == Items.END_STONE_BRICK_STAIRS || item == Items.END_STONE_BRICK_SLAB || item == Items.END_STONE_BRICK_WALL;
+	}
+
+	public static boolean isPurpurResource(Item item) {
+		if (item == null) return false;
+		return item == Items.PURPUR_BLOCK || item == Items.PURPUR_STAIRS || item == Items.PURPUR_SLAB || item == Items.PURPUR_PILLAR;
+	}
+
+	public static boolean isPrismarineResource(Item item) {
+		if (item == null) return false;
+		return item == Items.PRISMARINE || item == Items.PRISMARINE_STAIRS || item == Items.PRISMARINE_SLAB || item == Items.PRISMARINE_WALL
+			|| item == Items.PRISMARINE_BRICKS || item == Items.PRISMARINE_BRICK_STAIRS || item == Items.PRISMARINE_BRICK_SLAB
+			|| item == Items.DARK_PRISMARINE || item == Items.DARK_PRISMARINE_STAIRS || item == Items.DARK_PRISMARINE_SLAB;
+	}
+
 	public static boolean isMetalDerivativeResource(Item item) {
 		if (item == null) return false;
 		return item == Items.IRON_INGOT || item == Items.IRON_BARS || item == Items.CHAIN || item == Items.IRON_BLOCK
@@ -1441,7 +1542,12 @@ public final class MinionHarvestingHelper {
 			|| stack.isIn(ItemTags.WOODEN_DOORS)
 			|| stack.isIn(ItemTags.WOODEN_TRAPDOORS)
 			|| stack.isIn(ItemTags.WOODEN_FENCES)
-			|| stack.isIn(ItemTags.FENCE_GATES);
+			|| stack.isIn(ItemTags.FENCE_GATES)
+			|| stack.isIn(ItemTags.WOODEN_PRESSURE_PLATES)
+			|| stack.isIn(ItemTags.WOODEN_BUTTONS)
+			|| stack.isIn(ItemTags.SIGNS)
+			|| stack.isIn(ItemTags.HANGING_SIGNS)
+			|| item == Items.LADDER;
 	}
 
 	private static boolean isSandstoneDerivative(Item item) {
@@ -1670,6 +1776,31 @@ public final class MinionHarvestingHelper {
 				playCraftingFeedback(minion, world, null);
 				return true;
 			}
+		}
+
+		// 21. Blackstone Derivatives
+		if (isBlackstoneResource(targetItem)) {
+			return craftBlackstoneDerivative(minion, world, targetItem, session);
+		}
+
+		// 22. Tuff Derivatives
+		if (isTuffResource(targetItem)) {
+			return craftTuffDerivative(minion, world, targetItem, session);
+		}
+
+		// 23. End Stone Derivatives
+		if (isEndStoneResource(targetItem)) {
+			return craftEndStoneDerivative(minion, world, targetItem, session);
+		}
+
+		// 24. Purpur Derivatives
+		if (isPurpurResource(targetItem)) {
+			return craftPurpurDerivative(minion, world, targetItem, session);
+		}
+
+		// 25. Prismarine Derivatives
+		if (isPrismarineResource(targetItem)) {
+			return craftPrismarineDerivative(minion, world, targetItem, session);
 		}
 
 		return false;
@@ -2438,6 +2569,22 @@ public final class MinionHarvestingHelper {
 		if (path.startsWith("warped_")) return Items.WARPED_PLANKS;
 		return Items.OAK_PLANKS;
 	}
+	private static void ensureSticks(SimpleInventory inv, int count) {
+		if (countItemInInventory(inv, Items.STICK) >= count) return;
+		for (int i = 0; i < inv.size() && countItemInInventory(inv, Items.STICK) < count; i++) {
+			ItemStack s = inv.getStack(i);
+			if (!s.isEmpty() && isPlanksItem(s.getItem())) {
+				int planksAvailable = s.getCount();
+				int planksToUse = Math.min(planksAvailable, Math.max(1, (count - countItemInInventory(inv, Items.STICK) + 1) / 2));
+				s.decrement(planksToUse);
+				if (s.isEmpty()) {
+					inv.setStack(i, ItemStack.EMPTY);
+				}
+				inv.addStack(new ItemStack(Items.STICK, planksToUse * 2));
+				inv.markDirty();
+			}
+		}
+	}
 
 	private static boolean craftWoodenDerivative(
 		MinionEntity minion,
@@ -2449,12 +2596,31 @@ public final class MinionHarvestingHelper {
 		Item planksItem = resolvePlanksForWoodenItem(targetItem);
 
 		int neededPlanks = 6;
+		int neededSticks = 0;
 		if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_SLABS)) {
 			neededPlanks = 3;
 		} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_FENCES)) {
 			neededPlanks = 4;
+			neededSticks = 2;
 		} else if (targetItem.getDefaultStack().isIn(ItemTags.FENCE_GATES)) {
 			neededPlanks = 2;
+			neededSticks = 4;
+		} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_PRESSURE_PLATES)) {
+			neededPlanks = 2;
+		} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_BUTTONS)) {
+			neededPlanks = 1;
+		} else if (targetItem.getDefaultStack().isIn(ItemTags.SIGNS)) {
+			neededPlanks = 6;
+			neededSticks = 1;
+		} else if (targetItem.getDefaultStack().isIn(ItemTags.HANGING_SIGNS)) {
+			neededPlanks = 2;
+		} else if (targetItem == Items.LADDER) {
+			neededPlanks = 2;
+			neededSticks = 7;
+		}
+
+		if (neededSticks > 0) {
+			ensureSticks(inv, neededSticks);
 		}
 
 		ensurePlanks(minion, world, session, neededPlanks);
@@ -2462,22 +2628,43 @@ public final class MinionHarvestingHelper {
 			planksItem = findItemInInventory(inv, ItemTags.PLANKS);
 		}
 
-		if (planksItem != null && countItemInInventory(inv, planksItem) >= neededPlanks) {
-			consumeItemFromInventory(inv, planksItem, neededPlanks);
+		int availablePlanks = planksItem != null ? countItemInInventory(inv, planksItem) : 0;
+		if (availablePlanks == 0 && countItemInInventory(inv, ItemTags.PLANKS) > 0) {
+			planksItem = findItemInInventory(inv, ItemTags.PLANKS);
+			availablePlanks = planksItem != null ? countItemInInventory(inv, planksItem) : 0;
+		}
 
-			int yield = 4;
-			if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_SLABS)) {
-				yield = 6;
+		if (planksItem != null && availablePlanks > 0) {
+			int consumedPlanks = Math.min(availablePlanks, neededPlanks);
+			consumeItemFromInventory(inv, planksItem, consumedPlanks);
+
+			int yield = 1;
+			if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_STAIRS)) {
+				yield = (consumedPlanks >= 6) ? 4 : consumedPlanks;
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_SLABS)) {
+				yield = (consumedPlanks >= 3) ? 6 : consumedPlanks * 2;
 			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_DOORS)) {
-				yield = 3;
+				yield = (consumedPlanks >= 6) ? 3 : Math.max(1, consumedPlanks / 2);
 			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_TRAPDOORS)) {
-				yield = 2;
+				yield = (consumedPlanks >= 6) ? 2 : Math.max(1, consumedPlanks / 3);
 			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_FENCES)) {
-				yield = 3;
-				consumeItemFromInventory(inv, Items.STICK, 2);
+				consumeItemFromInventory(inv, Items.STICK, Math.min(countItemInInventory(inv, Items.STICK), 2));
+				yield = (consumedPlanks >= 4) ? 3 : consumedPlanks;
 			} else if (targetItem.getDefaultStack().isIn(ItemTags.FENCE_GATES)) {
+				consumeItemFromInventory(inv, Items.STICK, Math.min(countItemInInventory(inv, Items.STICK), 4));
 				yield = 1;
-				consumeItemFromInventory(inv, Items.STICK, 4);
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_PRESSURE_PLATES)) {
+				yield = 1;
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.WOODEN_BUTTONS)) {
+				yield = 1;
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.SIGNS)) {
+				consumeItemFromInventory(inv, Items.STICK, Math.min(countItemInInventory(inv, Items.STICK), 1));
+				yield = (consumedPlanks >= 6) ? 3 : 1;
+			} else if (targetItem.getDefaultStack().isIn(ItemTags.HANGING_SIGNS)) {
+				yield = (consumedPlanks >= 2) ? 6 : 2;
+			} else if (targetItem == Items.LADDER) {
+				consumeItemFromInventory(inv, Items.STICK, Math.min(countItemInInventory(inv, Items.STICK), 7));
+				yield = 3;
 			}
 
 			inv.addStack(new ItemStack(targetItem, yield));
@@ -2486,6 +2673,457 @@ public final class MinionHarvestingHelper {
 			return true;
 		}
 		return false;
+	}
+
+	private static boolean craftBlackstoneDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.POLISHED_BLACKSTONE) {
+			if (countItemInInventory(inv, Items.BLACKSTONE) < 1) {
+				quarryNaturalStone(minion, world, Items.BLACKSTONE, 1, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.BLACKSTONE) >= 1) {
+				return executeStonecut(minion, world, Items.BLACKSTONE, 1, Items.POLISHED_BLACKSTONE, 1);
+			}
+			if (countItemInInventory(inv, Items.BLACKSTONE) >= 1) {
+				consumeItemFromInventory(inv, Items.BLACKSTONE, 1);
+				inv.addStack(new ItemStack(Items.POLISHED_BLACKSTONE, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.POLISHED_BLACKSTONE_BRICKS) {
+			if (countItemInInventory(inv, Items.POLISHED_BLACKSTONE) < 1) {
+				craftBlackstoneDerivative(minion, world, Items.POLISHED_BLACKSTONE, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.POLISHED_BLACKSTONE) >= 1) {
+				return executeStonecut(minion, world, Items.POLISHED_BLACKSTONE, 1, Items.POLISHED_BLACKSTONE_BRICKS, 1);
+			}
+			if (countItemInInventory(inv, Items.POLISHED_BLACKSTONE) >= 1) {
+				consumeItemFromInventory(inv, Items.POLISHED_BLACKSTONE, 1);
+				inv.addStack(new ItemStack(Items.POLISHED_BLACKSTONE_BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.CRACKED_POLISHED_BLACKSTONE_BRICKS) {
+			if (countItemInInventory(inv, Items.POLISHED_BLACKSTONE_BRICKS) < 1) {
+				craftBlackstoneDerivative(minion, world, Items.POLISHED_BLACKSTONE_BRICKS, session);
+			}
+			if (countItemInInventory(inv, Items.POLISHED_BLACKSTONE_BRICKS) >= 1) {
+				return executeSmelt(minion, world, Items.POLISHED_BLACKSTONE_BRICKS, 1, Items.CRACKED_POLISHED_BLACKSTONE_BRICKS, 1, session);
+			}
+			return false;
+		}
+
+		Item baseBlock = resolveBlackstoneBaseBlock(targetItem);
+		if (countItemInInventory(inv, baseBlock) < 1) {
+			craftBlackstoneDerivative(minion, world, baseBlock, session);
+		}
+		if (countItemInInventory(inv, baseBlock) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, baseBlock, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, baseBlock, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+
+		return false;
+	}
+
+	private static Item resolveBlackstoneBaseBlock(Item item) {
+		String path = Registries.ITEM.getId(item).getPath();
+		if (path.contains("brick")) return Items.POLISHED_BLACKSTONE_BRICKS;
+		if (path.contains("polished")) return Items.POLISHED_BLACKSTONE;
+		return Items.BLACKSTONE;
+	}
+
+	private static boolean craftTuffDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.POLISHED_TUFF) {
+			if (countItemInInventory(inv, Items.TUFF) < 1) {
+				quarryNaturalStone(minion, world, Items.TUFF, 1, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.TUFF) >= 1) {
+				return executeStonecut(minion, world, Items.TUFF, 1, Items.POLISHED_TUFF, 1);
+			}
+			if (countItemInInventory(inv, Items.TUFF) >= 1) {
+				consumeItemFromInventory(inv, Items.TUFF, 1);
+				inv.addStack(new ItemStack(Items.POLISHED_TUFF, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (targetItem == Items.TUFF_BRICKS) {
+			if (countItemInInventory(inv, Items.POLISHED_TUFF) < 1 && countItemInInventory(inv, Items.TUFF) < 1) {
+				quarryNaturalStone(minion, world, Items.TUFF, 1, session);
+			}
+			Item base = countItemInInventory(inv, Items.POLISHED_TUFF) >= 1 ? Items.POLISHED_TUFF : Items.TUFF;
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, base) >= 1) {
+				return executeStonecut(minion, world, base, 1, Items.TUFF_BRICKS, 1);
+			}
+			if (countItemInInventory(inv, base) >= 1) {
+				consumeItemFromInventory(inv, base, 1);
+				inv.addStack(new ItemStack(Items.TUFF_BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		Item baseBlock = resolveTuffBaseBlock(targetItem);
+		if (countItemInInventory(inv, baseBlock) < 1) {
+			craftTuffDerivative(minion, world, baseBlock, session);
+		}
+		if (countItemInInventory(inv, baseBlock) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, baseBlock, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, baseBlock, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+
+		return false;
+	}
+
+	private static Item resolveTuffBaseBlock(Item item) {
+		String path = Registries.ITEM.getId(item).getPath();
+		if (path.contains("brick")) return Items.TUFF_BRICKS;
+		if (path.contains("polished")) return Items.POLISHED_TUFF;
+		return Items.TUFF;
+	}
+
+	private static boolean craftEndStoneDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.END_STONE_BRICKS) {
+			if (countItemInInventory(inv, Items.END_STONE) < 1) {
+				quarryNaturalStone(minion, world, Items.END_STONE, 1, session);
+			}
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			if (cutterPos != null && countItemInInventory(inv, Items.END_STONE) >= 1) {
+				return executeStonecut(minion, world, Items.END_STONE, 1, Items.END_STONE_BRICKS, 1);
+			}
+			if (countItemInInventory(inv, Items.END_STONE) >= 1) {
+				consumeItemFromInventory(inv, Items.END_STONE, 1);
+				inv.addStack(new ItemStack(Items.END_STONE_BRICKS, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (countItemInInventory(inv, Items.END_STONE_BRICKS) < 1) {
+			craftEndStoneDerivative(minion, world, Items.END_STONE_BRICKS, session);
+		}
+		if (countItemInInventory(inv, Items.END_STONE_BRICKS) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, Items.END_STONE_BRICKS, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, Items.END_STONE_BRICKS, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
+	private static boolean craftPurpurDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		if (targetItem == Items.PURPUR_BLOCK) {
+			if (countItemInInventory(inv, Items.POPPED_CHORUS_FRUIT) >= 1) {
+				consumeItemFromInventory(inv, Items.POPPED_CHORUS_FRUIT, 1);
+				inv.addStack(new ItemStack(Items.PURPUR_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		if (countItemInInventory(inv, Items.PURPUR_BLOCK) < 1) {
+			craftPurpurDerivative(minion, world, Items.PURPUR_BLOCK, session);
+		}
+		if (countItemInInventory(inv, Items.PURPUR_BLOCK) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, Items.PURPUR_BLOCK, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, Items.PURPUR_BLOCK, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
+	private static boolean craftPrismarineDerivative(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		SimpleInventory inv = minion.getInventory();
+
+		Item baseBlock = resolvePrismarineBaseBlock(targetItem);
+		if (countItemInInventory(inv, baseBlock) < 1) {
+			if (countItemInInventory(inv, Items.PRISMARINE_SHARD) >= 4) {
+				consumeItemFromInventory(inv, Items.PRISMARINE_SHARD, 4);
+				inv.addStack(new ItemStack(baseBlock, 1));
+				playCraftingFeedback(minion, world, null);
+			}
+		}
+
+		if (targetItem == baseBlock) {
+			return countItemInInventory(inv, baseBlock) >= 1;
+		}
+
+		if (countItemInInventory(inv, baseBlock) >= 1) {
+			BlockPos cutterPos = findNearbyToolBlock(world, minion.getBlockPos(), 16, Blocks.STONECUTTER);
+			int yield = isSlabItem(targetItem) ? 2 : 1;
+			if (cutterPos != null) {
+				return executeStonecut(minion, world, baseBlock, 1, targetItem, yield);
+			}
+			consumeItemFromInventory(inv, baseBlock, 1);
+			inv.addStack(new ItemStack(targetItem, yield));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
+	private static Item resolvePrismarineBaseBlock(Item item) {
+		String path = Registries.ITEM.getId(item).getPath();
+		if (path.contains("dark")) return Items.DARK_PRISMARINE;
+		if (path.contains("brick")) return Items.PRISMARINE_BRICKS;
+		return Items.PRISMARINE;
+	}
+
+	public static boolean tryCraftBlockFromInventory(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		if (minion == null || targetItem == null) return false;
+		SimpleInventory inv = minion.getInventory();
+		if (countItemInInventory(inv, targetItem) > 0) return true;
+
+		// 1. Planks from logs in inventory
+		if (isPlanksItem(targetItem)) {
+			convertLogsToPlanks(minion, targetItem);
+			if (countItemInInventory(inv, targetItem) > 0) return true;
+		}
+
+		// 2. Wooden derivative from planks or logs in inventory
+		if (isWoodenDerivative(targetItem)) {
+			craftWoodenDerivative(minion, world, targetItem, session);
+			if (countItemInInventory(inv, targetItem) > 0) return true;
+		}
+
+		// 3. Smart transformation (stone, deepslate, sandstone, bricks, metals, etc.)
+		if (isTransformableResource(targetItem)) {
+			trySmartTransformation(minion, world, targetItem, session);
+			if (countItemInInventory(inv, targetItem) > 0) return true;
+		}
+
+		// 4. Workstations & utilities (chests, barrels, crafting table, furnace, ladder, torch)
+		if (isWorkstationResource(targetItem)) {
+			synthesizeWorkstation(minion, world, targetItem, session);
+			if (countItemInInventory(inv, targetItem) > 0) return true;
+		}
+
+		return countItemInInventory(inv, targetItem) > 0;
+	}
+
+	public static List<Item> getCraftingIngredients(Item targetItem) {
+		if (targetItem == null) return Collections.emptyList();
+		List<Item> ingredients = new ArrayList<>();
+
+		if (isWoodenDerivative(targetItem)) {
+			Item planks = resolvePlanksForWoodenItem(targetItem);
+			ingredients.add(planks);
+			Item log = resolveLogForWoodenItem(targetItem);
+			if (log != null) ingredients.add(log);
+			ingredients.add(Items.OAK_PLANKS);
+			ingredients.add(Items.OAK_LOG);
+			ingredients.add(Items.STICK);
+			return ingredients;
+		}
+
+		if (isPlanksItem(targetItem)) {
+			Item log = resolveLogForWoodenItem(targetItem);
+			if (log != null) ingredients.add(log);
+			ingredients.add(Items.OAK_LOG);
+			return ingredients;
+		}
+
+		if (isStoneBrickResource(targetItem) || targetItem == Items.STONE_STAIRS || targetItem == Items.STONE_SLAB || targetItem == Items.SMOOTH_STONE) {
+			ingredients.add(Items.STONE_BRICKS);
+			ingredients.add(Items.STONE);
+			ingredients.add(Items.COBBLESTONE);
+			return ingredients;
+		}
+
+		if (isDeepslateDerivedResource(targetItem)) {
+			ingredients.add(Items.DEEPSLATE_TILES);
+			ingredients.add(Items.DEEPSLATE_BRICKS);
+			ingredients.add(Items.POLISHED_DEEPSLATE);
+			ingredients.add(Items.COBBLED_DEEPSLATE);
+			ingredients.add(Items.DEEPSLATE);
+			return ingredients;
+		}
+
+		if (isSandstoneDerivative(targetItem)) {
+			String path = Registries.ITEM.getId(targetItem).getPath();
+			if (path.contains("red")) {
+				ingredients.add(Items.CUT_RED_SANDSTONE);
+				ingredients.add(Items.RED_SANDSTONE);
+				ingredients.add(Items.RED_SAND);
+			} else {
+				ingredients.add(Items.CUT_SANDSTONE);
+				ingredients.add(Items.SANDSTONE);
+				ingredients.add(Items.SAND);
+			}
+			return ingredients;
+		}
+
+		if (isBrickResource(targetItem)) {
+			ingredients.add(Items.BRICKS);
+			ingredients.add(Items.BRICK);
+			ingredients.add(Items.CLAY);
+			ingredients.add(Items.CLAY_BALL);
+			return ingredients;
+		}
+
+		if (isGlassResource(targetItem)) {
+			ingredients.add(Items.GLASS);
+			ingredients.add(Items.SAND);
+			return ingredients;
+		}
+
+		if (isNetherBrickResource(targetItem)) {
+			ingredients.add(Items.NETHER_BRICKS);
+			ingredients.add(Items.NETHER_BRICK);
+			ingredients.add(Items.NETHERRACK);
+			return ingredients;
+		}
+
+		if (isQuartzDerivedResource(targetItem)) {
+			ingredients.add(Items.QUARTZ_BLOCK);
+			ingredients.add(Items.QUARTZ);
+			return ingredients;
+		}
+
+		if (isBasaltDerivedResource(targetItem)) {
+			ingredients.add(Items.SMOOTH_BASALT);
+			ingredients.add(Items.POLISHED_BASALT);
+			ingredients.add(Items.BASALT);
+			return ingredients;
+		}
+
+		if (isPolishedStoneResource(targetItem)) {
+			ingredients.add(resolvePolishedBaseForDerivative(targetItem));
+			ingredients.add(resolveRawStoneForPolished(targetItem));
+			return ingredients;
+		}
+
+		if (isBlackstoneResource(targetItem)) {
+			ingredients.add(Items.POLISHED_BLACKSTONE_BRICKS);
+			ingredients.add(Items.POLISHED_BLACKSTONE);
+			ingredients.add(Items.BLACKSTONE);
+			return ingredients;
+		}
+
+		if (isTuffResource(targetItem)) {
+			ingredients.add(Items.TUFF_BRICKS);
+			ingredients.add(Items.POLISHED_TUFF);
+			ingredients.add(Items.TUFF);
+			return ingredients;
+		}
+
+		if (isEndStoneResource(targetItem)) {
+			ingredients.add(Items.END_STONE_BRICKS);
+			ingredients.add(Items.END_STONE);
+			return ingredients;
+		}
+
+		if (isPurpurResource(targetItem)) {
+			ingredients.add(Items.PURPUR_BLOCK);
+			ingredients.add(Items.POPPED_CHORUS_FRUIT);
+			ingredients.add(Items.CHORUS_FRUIT);
+			return ingredients;
+		}
+
+		if (isPrismarineResource(targetItem)) {
+			ingredients.add(Items.DARK_PRISMARINE);
+			ingredients.add(Items.PRISMARINE_BRICKS);
+			ingredients.add(Items.PRISMARINE);
+			ingredients.add(Items.PRISMARINE_SHARD);
+			return ingredients;
+		}
+
+		if (isMetalDerivativeResource(targetItem)) {
+			ingredients.add(Items.IRON_INGOT);
+			ingredients.add(Items.COPPER_INGOT);
+			ingredients.add(Items.GOLD_INGOT);
+			ingredients.add(Items.RAW_IRON);
+			ingredients.add(Items.RAW_COPPER);
+			ingredients.add(Items.RAW_GOLD);
+			return ingredients;
+		}
+
+		if (isWorkstationResource(targetItem)) {
+			ingredients.add(Items.OAK_PLANKS);
+			ingredients.add(Items.SPRUCE_PLANKS);
+			ingredients.add(Items.OAK_LOG);
+			ingredients.add(Items.COBBLESTONE);
+			return ingredients;
+		}
+
+		return ingredients;
 	}
 
 	// =========================================================================
@@ -3278,6 +3916,9 @@ public final class MinionHarvestingHelper {
 
 	private static void ensurePlanks(MinionEntity minion, ServerWorld world, ConstructionSession session, int required) {
 		SimpleInventory inv = minion.getInventory();
+		if (countPlanksInInventory(inv) < required) {
+			convertLogsToPlanks(minion, Items.OAK_PLANKS);
+		}
 		if (countPlanksInInventory(inv) < required) {
 			harvestWoodOrAgroForestry(minion, world, session);
 			convertLogsToPlanks(minion, Items.OAK_PLANKS);

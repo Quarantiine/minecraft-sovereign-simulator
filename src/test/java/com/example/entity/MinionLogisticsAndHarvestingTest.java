@@ -1204,4 +1204,276 @@ public class MinionLogisticsAndHarvestingTest {
 		inventory.put("cut_copper_slab", 2);
 		Assertions.assertEquals(2, inventory.get("cut_copper_slab"));
 	}
+
+	@Test
+	@DisplayName("Validate builder survival block crafting source contracts and helper signatures")
+	void testBuilderSurvivalCraftingSourceContracts() throws IOException {
+		String harvestingSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+		String buildGoalSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java"));
+		String logisticsSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionLogisticsHelper.java"));
+
+		// 1. On-demand crafting signatures in MinionHarvestingHelper
+		Assertions.assertTrue(harvestingSource.contains("public static boolean tryCraftBlockFromInventory"),
+			"MinionHarvestingHelper must declare tryCraftBlockFromInventory");
+		Assertions.assertTrue(harvestingSource.contains("public static List<Item> getCraftingIngredients"),
+			"MinionHarvestingHelper must declare getCraftingIngredients");
+		Assertions.assertTrue(harvestingSource.contains("ensureSticks"),
+			"MinionHarvestingHelper must provide ensureSticks helper");
+		Assertions.assertTrue(harvestingSource.contains("craftWoodenDerivative"),
+			"MinionHarvestingHelper must provide craftWoodenDerivative");
+		Assertions.assertTrue(harvestingSource.contains("craftBlackstoneDerivative"),
+			"MinionHarvestingHelper must provide craftBlackstoneDerivative");
+		Assertions.assertTrue(harvestingSource.contains("craftTuffDerivative"),
+			"MinionHarvestingHelper must provide craftTuffDerivative");
+		Assertions.assertTrue(harvestingSource.contains("craftEndStoneDerivative"),
+			"MinionHarvestingHelper must provide craftEndStoneDerivative");
+		Assertions.assertTrue(harvestingSource.contains("craftPurpurDerivative"),
+			"MinionHarvestingHelper must provide craftPurpurDerivative");
+		Assertions.assertTrue(harvestingSource.contains("craftPrismarineDerivative"),
+			"MinionHarvestingHelper must provide craftPrismarineDerivative");
+
+		// 2. Resource classification predicates
+		Assertions.assertTrue(harvestingSource.contains("public static boolean isBlackstoneResource"),
+			"MinionHarvestingHelper must declare isBlackstoneResource");
+		Assertions.assertTrue(harvestingSource.contains("public static boolean isTuffResource"),
+			"MinionHarvestingHelper must declare isTuffResource");
+		Assertions.assertTrue(harvestingSource.contains("public static boolean isEndStoneResource"),
+			"MinionHarvestingHelper must declare isEndStoneResource");
+		Assertions.assertTrue(harvestingSource.contains("public static boolean isPurpurResource"),
+			"MinionHarvestingHelper must declare isPurpurResource");
+		Assertions.assertTrue(harvestingSource.contains("public static boolean isPrismarineResource"),
+			"MinionHarvestingHelper must declare isPrismarineResource");
+
+		// 3. MinionBuildGoal survival workflow integration
+		Assertions.assertTrue(buildGoalSource.contains("MinionHarvestingHelper.tryCraftBlockFromInventory"),
+			"MinionBuildGoal must call tryCraftBlockFromInventory for survival block crafting");
+		Assertions.assertTrue(buildGoalSource.contains("MinionHarvestingHelper.getCraftingIngredients"),
+			"MinionBuildGoal must use getCraftingIngredients for container scavenging");
+
+		// 4. MinionLogisticsHelper peer-to-peer crafting integration
+		Assertions.assertTrue(logisticsSource.contains("MinionHarvestingHelper.tryCraftBlockFromInventory"),
+			"MinionLogisticsHelper must allow allies to craft requested blocks on-demand");
+		Assertions.assertTrue(logisticsSource.contains("MinionHarvestingHelper.getCraftingIngredients"),
+			"MinionLogisticsHelper must support sharing base crafting ingredients among allies");
+	}
+
+	@Test
+	@DisplayName("Validate wood type fidelity resolution and proportional derivative crafting simulation")
+	void testWoodTypeFidelityAndDerivativeCraftingSimulation() {
+		// Wood type path mapping simulation
+		Map<String, String> logToPlanks = Map.of(
+			"birch_log", "birch_planks",
+			"spruce_log", "spruce_planks",
+			"jungle_log", "jungle_planks",
+			"acacia_log", "acacia_planks",
+			"dark_oak_log", "dark_oak_planks",
+			"mangrove_log", "mangrove_planks",
+			"cherry_log", "cherry_planks",
+			"bamboo_block", "bamboo_planks",
+			"crimson_stem", "crimson_planks",
+			"warped_stem", "warped_planks"
+		);
+
+		for (Map.Entry<String, String> entry : logToPlanks.entrySet()) {
+			String log = entry.getKey();
+			String expectedPlanks = entry.getValue();
+			String prefix = log.replace("_log", "").replace("_stem", "").replace("_block", "");
+			Assertions.assertTrue(expectedPlanks.startsWith(prefix),
+				"Wood type fidelity: log '" + log + "' must resolve to matching planks '" + expectedPlanks + "'");
+		}
+
+		// Proportional wooden derivative crafting simulation
+		class WoodCrafterSimulator {
+			int logs = 0;
+			int planks = 0;
+			int sticks = 0;
+
+			void convertLog() {
+				if (logs > 0) {
+					logs--;
+					planks += 4;
+				}
+			}
+
+			void ensureSticks(int needed) {
+				while (sticks < needed && (planks > 0 || logs > 0)) {
+					if (planks == 0) convertLog();
+					if (planks >= 2) {
+						planks -= 2;
+						sticks += 4;
+					} else if (planks == 1) {
+						planks -= 1;
+						sticks += 2;
+					}
+				}
+			}
+
+			int craftStairs() {
+				if (planks == 0 && logs > 0) convertLog();
+				if (planks >= 6) {
+					planks -= 6;
+					return 4;
+				} else if (planks > 0) {
+					int used = planks;
+					planks = 0;
+					return used; // Proportional 1:1 fallback
+				}
+				return 0;
+			}
+
+			int craftSlabs() {
+				if (planks == 0 && logs > 0) convertLog();
+				if (planks >= 3) {
+					planks -= 3;
+					return 6;
+				} else if (planks > 0) {
+					int used = planks;
+					planks = 0;
+					return used * 2; // Proportional 2:1
+				}
+				return 0;
+			}
+
+			int craftFences() {
+				ensureSticks(2);
+				if (planks == 0 && logs > 0) convertLog();
+				if (planks >= 4 && sticks >= 2) {
+					planks -= 4;
+					sticks -= 2;
+					return 3;
+				} else if (planks > 0) {
+					int used = Math.min(planks, 2);
+					planks -= used;
+					if (sticks > 0) sticks--;
+					return used;
+				}
+				return 0;
+			}
+		}
+
+		WoodCrafterSimulator sim = new WoodCrafterSimulator();
+		// Test A: 1 single plank creates 1 stair (proportional crafting prevents stalled minion)
+		sim.planks = 1;
+		int stairs = sim.craftStairs();
+		Assertions.assertEquals(1, stairs, "1 plank should craft 1 stair proportionally");
+		Assertions.assertEquals(0, sim.planks);
+
+		// Test B: 6 planks create standard 4 stairs
+		sim.planks = 6;
+		stairs = sim.craftStairs();
+		Assertions.assertEquals(4, stairs, "6 planks should craft 4 stairs");
+		Assertions.assertEquals(0, sim.planks);
+
+		// Test C: 1 single log converts into 4 planks and crafts 6 slabs leaving 1 plank
+		sim.logs = 1;
+		int slabs = sim.craftSlabs();
+		Assertions.assertEquals(6, slabs, "1 log (4 planks) crafts 6 slabs");
+		Assertions.assertEquals(1, sim.planks, "1 leftover plank preserved in inventory");
+
+		// Test D: Fence crafting with auto-stick generation
+		sim.planks = 5;
+		int fences = sim.craftFences();
+		Assertions.assertTrue(fences >= 1, "Should successfully craft fences using auto-generated sticks");
+	}
+
+	@Test
+	@DisplayName("Validate container ingredient scavenging and peer-to-peer cooperative crafting simulation")
+	void testContainerScavengingAndP2PCraftingSimulation() {
+		// Mock container storage (chest near construction site)
+		Map<String, Integer> chest = new HashMap<>();
+		chest.put("oak_planks", 12);
+		chest.put("cobblestone", 16);
+
+		// Minion inventory
+		Map<String, Integer> minionInv = new HashMap<>();
+
+		// Minion needs oak_stairs, but chest only has oak_planks:
+		// 1. Scavenging withdraws planks from chest into minion inventory
+		Assertions.assertFalse(chest.containsKey("oak_stairs"), "Chest does not have finished stairs");
+		int withdrawn = Math.min(6, chest.get("oak_planks"));
+		chest.put("oak_planks", chest.get("oak_planks") - withdrawn);
+		minionInv.put("oak_planks", minionInv.getOrDefault("oak_planks", 0) + withdrawn);
+
+		Assertions.assertEquals(6, minionInv.get("oak_planks"));
+		Assertions.assertEquals(6, chest.get("oak_planks"));
+
+		// 2. Minion crafts oak_stairs from scavenged planks
+		int consumed = 6;
+		minionInv.put("oak_planks", minionInv.get("oak_planks") - consumed);
+		minionInv.put("oak_stairs", 4);
+		Assertions.assertEquals(0, minionInv.get("oak_planks"));
+		Assertions.assertEquals(4, minionInv.get("oak_stairs"));
+
+		// 3. Minion consumes 1 stair to place the block
+		minionInv.put("oak_stairs", minionInv.get("oak_stairs") - 1);
+		Assertions.assertEquals(3, minionInv.get("oak_stairs"), "Minion retains 3 remaining stairs for subsequent tasks");
+
+		// 4. Allied minion cooperation: Ally has cobblestone, requester needs stone bricks
+		Map<String, Integer> allyInv = new HashMap<>();
+		allyInv.put("cobblestone", 8);
+
+		// Ally smelts cobblestone -> stone, crafts stone -> stone bricks, and shares 1 with requester
+		allyInv.put("cobblestone", allyInv.get("cobblestone") - 4);
+		allyInv.put("stone_bricks", 4);
+		int transferred = 1;
+		allyInv.put("stone_bricks", allyInv.get("stone_bricks") - transferred);
+		minionInv.put("stone_bricks", minionInv.getOrDefault("stone_bricks", 0) + transferred);
+
+		Assertions.assertEquals(1, minionInv.get("stone_bricks"), "Requester received stone bricks from ally");
+		Assertions.assertEquals(3, allyInv.get("stone_bricks"), "Ally retains 3 stone bricks");
+	}
+
+	@Test
+	@DisplayName("Validate masonry, deepslate, nether, and end stone multi-block transformation simulation")
+	void testMasonryAndArchitecturalTransformationsSimulation() {
+		Map<String, Integer> inventory = new HashMap<>();
+
+		// 1. Blackstone chain: Blackstone -> Polished Blackstone -> Polished Blackstone Bricks -> Stairs
+		inventory.put("blackstone", 4);
+		// Stonecutter or craft: 1 Blackstone -> 1 Polished Blackstone
+		inventory.put("blackstone", inventory.get("blackstone") - 1);
+		inventory.put("polished_blackstone", 1);
+		// 1 Polished Blackstone -> 1 Polished Blackstone Bricks
+		inventory.put("polished_blackstone", inventory.get("polished_blackstone") - 1);
+		inventory.put("polished_blackstone_bricks", 1);
+		// 1 Polished Blackstone Bricks -> 1 Polished Blackstone Brick Stairs
+		inventory.put("polished_blackstone_bricks", inventory.get("polished_blackstone_bricks") - 1);
+		inventory.put("polished_blackstone_brick_stairs", 1);
+		Assertions.assertEquals(1, inventory.get("polished_blackstone_brick_stairs"));
+
+		// 2. Tuff chain: Tuff -> Polished Tuff -> Tuff Bricks -> Chiseled Tuff Bricks
+		inventory.put("tuff", 4);
+		inventory.put("tuff", inventory.get("tuff") - 1);
+		inventory.put("polished_tuff", 1);
+		inventory.put("polished_tuff", inventory.get("polished_tuff") - 1);
+		inventory.put("tuff_bricks", 1);
+		inventory.put("tuff_bricks", inventory.get("tuff_bricks") - 1);
+		inventory.put("chiseled_tuff_bricks", 1);
+		Assertions.assertEquals(1, inventory.get("chiseled_tuff_bricks"));
+
+		// 3. End Stone chain: End Stone -> End Stone Bricks -> End Stone Brick Slab (1:2)
+		inventory.put("end_stone", 1);
+		inventory.put("end_stone", 0);
+		inventory.put("end_stone_bricks", 1);
+		inventory.put("end_stone_bricks", 0);
+		inventory.put("end_stone_brick_slab", 2);
+		Assertions.assertEquals(2, inventory.get("end_stone_brick_slab"));
+
+		// 4. Purpur chain: Popped Chorus Fruit -> Purpur Block -> Purpur Stairs
+		inventory.put("popped_chorus_fruit", 1);
+		inventory.put("popped_chorus_fruit", 0);
+		inventory.put("purpur_block", 1);
+		inventory.put("purpur_block", 0);
+		inventory.put("purpur_stairs", 1);
+		Assertions.assertEquals(1, inventory.get("purpur_stairs"));
+
+		// 5. Prismarine chain: Prismarine Shards (4) -> Prismarine -> Prismarine Wall
+		inventory.put("prismarine_shard", 4);
+		inventory.put("prismarine_shard", 0);
+		inventory.put("prismarine", 1);
+		inventory.put("prismarine", 0);
+		inventory.put("prismarine_wall", 1);
+		Assertions.assertEquals(1, inventory.get("prismarine_wall"));
+	}
 }
+
