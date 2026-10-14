@@ -5,6 +5,7 @@ All notable changes to **Sovereign Simulator: Arcane Strategy & Engineering** wi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+
 ## [1.1.1] - 2026-10-14
 
 ### 🔨 Builder Minion Survival On-Demand Block Crafting & Multi-Block Transformations
@@ -12,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 #### 🔨 Builder Minion Survival On-Demand Block Crafting & Multi-Block Transformations
+
 - **On-Demand Block-to-Block Crafting (`MinionHarvestingHelper.tryCraftBlockFromInventory`)**:
   - Builder minions in survival mode can now craft architectural, masonry, utility, and decorative blocks on demand directly from base materials in their own 9-slot inventory (functioning like a player using a crafting table).
   - Evaluated immediately before container scavenging and world harvesting, preventing minions from stalling or felling trees when holding base materials (e.g., crafting planks into stairs or logs into planks).
@@ -60,6 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 #### 🎨 3D Blueprint Palette Remapping & Save Choice Dialog (`BlueprintExplorerScreen` & `BlueprintSaveChoiceModalScreen`)
+
 - **Direct 3D Viewer Palette Modification**: Players can now modify the block palette of any blueprint directly from within the 3D Architectural Blueprint Explorer (`BlueprintExplorerScreen`) via a new `[ 🎨 Remap ]` action button.
 - **Save Choice Dialog (`BlueprintSaveChoiceModalScreen`)**:
   - Modal dialog allowing players to choose between **[ 💾 Overwrite ]** (updates existing blueprint in-place) or **[ 📋 Save as Copy ]** (generates a new unique blueprint identifier and registers a new custom blueprint).
@@ -71,6 +74,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Dynamically re-normalizes coordinate offsets to `(0, 0, 0)` if outer boundary blocks were erased.
 
 #### ✏️ Custom Blueprint Direct Renaming in 3D Viewer (`BlueprintExplorerScreen`)
+
 - **Direct 3D Viewer Renaming**: Players can now rename any custom blueprint directly from within the 3D Architectural Blueprint Explorer (`BlueprintExplorerScreen`) via a dedicated **`[ ✏ Rename ]`** button or keyboard shortcut **`[R]`** without having to recapture or clone the structure.
 - **Glassmorphic Rename Modal Dialog**:
   - Centered modal dialog (`240x104`) with dark arcane styling (`#141E2B`), cyan glowing border (`#00E5FF`), and prefilled `TextFieldWidget` (up to 64 characters).
@@ -83,6 +87,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Updating or renaming an existing custom blueprint preserves its exact slot position in `customBlueprints` and `BlueprintRegistry` rather than bumping it to index 0, keeping the player's browsing context intact.
 
 #### 🥷 Selected Minion Sneaking & Tactical Overhead Stealth (`MinionEntity`, `MinionEntityRenderer`, `MinionOverheadBadgeFeatureRenderer`)
+
 - **Commander Synchronized Sneaking**:
   - Selected minions (`isSelected() == true`) now automatically sneak and crouch whenever their commanding player sneaks (`owner.isSneaking() == true`).
   - Escort minions following a designated squad leader dynamically sneak when their leader is sneaking, enabling synchronized squad-wide stealth maneuvers.
@@ -96,6 +101,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Minions that are sitting, actively constructing buildings (`isActivelyBuilding()`), or navigating in 3D Arcane Levitation are cleanly exempted from sneaking to prevent posture conflicts and maintain building throughput.
 
 #### ⚔️ 90° Mass Assault State Preservation (`CommandScepterItem`, `MinionEntity`)
+
 - **Non-Intrusive Tactical Mass Assault**:
   - Channeling the 90° forward sector (Banner of Courage) over hostile mobs now directs combat-capable minions into a coordinated Mass Assault without converting them into a following squad or setting `selected = true`.
 - **Stationed Post Preservation (`guardAnchorPos`)**:
@@ -109,9 +115,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Strict Peaceful Rally Partitioning**:
   - The squad rally logic (which marshals minions into a following squad and sets `selected = true`) now triggers strictly when **no** hostiles are enclosed in the sector, preventing accidental disbanding of defensive garrisons and patrols during combat orders.
 
-
-
 #### 🎨 Granular Blueprint Palette Remapping & Material Replacement (`DESIGN` Mode)
+
 - **Dedicated Palette Remapping Modal (`BlueprintPaletteRemapModalScreen`)**:
   - Live volumetric scan aggregates unique non-air blocks into a sorted tally table (descending by block frequency).
   - Offers granular per-block row controls: `[ 🔍 Change ]` (opens searchable block picker), `[ ✕ Erase ]` (maps block to `minecraft:air` to omit it from the blueprint), and `[ ↺ Reset ]` (reverts to original captured block).
@@ -130,12 +135,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Substituted blocks dynamically recalculate `requiredItems`, immediately updating survival mode builder resource requirements and the Material Bill of Materials (BOM) in `BlueprintResourceEstimatorModalScreen`.
 
 #### ⚡ High-Performance 3D Voxel Engine (`BlueprintMeshCache` & Zero-Allocation Depth Sorting)
+
 - **Eliminated 3D Viewer Lag on Massive Structures**:
   - Fixed severe frame drops when inspecting large captured structures (e.g., villages, keeps, or castles with 10k–50k blocks).
   - **Surface Face Pre-Caching (`BlueprintMeshCache`)**: Solid-to-solid interior faces are pre-culled once when the blueprint loads, discarding 85–95% of hidden faces from runtime consideration.
   - **Zero-Allocation Primitive Depth Buffer**: Replaced per-frame `ProjectedFace` object allocations and boxed `Double` comparator sorting with reusable primitive `long[]` sorting (`Arrays.sort`) encoding 32-bit depth and face index, completely eliminating per-frame garbage collection pauses.
 
 #### 🛡 Sentinel Wall-Penetrating "Hearing" & Sentry Senses (`MinionActiveTargetGoal`, `MinionEntity`)
+
 - **Exclusive Wall-Penetrating Echolocation for Sentinels**:
   - Sentinels (and `AUTO` minions dynamically adapted as Sentinels) gain supernatural sentry senses (`MinionEntity.hasSentrySense()`), autonomously detecting and targeting allowed hostile mobs through solid walls, closed doors, floors, and ceilings within their 24-block horizontal and expanded 128-block perimeter guard zone.
   - **Expanded Vertical Sentry Search Box**: Vertical detection expanded from `4.0D` to `12.0D` (`±12.0D` vertical search box) exclusively for Sentinels, allowing sentries on bastion towers or elevated battlements to detect intruders infiltrating beneath them or underground.
@@ -153,25 +160,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed & Fixed
 
 #### 🎯 Left-Click / Ground-Hitting Blueprint Rotation Removed
+
 - **Standard Left-Click Behavior in Build Mode**: Left-clicking in `BUILD` mode is now a standard attack (survival) or break block (creative) action. Ground-hitting no longer triggers blueprint rotation.
 - **Exclusive `[R]` Key & GUI Rotation**: Blueprint rotation is now exclusively triggered via the `[R]` key or GUI rotation buttons.
 - Updated action bar flight guide (`[R] Rotate`), Command Scepter item tooltips, and client input contract tests.
 
 #### 📦 Expanded Builder Minion Container Search Radius (32 Blocks)
+
 - **Expanded Scavenge Radius**: Builder minions now search nearby containers (chests, barrels, shulker boxes) within **32 blocks horizontally and 16 blocks vertically** (expanded from 12 blocks).
 - **Sub-Millisecond Chunk Querying**: Implemented `chunk.getBlockEntities()` chunk-level container discovery, preventing server lag across large search volumes.
 - Minion harvesting helpers (`MinionHarvestingHelper`) updated to deposit excess materials and search for storage containers across 32 blocks.
 
 #### 🚶 Free Roaming on Patrol Route Deletion
+
 - **Eliminated Sitting/Holding Position on Route Deletion**: When a patrol route is deleted, assigned minions have their route assignment cleared (`setPatrolRouteId(-1)`), are set to not sit (`setSitting(false)`), have their guard anchor cleared, and stop navigation so their ambient wandering AI (`WanderAroundFarGoal`) engages immediately to roam freely.
 
 #### 🖥 Card Title & Size Text Overlap Resolved in 3D Explorer
+
 - **Fixed UI Collision**: Replaced vanilla `ButtonWidget` centering with `CardSlotButton` and two-line rendering in `BlueprintExplorerScreen.render()`:
   - Card Title rendered at `cardY + 5`.
   - Card Dimensions and Block Count rendered at `cardY + 18`.
   - Selection indicators (`▶`) and badges (`[C]`, `[B]`) rendered with hover highlights without text collision.
 
 #### 🎛️ Uncluttered 3D Viewer Action Button Architecture (`BlueprintExplorerScreen`)
+
 - **Eliminated Button Crowding**: Redesigned the 3D Blueprint Explorer button layout to guarantee clean visual hierarchy, generous margins, and full-word labels without cramming or unreadable abbreviations.
 - **Specifications Card Rename Integration**:
   - In standard split-pane mode, elevated the **`[ ✏ Rename ]`** button directly into the Specifications Card header (`vpX + vpW - 58, specY + 3, 52, 14`) right beside the blueprint title it modifies.
@@ -181,6 +193,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Maximized mode seamlessly distributes all 6 actions across the expanded 376px bottom toolbar with spacious gaps and zero visual clutter.
 
 #### 📚 Documentation Organization & Numbering Harmonization (`COMMANDS.md`, `FEATURES.md`)
+
 - **COMMANDS.md Structure & Categorized Cheat Sheets**:
   - Implemented an interactive Table of Contents linking to all 13 core sections.
   - Deconstructed the monolithic cheat sheet into 7 focused, categorized control tables (Core Scepter Directives, Tactical Combat & Retreat, Multiblock Construction & Flight, Custom Blueprint Capture & Palette Remap, Mining & Area Clearance, Visual Pathway Patrols, and Minion Direct Interactions & Squad Escorts).
@@ -191,9 +204,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Normalized subsection numbering across in-world spatial capture (21.1 through 21.9).
 
 #### 📋 Material Bill of Materials (BOM) Cleanup
+
 - Removed the redundant category tallies section (`Stone 0/N | Timber 0/N | Glass 0/N | Organic 0/N`) from `BlueprintResourceEstimatorModalScreen`, shifting table rows up and displaying 5 rows per page for a cleaner layout.
 
 #### ⛏ Seamless Building & Mining Session Chaining & Egress Prevention
+
 - **Eliminated Egress Traps & Forced Ground Landings for Builders & Miners**:
   - `ConstructionManager.completeSession` now completely bypasses `startEgressFromStructure` when chaining to an active adjacent session (`nextSession.isPresent()`) for both construction and mining. Minions never trigger building egress or perimeter wall sweeps when another job is ready.
   - Added `MinionEntity.clearBuildingEgress()`, which immediately purges egress state without commanding downward glide descent (`-0.22D`) or disabling Arcane Levitation.
@@ -208,6 +223,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Expanded default `isMinionEngagedInConstruction` radius to 128.0 blocks to match builder chaining and operational search radius.
 
 #### 🔨 Absolute Builder Combat Immunity & Non-Combatant Enforcement (`MinionEntity`, `MinionBuildGoal`, `MinionActiveTargetGoal`, `CommandScepterItem`)
+
 - **Strict Target Acquisition Lockdown**:
   - `MinionEntity.setTarget(LivingEntity)` and `MinionEntity.isTargetAllowed(LivingEntity)` immediately reject and discard any hostile target when the minion's role is `MinionRole.BUILDER`.
   - Switching to `BUILDER` (manually via `setRole` or dynamically via `setAdaptiveRole`) immediately purges active targets (`setTarget(null)`) and clears all queued assault targets (`clearAssaultTargets()`).
@@ -229,6 +245,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Completely eradicated solo mob hunting fallback for builders. When organic/mob materials are required, builders commission nearby Warriors on tactical hunting contracts; if no warrior is available, the builder cleanly pauses and waits for assistance instead of attempting to hunt hostiles solo.
 
 #### 🚶 Autonomous Free Roaming on Construction & Mining Completion
+
 - **Eliminated Hold Position Lock on Build/Mine Finish**:
   - `ConstructionManager.completeSession` now releases minions to roam freely upon concluding construction or mining sessions when no chained blueprint is queued (`minion.setSitting(false); minion.setGuardAnchorPos(null); minion.setSelected(false);`).
   - Minions safely egress from completed structures/quarries onto solid ground, land cleanly from Arcane Levitation, and naturally engage `WanderAroundFarGoal` on foot without displaying `[HOLD]` or `[Stationed]` overhead badges.

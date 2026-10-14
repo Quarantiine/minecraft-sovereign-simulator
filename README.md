@@ -150,23 +150,23 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 ### Tactical Controls Cheat Sheet
 
-| Key / Action           | Context            | Tactical Function                                                                                   |
-| :--------------------- | :----------------- | :-------------------------------------------------------------------------------------------------- |
-| **`V` Key**            | Scepter in Hand    | Opens the **Command Hub GUI** (squad channels, modes, patrol dashboard, blueprints, target filter). |
-| **`R` Key**            | Scepter in `BUILD` | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°).                      |
-| **`R` Key**            | Other Modes        | **Squad Retreat**: Recalls selected active squad minions within 64m.                                |
-| **`Shift + R`**        | Scepter in Hand    | **Citadel Call**: Army-wide emergency alarm (128m) recalling all units and unbinding patrols.       |
-| **Left-Click**         | Scepter in `BUILD` | **Normal Hit / Break**: Standard attack or block break; does not rotate blueprint.                 |
-| **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                 |
-| **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 5$ blocks high permitted.       |
-| **`Ctrl` + Scroll**    | `DESIGN` / `MINE`  | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).          |
+| Key / Action           | Context            | Tactical Function                                                                                                                                    |
+| :--------------------- | :----------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`V` Key**            | Scepter in Hand    | Opens the **Command Hub GUI** (squad channels, modes, patrol dashboard, blueprints, target filter).                                                  |
+| **`R` Key**            | Scepter in `BUILD` | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°).                                                                       |
+| **`R` Key**            | Other Modes        | **Squad Retreat**: Recalls selected active squad minions within 64m.                                                                                 |
+| **`Shift + R`**        | Scepter in Hand    | **Citadel Call**: Army-wide emergency alarm (128m) recalling all units and unbinding patrols.                                                        |
+| **Left-Click**         | Scepter in `BUILD` | **Normal Hit / Break**: Standard attack or block break; does not rotate blueprint.                                                                   |
+| **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                                                                  |
+| **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 5$ blocks high permitted.                                                        |
+| **`Ctrl` + Scroll**    | `DESIGN` / `MINE`  | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).                                                           |
 | **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault (preserves hold position, patrol routes, and roaming). |
-| **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.    |
-| **Sneak + Left-Click** | `DESIGN` / `MINE`  | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.              |
-| **Sneak (Hold Shift)** | Leading Minions    | **Tactical Squad Sneak**: Minions crouch in sync; hides nametags and all overhead HUD badges.       |
-| **`Tab` / `F` Key**    | In 3D Explorer     | **Maximize Viewport**: Toggles full-width $404 \times 194$ px 3D inspection view.                   |
-| **Right-Click Drag**   | In 3D Explorer     | **Camera Pan**: Translates 3D model horizontally and vertically.                                    |
-| **`▲` / `▼` Slicer**   | In 3D Explorer     | **Architectural Floor Slicer**: Steps through floors to inspect interior room layouts.              |
+| **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.                                                     |
+| **Sneak + Left-Click** | `DESIGN` / `MINE`  | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.                                                               |
+| **Sneak (Hold Shift)** | Leading Minions    | **Tactical Squad Sneak**: Minions crouch in sync; hides nametags and all overhead HUD badges.                                                        |
+| **`Tab` / `F` Key**    | In 3D Explorer     | **Maximize Viewport**: Toggles full-width $404 \times 194$ px 3D inspection view.                                                                    |
+| **Right-Click Drag**   | In 3D Explorer     | **Camera Pan**: Translates 3D model horizontally and vertically.                                                                                     |
+| **`▲` / `▼` Slicer**   | In 3D Explorer     | **Architectural Floor Slicer**: Steps through floors to inspect interior room layouts.                                                               |
 
 > 📖 For the exhaustive controls manual, see [**COMMANDS.md**](COMMANDS.md).
 
