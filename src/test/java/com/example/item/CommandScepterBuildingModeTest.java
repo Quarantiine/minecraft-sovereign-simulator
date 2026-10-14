@@ -212,4 +212,63 @@ public class CommandScepterBuildingModeTest {
 		Assertions.assertTrue(modContent.contains("BuildingMode.AREA"), "ExampleMod must check BuildingMode.AREA");
 		Assertions.assertTrue(modContent.contains("handleBuildClick"), "ExampleMod must call handleBuildClick");
 	}
+
+	@Test
+	@DisplayName("Edge Case Contract: BlueprintHologramRenderer persists in-world wireframe and ghost grid during active area build sessions")
+	void testActiveAreaBuildHologramPersistence() throws Exception {
+		File rendererFile = new File("src/client/java/com/example/client/renderer/BlueprintHologramRenderer.java");
+		Assertions.assertTrue(rendererFile.exists());
+		String content = Files.readString(rendererFile.toPath());
+		Assertions.assertTrue(
+			content.contains("!sessionData.isDismantle() && sessionData.sizeX() > 0") &&
+			content.contains("renderBuildBoundingBox(") &&
+			content.contains("renderBuildGhostGrid("),
+			"BlueprintHologramRenderer must render wireframe and ghost grid for active area build sessions"
+		);
+	}
+
+	@Test
+	@DisplayName("Edge Case Contract: ExampleModClient supports keyboard shortcuts for BUILD AREA height and restricts rotation to BLUEPRINT mode")
+	void testClientKeyboardShortcutsAndRetreatParity() throws Exception {
+		File clientFile = new File("src/client/java/com/example/client/ExampleModClient.java");
+		Assertions.assertTrue(clientFile.exists());
+		String content = Files.readString(clientFile.toPath());
+
+		// 1. Keyboard shortcuts ([ / ] and PageUp / PageDown) for BUILD AREA
+		Assertions.assertTrue(
+			content.contains("BuildingMode.AREA") &&
+			content.contains("ClientBuildCaptureTracker.adjustHeight(step)"),
+			"ExampleModClient must support bracket and page keys for BUILD AREA height adjustment"
+		);
+
+		// 2. R key checks BLUEPRINT mode specifically so AREA mode falls through to retreat / emergency recall
+		Assertions.assertTrue(
+			content.contains("CommandScepterItem.getBuildingMode(heldScepter) == com.example.component.BuildingMode.BLUEPRINT"),
+			"ExampleModClient must only rotate blueprint in BLUEPRINT mode, allowing AREA mode to trigger retreat/recall"
+		);
+	}
+
+	@Test
+	@DisplayName("Edge Case Contract: ModNetworking validates world height boundaries for area build and mining")
+	void testWorldHeightBoundsValidation() throws Exception {
+		File netFile = new File("src/main/java/com/example/network/ModNetworking.java");
+		Assertions.assertTrue(netFile.exists());
+		String content = Files.readString(netFile.toPath());
+		Assertions.assertTrue(
+			content.contains("minY < world.getBottomY() || maxY >= world.getTopY()"),
+			"ModNetworking must check world height limits for area sessions"
+		);
+	}
+
+	@Test
+	@DisplayName("Edge Case Contract: BuildAreaConfirmModalScreen updates changeBlockButton visibility based on corner selection")
+	void testModalCornerStateVisibility() throws Exception {
+		File modalFile = new File("src/client/java/com/example/client/gui/BuildAreaConfirmModalScreen.java");
+		Assertions.assertTrue(modalFile.exists());
+		String content = Files.readString(modalFile.toPath());
+		Assertions.assertTrue(
+			content.contains("this.changeBlockButton.visible = (this.pos1 != null && this.pos2 != null)"),
+			"Modal must toggle change block button visibility when corners are present"
+		);
+	}
 }

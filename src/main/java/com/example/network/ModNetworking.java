@@ -996,6 +996,12 @@ public class ModNetworking {
 			return;
 		}
 
+		if (minY < world.getBottomY() || maxY >= world.getTopY()) {
+			player.sendMessage(Text.literal("§c⚠ Mining area exceeds world height limits (Y: " +
+				world.getBottomY() + " to " + (world.getTopY() - 1) + ")!§r"), true);
+			return;
+		}
+
 		try {
 			com.example.construction.ConstructionSession session = com.example.construction.ConstructionManager.getInstance()
 				.startAreaDismantleSession(world, pos1, pos2, player);
@@ -1060,6 +1066,12 @@ public class ModNetworking {
 		if (volume > com.example.blueprint.StructureBlueprint.MAX_SPATIAL_VOLUME) {
 			player.sendMessage(Text.literal("§c⚠ Build area volume exceeds maximum limit of " +
 				com.example.blueprint.StructureBlueprint.MAX_SPATIAL_VOLUME + " blocks!§r"), true);
+			return;
+		}
+
+		if (minY < world.getBottomY() || maxY >= world.getTopY()) {
+			player.sendMessage(Text.literal("§c⚠ Build area exceeds world height limits (Y: " +
+				world.getBottomY() + " to " + (world.getTopY() - 1) + ")!§r"), true);
 			return;
 		}
 

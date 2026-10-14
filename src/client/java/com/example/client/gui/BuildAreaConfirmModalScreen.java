@@ -200,6 +200,9 @@ public class BuildAreaConfirmModalScreen extends Screen {
 		if (this.startButton != null) {
 			this.startButton.active = hasValidGeometry() && this.selectedBlockId != null;
 		}
+		if (this.changeBlockButton != null) {
+			this.changeBlockButton.visible = (this.pos1 != null && this.pos2 != null);
+		}
 	}
 
 	public void clearSelection() {

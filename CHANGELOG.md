@@ -45,6 +45,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Command Hub GUI (`CommandScepterScreen`) Integration**:
   - Features dedicated `[ 🏛 Blue ]` vs `[ ◫ Area ]` sub-mode toggle buttons in the `BUILD` mode control bar.
   - Displays live area volume dimensions and provides a quick **`[ ✦ Fill ]`** modal trigger.
+- **Active Area Build Hologram Persistence (`BlueprintHologramRenderer`)**:
+  - The in-world cyan/aqua wireframe and voxel ghost grid now persist dynamically in the world throughout the entire duration of active area build sessions until all blocks are placed, giving commanders full visual feedback on minion progress matching area mining quarries.
+- **Keyboard Height Adjustment Parity (`ExampleModClient`)**:
+  - Full keyboard height stepping with **`[`** / **`]`** and **`PageUp`** / **`PageDown`** (plus **`Shift`** for $\pm 5$) is now supported in `BUILD (AREA)` mode alongside `Ctrl + Scroll`.
+- **Contextual Keybind Parity (`R` Key)**:
+  - In `BUILD (AREA)` mode, the `R` key triggers minion retreat and emergency citadel recall (matching `MINE (AREA)` and `DESIGN`), while 90° blueprint rotation is cleanly scoped to `BUILD (BLUEPRINT)` mode.
+- **World Height Limits & Boundary Safety (`ModNetworking`)**:
+  - Authoritative server validation verifies that bounding volumes stay strictly within world height limits (`world.getBottomY()` to `world.getTopY() - 1`) for both area building and mining, preventing out-of-bounds tasks.
+- **Modal Corner State Safety (`BuildAreaConfirmModalScreen`)**:
+  - Dynamically hides the block picker button when corners are incomplete, ensuring a clean and error-free modal presentation.
 
 - **On-Demand Block-to-Block Crafting (`MinionHarvestingHelper.tryCraftBlockFromInventory`)**:
   - Builder minions in survival mode can now craft architectural, masonry, utility, and decorative blocks on demand directly from base materials in their own 9-slot inventory (functioning like a player using a crafting table).

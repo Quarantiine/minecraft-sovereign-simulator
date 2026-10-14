@@ -8,6 +8,7 @@ import com.example.client.network.ModClientNetworking;
 import com.example.client.renderer.BlueprintHologramRenderer;
 import com.example.client.renderer.ClientDesignCaptureTracker;
 import com.example.client.renderer.ClientMiningCaptureTracker;
+import com.example.client.renderer.ClientBuildCaptureTracker;
 import com.example.client.renderer.MinionEntityRenderer;
 import com.example.client.renderer.TntProjectileRenderer;
 import com.example.component.CommandMode;
@@ -335,8 +336,8 @@ public class ExampleModClient implements ClientModInitializer {
 			while (retreatKey.wasPressed()) {
 				if (client.player != null) {
 					ItemStack heldScepter = CommandScepterItem.getHeldScepter(client.player);
-					if (!heldScepter.isEmpty() && CommandScepterItem.getMode(heldScepter) == CommandMode.BUILD) {
-						// In BUILD mode: pressing R rotates the blueprint 90° clockwise!
+					if (!heldScepter.isEmpty() && CommandScepterItem.getMode(heldScepter) == CommandMode.BUILD && CommandScepterItem.getBuildingMode(heldScepter) == com.example.component.BuildingMode.BLUEPRINT) {
+						// In BUILD (BLUEPRINT) mode: pressing R rotates the blueprint 90° clockwise!
 						CommandScepterItem.cycleRotation(heldScepter, client.player);
 						ModClientNetworking.sendUpdateScepter(
 							CommandMode.BUILD,
@@ -431,6 +432,30 @@ public class ExampleModClient implements ClientModInitializer {
 									int maxY = Math.max(ClientMiningCaptureTracker.getPos1().getY(), ClientMiningCaptureTracker.getPos2().getY());
 									client.player.sendMessage(
 										Text.literal("§6✦ Mining Box Height: §f" + newH + " blocks §8(Y: " + minY + " → " + maxY + ") §8| §e" + ClientMiningCaptureTracker.getDimensionString()),
+										true
+									);
+									client.player.playSound(net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);
+								}
+								lastHeightKeyTime = now;
+							}
+						}
+					} else if (CommandScepterItem.getMode(heldScepter) == CommandMode.BUILD && CommandScepterItem.getBuildingMode(heldScepter) == com.example.component.BuildingMode.AREA) {
+						long win = client.getWindow().getHandle();
+						long now = System.currentTimeMillis();
+						if (now - lastHeightKeyTime >= 150L) {
+							boolean upPressed = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_RIGHT_BRACKET)
+								|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_PAGE_UP);
+							boolean downPressed = InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_LEFT_BRACKET)
+								|| InputUtil.isKeyPressed(win, GLFW.GLFW_KEY_PAGE_DOWN);
+							if (upPressed || downPressed) {
+								int step = upPressed ? 1 : -1;
+								if (net.minecraft.client.gui.screen.Screen.hasShiftDown()) step *= 5;
+								int newH = ClientBuildCaptureTracker.adjustHeight(step);
+								if (newH > 0 && ClientBuildCaptureTracker.getPos1() != null && ClientBuildCaptureTracker.getPos2() != null) {
+									int minY = Math.min(ClientBuildCaptureTracker.getPos1().getY(), ClientBuildCaptureTracker.getPos2().getY());
+									int maxY = Math.max(ClientBuildCaptureTracker.getPos1().getY(), ClientBuildCaptureTracker.getPos2().getY());
+									client.player.sendMessage(
+										Text.literal("§b✦ Build Box Height: §f" + newH + " blocks §8(Y: " + minY + " → " + maxY + ") §8| §e" + ClientBuildCaptureTracker.getDimensionString()),
 										true
 									);
 									client.player.playSound(net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);

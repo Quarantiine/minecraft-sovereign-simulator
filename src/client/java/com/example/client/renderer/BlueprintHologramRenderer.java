@@ -218,6 +218,17 @@ public class BlueprintHologramRenderer {
 				Box quarryBox = new Box(minX, minY, minZ, maxX + 1.0D, maxY + 1.0D, maxZ + 1.0D);
 				renderMiningBoundingBox(matrices, buffer, quarryBox, 1.0F, 0.45F, 0.05F, 0.85F, sessionData.anchorPos(), new BlockPos(maxX, maxY, maxZ));
 				renderMiningGhostGrid(matrices, buffer, client.world, minX, minY, minZ, maxX, maxY, maxZ, 1.0F);
+			} else if (!sessionData.isDismantle() && sessionData.sizeX() > 0 && sessionData.sizeY() > 0 && sessionData.sizeZ() > 0) {
+				// Persistent cyan/aqua wireframe & ghost grid for active area construction sessions
+				int minX = sessionData.anchorPos().getX();
+				int minY = sessionData.anchorPos().getY();
+				int minZ = sessionData.anchorPos().getZ();
+				int maxX = minX + sessionData.sizeX() - 1;
+				int maxY = minY + sessionData.sizeY() - 1;
+				int maxZ = minZ + sessionData.sizeZ() - 1;
+				Box buildBox = new Box(minX, minY, minZ, maxX + 1.0D, maxY + 1.0D, maxZ + 1.0D);
+				renderBuildBoundingBox(matrices, buffer, buildBox, 0.0F, 0.85F, 1.0F, 0.85F, sessionData.anchorPos(), new BlockPos(maxX, maxY, maxZ));
+				renderBuildGhostGrid(matrices, buffer, client.world, minX, minY, minZ, maxX, maxY, maxZ, 1.0F);
 			}
 		}
 
