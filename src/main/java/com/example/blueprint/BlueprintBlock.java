@@ -65,7 +65,17 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 	 * @return The Item associated with this block state, or Items.AIR if not obtainable.
 	 */
 	public Item getRequiredItem() {
-		return this.state != null ? this.state.getBlock().asItem() : net.minecraft.item.Items.AIR;
+		if (this.state == null) {
+			return net.minecraft.item.Items.AIR;
+		}
+		if (this.state.isOf(net.minecraft.block.Blocks.WATER)) {
+			return net.minecraft.item.Items.WATER_BUCKET;
+		}
+		if (this.state.isOf(net.minecraft.block.Blocks.LAVA)) {
+			return net.minecraft.item.Items.LAVA_BUCKET;
+		}
+		Item item = this.state.getBlock().asItem();
+		return item != null ? item : net.minecraft.item.Items.AIR;
 	}
 
 	/**

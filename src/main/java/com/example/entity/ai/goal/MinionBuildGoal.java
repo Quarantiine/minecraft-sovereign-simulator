@@ -38,6 +38,7 @@ import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
@@ -679,7 +680,14 @@ public class MinionBuildGoal extends Goal {
 		// Handle resource resolution
 		Item requiredItem = this.currentTask.getBlueprintBlock().getRequiredItem();
 		BlockState targetState = this.currentTask.getBlueprintBlock().state();
-		boolean alreadyPlaced = serverWorld.getBlockState(targetPos).equals(targetState);
+		boolean alreadyPlaced;
+		if (targetState.isOf(Blocks.WATER)) {
+			alreadyPlaced = serverWorld.getBlockState(targetPos).isOf(Blocks.WATER) && serverWorld.getFluidState(targetPos).isStill();
+		} else if (targetState.isOf(Blocks.LAVA)) {
+			alreadyPlaced = serverWorld.getBlockState(targetPos).isOf(Blocks.LAVA) && serverWorld.getFluidState(targetPos).isStill();
+		} else {
+			alreadyPlaced = serverWorld.getBlockState(targetPos).equals(targetState);
+		}
 		boolean hasResources = false;
 
 		if (alreadyPlaced || this.currentSession.isCreative() || requiredItem == Items.SCAFFOLDING) {
@@ -690,14 +698,14 @@ public class MinionBuildGoal extends Goal {
 			SimpleInventory minionInv = this.minion.getInventory();
 			int minionSlot = findItemSlot(minionInv, requiredItem);
 			if (minionSlot != -1) {
-				minionInv.removeStack(minionSlot, 1);
+				consumeResourceFromInventory(minionInv, minionSlot, requiredItem);
 				hasResources = true;
 			} else {
 				// 1.5 Craft on-demand from existing blocks in minion inventory (e.g. planks -> stairs, logs -> planks, stone -> stone bricks)
 				if (com.example.entity.ai.logistics.MinionHarvestingHelper.tryCraftBlockFromInventory(this.minion, serverWorld, requiredItem, this.currentSession)) {
 					int craftedSlot = findItemSlot(minionInv, requiredItem);
 					if (craftedSlot != -1) {
-						minionInv.removeStack(craftedSlot, 1);
+						consumeResourceFromInventory(minionInv, craftedSlot, requiredItem);
 						hasResources = true;
 					}
 				}
@@ -714,7 +722,7 @@ public class MinionBuildGoal extends Goal {
 				if (hasResources) {
 					int slot = findItemSlot(minionInv, requiredItem);
 					if (slot != -1) {
-						minionInv.removeStack(slot, 1);
+						consumeResourceFromInventory(minionInv, slot, requiredItem);
 					}
 				}
 			}
@@ -725,7 +733,7 @@ public class MinionBuildGoal extends Goal {
 				if (harvestOrContract) {
 					int slot = findItemSlot(minionInv, requiredItem);
 					if (slot != -1) {
-						minionInv.removeStack(slot, 1);
+						consumeResourceFromInventory(minionInv, slot, requiredItem);
 						hasResources = true;
 					} else {
 						// Procurement hunt contract commissioned or in progress: wait patiently for delivery
@@ -826,10 +834,19 @@ public class MinionBuildGoal extends Goal {
 			0.15
 		);
 
+		SoundEvent placeSound;
+		if (targetState.isOf(Blocks.WATER)) {
+			placeSound = SoundEvents.ITEM_BUCKET_EMPTY;
+		} else if (targetState.isOf(Blocks.LAVA)) {
+			placeSound = SoundEvents.ITEM_BUCKET_EMPTY_LAVA;
+		} else {
+			placeSound = targetState.getSoundGroup().getPlaceSound();
+		}
+
 		serverWorld.playSound(
 			null,
 			targetPos,
-			targetState.getSoundGroup().getPlaceSound(),
+			placeSound,
 			SoundCategory.BLOCKS,
 			1.0F,
 			0.9F + (this.minion.getRandom().nextFloat() * 0.2F)
@@ -867,6 +884,16 @@ public class MinionBuildGoal extends Goal {
 			if (this.currentSession == null || !this.currentSession.isActive()) {
 				this.minion.setActivelyBuilding(false);
 				restoreHeldWeapon();
+			}
+		}
+	}
+
+	private void consumeResourceFromInventory(SimpleInventory minionInv, int slot, Item item) {
+		minionInv.removeStack(slot, 1);
+		if (item == Items.WATER_BUCKET || item == Items.LAVA_BUCKET) {
+			ItemStack emptyBucket = new ItemStack(Items.BUCKET);
+			if (!minionInv.addStack(emptyBucket).isEmpty()) {
+				this.minion.dropStack(emptyBucket);
 			}
 		}
 	}
@@ -1731,8 +1758,9 @@ public class MinionBuildGoal extends Goal {
 
 		BlockState currentState = serverWorld.getBlockState(targetPos);
 		boolean alreadyAir = currentState.isAir();
+		boolean isFluid = currentState.isLiquid() || currentState.getBlock() instanceof net.minecraft.block.FluidBlock || !serverWorld.getFluidState(targetPos).isEmpty();
 
-		if (alreadyAir) {
+		if (alreadyAir || isFluid) {
 			this.currentSession.completeTask(this.currentTask, serverWorld);
 			this.workTicks = 0;
 			this.ticksNavigating = 0;
@@ -1789,9 +1817,7 @@ public class MinionBuildGoal extends Goal {
 			}
 		}
 
-		if (currentState.isLiquid() || currentState.getBlock() instanceof net.minecraft.block.FluidBlock) {
-			serverWorld.setBlockState(targetPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
-		} else if (this.currentSession.isCreative()) {
+		if (this.currentSession.isCreative()) {
 			serverWorld.breakBlock(targetPos, false, this.minion);
 			Box cleanBox = new Box(targetPos).expand(4.0D);
 			List<ItemEntity> strayItems = serverWorld.getEntitiesByClass(ItemEntity.class, cleanBox, e -> true);

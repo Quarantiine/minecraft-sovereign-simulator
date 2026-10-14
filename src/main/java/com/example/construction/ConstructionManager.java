@@ -1243,6 +1243,11 @@ public class ConstructionManager {
 				continue;
 			}
 
+			// Do not render hologram particles for Area Fill sessions (not needed / visual clutter)
+			if (session.getBlueprint() != null && session.getBlueprint().getId() != null && session.getBlueprint().getId().startsWith("build_area_")) {
+				continue;
+			}
+
 			BlockBox box = session.getWorldBoundingBox();
 			BlockPos anchor = session.getAnchorPos();
 

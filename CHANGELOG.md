@@ -8,7 +8,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [1.1.1] - 2026-10-14
 
-### 🔨 Area Fill / Volumetric Construction & Builder Minion Survival Crafting
+### 🔨 Area Fill / Volumetric Construction, Water Logistics & Builder Minion Survival Crafting
+
+### Added
+
+#### 💧 Water & Fluid Source Block Construction Logistics
+- **Water Bucket Material Mapping (`BlueprintBlock.getRequiredItem`, `StructureBlueprint.Builder.build`)**:
+  - Blueprint water source blocks (`Blocks.WATER`) now properly resolve to `Items.WATER_BUCKET` instead of returning `Items.AIR`.
+  - Lava source blocks (`Blocks.LAVA`) resolve to `Items.LAVA_BUCKET`.
+  - Blueprints, bills of materials (BOM), and material checks never request or display `Items.AIR` when building structures with water features (e.g. fountains, ponds, aqueducts).
+- **Flowing Fluid Filtering (`StructureBlueprint.captureBlocks`)**:
+  - Blueprint capture strictly distinguishes between fluid source blocks (`state.getFluidState().isStill()`) and flowing fluids (`!state.getFluidState().isStill()`).
+  - Flowing water/lava is filtered out of captured blueprints, ensuring only true water source blocks are captured. When placed, Minecraft's native fluid physics naturally cascade water down, preventing bloated bucket requirements and unwanted source flooding.
+- **Survival Water Bucket Lifecycle & SFX (`MinionBuildGoal`)**:
+  - In Survival mode, builder minions consume 1 `Items.WATER_BUCKET` and immediately return an empty `Items.BUCKET` into their inventory (or drop it at their feet if full).
+  - In Creative mode, minions place fluid source blocks freely without requiring item consumption.
+  - Realistic bucket emptying sound effects (`SoundEvents.ITEM_BUCKET_EMPTY` / `SoundEvents.ITEM_BUCKET_EMPTY_LAVA`) play upon liquid placement.
+- **Autonomous Water Gathering & In-Inventory Bucket Crafting (`MinionHarvestingHelper.gatherWaterBucket`)**:
+  - When a builder minion needs a water bucket in Survival mode, it can autonomously scoop nearby water sources within 16 blocks using an empty bucket.
+  - If the minion lacks an empty bucket but carries at least 3 iron ingots, it autonomously crafts a bucket on demand and scoops the water source.
+
+#### ⛏️ Mining & Dismantle Fluid Immunity
+- **Liquid Block Ignoring (`ConstructionSession`, `MinionBuildGoal.executeDismantleWork`)**:
+  - In both Survival and Creative modes, minions mining or dismantling structures strictly ignore water, lava, and any fluids (`isLiquid()` / `FluidBlock`).
+  - Minions will never swing tools at water/lava or attempt to clear fluids with pickaxes.
+- **Mining Area Blueprint Filtration (`StructureBlueprint.createAreaBlueprint`)**:
+  - Volumetric area mining blueprints automatically exclude all liquid and fluid blocks during creation, ensuring task queues only contain real destructible blocks.
+- **Fluid Clearance Non-Blocking (`ConstructionSession.isDismantleTaskReady`, `hasRemainingBlocksInWorld`)**:
+  - Water and lava above or around blocks are treated as cleared obstacles, preventing lower layers from stalling if water flows over them.
+  - Natural seeping fluids or ocean aquifers no longer prevent dismantle sessions from reaching 100% completion.
+
+#### ✨ Area Fill Mode Particle Cleanup
+- **Blueprint Perimeter Particle Suppression (`CommandScepterItem.inventoryTick`)**:
+  - Suppressed idle ground perimeter bounding particles when holding the scepter in `BUILD (AREA)` mode, preventing blueprint outlines from cluttering the screen while using Area Fill.
+- **Corner Selection Particle Removal (`CommandScepterItem.handleBuildPos1`, `handleBuildPos2`)**:
+  - Removed particle bursts when selecting `Pos1` and `Pos2` in Area Fill mode for a clean, minimal visual experience.
+- **Active Area Fill Hologram Particle Suppression (`ConstructionManager.renderHologramParticles`)**:
+  - Hologram aura and corner particles are suppressed for active Area Fill sessions, leaving only the clean Cyan/Aqua wireframe render.
 
 ### Added
 

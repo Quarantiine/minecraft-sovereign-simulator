@@ -1241,22 +1241,6 @@ public class CommandScepterItem extends Item {
 			);
 		}
 
-		if (world instanceof ServerWorld serverWorld) {
-			double cx = pos.getX() + 0.5D;
-			double cy = pos.getY() + 0.5D;
-			double cz = pos.getZ() + 0.5D;
-			serverWorld.spawnParticles(ParticleTypes.ENCHANT, cx, cy + 0.3D, cz, 8, 0.2D, 0.3D, 0.2D, 0.1D);
-			serverWorld.spawnParticles(ParticleTypes.GLOW, cx, cy + 0.5D, cz, 6, 0.2D, 0.2D, 0.2D, 0.02D);
-		} else if (world.isClient()) {
-			double cx = pos.getX() + 0.5D;
-			double cy = pos.getY() + 0.5D;
-			double cz = pos.getZ() + 0.5D;
-			for (int i = 0; i < 6; i++) {
-				world.addParticle(ParticleTypes.ENCHANT, cx, cy + 0.3D, cz, 0.0D, 0.05D, 0.0D);
-				world.addParticle(ParticleTypes.GLOW, cx, cy + 0.5D, cz, 0.0D, 0.02D, 0.0D);
-			}
-		}
-
 		if (player != null) {
 			BlockPos pos2 = getBuildPos2(stack);
 			if (pos2 != null) {
@@ -1301,22 +1285,6 @@ public class CommandScepterItem extends Item {
 				0.8F,
 				1.4F
 			);
-		}
-
-		if (world instanceof ServerWorld serverWorld) {
-			double cx = pos.getX() + 0.5D;
-			double cy = pos.getY() + 0.5D;
-			double cz = pos.getZ() + 0.5D;
-			serverWorld.spawnParticles(ParticleTypes.ENCHANT, cx, cy + 0.3D, cz, 10, 0.25D, 0.35D, 0.25D, 0.1D);
-			serverWorld.spawnParticles(ParticleTypes.GLOW, cx, cy + 0.5D, cz, 6, 0.2D, 0.2D, 0.2D, 0.02D);
-		} else if (world.isClient()) {
-			double cx = pos.getX() + 0.5D;
-			double cy = pos.getY() + 0.5D;
-			double cz = pos.getZ() + 0.5D;
-			for (int i = 0; i < 6; i++) {
-				world.addParticle(ParticleTypes.ENCHANT, cx, cy + 0.3D, cz, 0.0D, 0.05D, 0.0D);
-				world.addParticle(ParticleTypes.GLOW, cx, cy + 0.5D, cz, 0.0D, 0.02D, 0.0D);
-			}
 		}
 
 		if (player != null) {
@@ -2512,8 +2480,8 @@ public class CommandScepterItem extends Item {
 			return;
 		}
 
-		// Active only in BUILD mode
-		if (getMode(stack) != CommandMode.BUILD) {
+		// Active only in BUILD mode (and strictly for BLUEPRINT mode, not AREA fill mode)
+		if (getMode(stack) != CommandMode.BUILD || getBuildingMode(stack) == BuildingMode.AREA) {
 			return;
 		}
 

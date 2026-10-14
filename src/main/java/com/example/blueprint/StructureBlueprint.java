@@ -515,11 +515,17 @@ public class StructureBlueprint {
 		String cleanName = name != null && !name.isBlank() ? name : "Mining Area (" + sizeX + "x" + sizeY + "x" + sizeZ + ")";
 		String cleanDesc = (description != null && !description.isBlank()) ? description.trim() : "";
 
-		List<BlueprintBlock> blocks = (world != null) ? captureBlocks(world, pos1, pos2) : Collections.emptyList();
+		List<BlueprintBlock> rawBlocks = (world != null) ? captureBlocks(world, pos1, pos2) : Collections.emptyList();
+		List<BlueprintBlock> blocks = new ArrayList<>();
+		for (BlueprintBlock b : rawBlocks) {
+			if (b.state() != null && !b.state().isLiquid() && !(b.state().getBlock() instanceof net.minecraft.block.FluidBlock) && b.state().getFluidState().isEmpty()) {
+				blocks.add(b);
+			}
+		}
 		Map<Item, Integer> req = new LinkedHashMap<>();
 		for (BlueprintBlock b : blocks) {
-			if (b.state() != null && !b.state().isAir()) {
-				Item item = b.state().getBlock().asItem();
+			if (b.state() != null && !b.state().isAir() && !b.state().isLiquid() && !(b.state().getBlock() instanceof net.minecraft.block.FluidBlock)) {
+				Item item = b.getRequiredItem();
 				if (item != null && item != net.minecraft.item.Items.AIR) {
 					req.merge(item, 1, Integer::sum);
 				}
@@ -583,9 +589,15 @@ public class StructureBlueprint {
 		Item requiredItem = null;
 		try {
 			if (fillBlockState != null && fillBlockState.getBlock() != null) {
-				Item candidate = fillBlockState.getBlock().asItem();
-				if (candidate != null && candidate != net.minecraft.item.Items.AIR) {
-					requiredItem = candidate;
+				if (fillBlockState.isOf(net.minecraft.block.Blocks.WATER)) {
+					requiredItem = net.minecraft.item.Items.WATER_BUCKET;
+				} else if (fillBlockState.isOf(net.minecraft.block.Blocks.LAVA)) {
+					requiredItem = net.minecraft.item.Items.LAVA_BUCKET;
+				} else {
+					Item candidate = fillBlockState.getBlock().asItem();
+					if (candidate != null && candidate != net.minecraft.item.Items.AIR) {
+						requiredItem = candidate;
+					}
 				}
 			}
 		} catch (Throwable ignored) {}
@@ -694,6 +706,12 @@ public class StructureBlueprint {
 					mutablePos.set(x, y, z);
 					BlockState state = world.getBlockState(mutablePos);
 					if (state != null && !state.isAir()) {
+						if (state.getBlock() instanceof net.minecraft.block.FluidBlock) {
+							// Only capture static fluid sources (e.g. water source block). Skip flowing water/lava.
+							if (!state.getFluidState().isStill()) {
+								continue;
+							}
+						}
 						if (replacements != null && !replacements.isEmpty()) {
 							try {
 								if (state.getBlock() != null && net.minecraft.registry.Registries.BLOCK != null) {
@@ -913,10 +931,16 @@ public class StructureBlueprint {
 				Item item = null;
 				try {
 					if (state != null && state.getBlock() != null) {
-						item = state.getBlock().asItem();
+						if (state.isOf(net.minecraft.block.Blocks.WATER)) {
+							item = net.minecraft.item.Items.WATER_BUCKET;
+						} else if (state.isOf(net.minecraft.block.Blocks.LAVA)) {
+							item = net.minecraft.item.Items.LAVA_BUCKET;
+						} else {
+							item = state.getBlock().asItem();
+						}
 					}
 				} catch (Throwable ignored) {}
-				if (item != null) {
+				if (item != null && item != net.minecraft.item.Items.AIR) {
 					itemCounts.merge(item, 1, Integer::sum);
 				}
 

@@ -165,6 +165,13 @@ public final class MinionHarvestingHelper {
 			}
 		}
 
+		// 7. Water Gathering: Scoop water source with bucket or craft bucket from iron ingots
+		if (requiredItem == Items.WATER_BUCKET) {
+			if (gatherWaterBucket(minion, world)) {
+				return hasItemInInventory(minion, requiredItem);
+			}
+		}
+
 		return false;
 	}
 
@@ -784,6 +791,35 @@ public final class MinionHarvestingHelper {
 		}
 
 		return harvested > 0;
+	}
+
+	private static boolean gatherWaterBucket(MinionEntity minion, ServerWorld world) {
+		if (minion == null || world == null) {
+			return false;
+		}
+		// If minion has no empty bucket, try to craft one from 3 iron ingots
+		if (!hasItemInInventory(minion, Items.BUCKET)) {
+			if (countItemInInventory(minion.getInventory(), Items.IRON_INGOT) >= 3) {
+				consumeItemFromInventory(minion.getInventory(), Items.IRON_INGOT, 3);
+				giveOrDropItem(minion, new ItemStack(Items.BUCKET, 1));
+				world.playSound(null, minion.getBlockPos(), SoundEvents.ENTITY_VILLAGER_WORK_TOOLSMITH, SoundCategory.NEUTRAL, 1.0F, 1.0F);
+			}
+		}
+
+		if (hasItemInInventory(minion, Items.BUCKET)) {
+			BlockPos minionPos = minion.getBlockPos();
+			for (BlockPos pos : BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, 6, HARVEST_SEARCH_RADIUS)) {
+				BlockState state = world.getBlockState(pos);
+				if (state.isOf(Blocks.WATER) && world.getFluidState(pos).isStill()) {
+					consumeItemFromInventory(minion.getInventory(), Items.BUCKET, 1);
+					giveOrDropItem(minion, new ItemStack(Items.WATER_BUCKET, 1));
+					world.playSound(null, pos, SoundEvents.ITEM_BUCKET_FILL, SoundCategory.BLOCKS, 1.0F, 1.0F);
+					world.spawnParticles(ParticleTypes.SPLASH, pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.1D);
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private static boolean matchesQuarryTarget(BlockState state, Item requiredItem) {
