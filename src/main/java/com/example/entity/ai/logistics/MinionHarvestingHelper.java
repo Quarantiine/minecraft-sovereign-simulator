@@ -167,7 +167,7 @@ public final class MinionHarvestingHelper {
 
 		// 7. Water Gathering: Scoop water source with bucket or craft bucket from iron ingots
 		if (requiredItem == Items.WATER_BUCKET) {
-			if (gatherWaterBucket(minion, world)) {
+			if (gatherWaterBucket(minion, world, session)) {
 				return hasItemInInventory(minion, requiredItem);
 			}
 		}
@@ -793,7 +793,51 @@ public final class MinionHarvestingHelper {
 		return harvested > 0;
 	}
 
-	private static boolean gatherWaterBucket(MinionEntity minion, ServerWorld world) {
+	/**
+	 * Determines whether a candidate water block is part of an active construction session,
+	 * blueprint volume, or architectural structure and therefore strictly protected from being scooped.
+	 */
+	public static boolean isProtectedWaterSource(ServerWorld world, BlockPos pos, ConstructionSession session) {
+		if (world == null || pos == null) {
+			return true;
+		}
+
+		// 1. Current active construction session volume & tasks protection
+		if (session != null && session.containsBlockPos(pos)) {
+			return true;
+		}
+		if (session != null && session.getWorldBoundingBox() != null && session.getWorldBoundingBox().contains(pos)) {
+			return true;
+		}
+
+		// 2. Multi-session protection: Any active construction session on the server
+		if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyActiveSession(pos)) {
+			return true;
+		}
+
+		// 3. Structural contact protection: If adjacent to any active session task/volume or processed architectural block
+		for (Direction dir : Direction.values()) {
+			BlockPos neighborPos = pos.offset(dir);
+			if (session != null && session.containsBlockPos(neighborPos)) {
+				return true;
+			}
+			if (session != null && session.getWorldBoundingBox() != null && session.getWorldBoundingBox().contains(neighborPos)) {
+				return true;
+			}
+			if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyActiveSession(neighborPos)) {
+				return true;
+			}
+			BlockState neighborState = world.getBlockState(neighborPos);
+			String neighborId = Registries.BLOCK.getId(neighborState.getBlock()).getPath();
+			if (isProcessedBlockId(neighborId)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static boolean gatherWaterBucket(MinionEntity minion, ServerWorld world, ConstructionSession session) {
 		if (minion == null || world == null) {
 			return false;
 		}
@@ -809,6 +853,12 @@ public final class MinionHarvestingHelper {
 		if (hasItemInInventory(minion, Items.BUCKET)) {
 			BlockPos minionPos = minion.getBlockPos();
 			for (BlockPos pos : BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, 6, HARVEST_SEARCH_RADIUS)) {
+				// Strict Blueprint, Session, and Structure Protection:
+				// NEVER scoop water from active construction sessions, blueprints, or architectural structures!
+				if (isProtectedWaterSource(world, pos, session)) {
+					continue;
+				}
+
 				BlockState state = world.getBlockState(pos);
 				if (state.isOf(Blocks.WATER) && world.getFluidState(pos).isStill()) {
 					consumeItemFromInventory(minion.getInventory(), Items.BUCKET, 1);
@@ -821,6 +871,10 @@ public final class MinionHarvestingHelper {
 			}
 		}
 		return false;
+	}
+
+	public static boolean gatherWaterBucket(MinionEntity minion, ServerWorld world) {
+		return gatherWaterBucket(minion, world, null);
 	}
 
 	private static boolean matchesQuarryTarget(BlockState state, Item requiredItem) {
@@ -1113,7 +1167,17 @@ public final class MinionHarvestingHelper {
 			|| path.contains("button")
 			|| path.contains("lever")
 			|| path.contains("sign")
-			|| path.contains("banner");
+			|| path.contains("banner")
+			|| path.contains("quartz")
+			|| path.contains("prismarine")
+			|| path.contains("purpur")
+			|| path.contains("copper")
+			|| path.contains("cut_")
+			|| path.contains("smooth_")
+			|| path.contains("polished_")
+			|| path.contains("chiseled_")
+			|| path.contains("pillar")
+			|| path.contains("tile");
 	}
 
 	/**

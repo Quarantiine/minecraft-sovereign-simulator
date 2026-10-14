@@ -412,8 +412,12 @@ public class ConstructionSession {
 
 				// BUILD mode: if the block is already in place (placed by a peer minion, the player, or a
 				// stolen task finished elsewhere), mark it done so nobody walks over to re-place it.
-				if (this.mode == SessionMode.BUILD && world != null
-						&& world.getBlockState(task.getWorldPos()).equals(task.getBlueprintBlock().state())) {
+				boolean isMatchingBlock = world != null && world.getBlockState(task.getWorldPos()).equals(task.getBlueprintBlock().state());
+				boolean isMatchingFluid = world != null && (
+					(task.getBlueprintBlock().state().isOf(Blocks.WATER) && world.getBlockState(task.getWorldPos()).isOf(Blocks.WATER) && world.getFluidState(task.getWorldPos()).isStill())
+					|| (task.getBlueprintBlock().state().isOf(Blocks.LAVA) && world.getBlockState(task.getWorldPos()).isOf(Blocks.LAVA) && world.getFluidState(task.getWorldPos()).isStill())
+				);
+				if (this.mode == SessionMode.BUILD && world != null && (isMatchingBlock || isMatchingFluid)) {
 					task.complete();
 					this.completedCount++;
 					if (this.completedCount >= this.tasks.size()) {

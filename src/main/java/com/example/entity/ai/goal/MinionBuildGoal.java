@@ -810,6 +810,12 @@ public class MinionBuildGoal extends Goal {
 				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
 			}
 
+			if (targetState.isOf(Blocks.WATER)) {
+				serverWorld.scheduleFluidTick(targetPos, net.minecraft.fluid.Fluids.WATER, net.minecraft.fluid.Fluids.WATER.getTickRate(serverWorld));
+			} else if (targetState.isOf(Blocks.LAVA)) {
+				serverWorld.scheduleFluidTick(targetPos, net.minecraft.fluid.Fluids.LAVA, net.minecraft.fluid.Fluids.LAVA.getTickRate(serverWorld));
+			}
+
 			if (this.currentSession.isCreative()) {
 				Box cleanBox = new Box(targetPos).expand(4.0D);
 				List<ItemEntity> strayItems = serverWorld.getEntitiesByClass(ItemEntity.class, cleanBox, e -> true);
@@ -821,17 +827,43 @@ public class MinionBuildGoal extends Goal {
 
 		// Visual and auditory feedback
 		this.minion.swingHand(Hand.MAIN_HAND);
-		serverWorld.spawnParticles(
-			new BlockStateParticleEffect(ParticleTypes.BLOCK, targetState),
-			targetPos.getX() + 0.5D,
-			targetPos.getY() + 0.5D,
-			targetPos.getZ() + 0.5D,
-			14,
-			0.3,
-			0.3,
-			0.3,
-			0.15
-		);
+		if (targetState.isOf(Blocks.WATER)) {
+			serverWorld.spawnParticles(
+				ParticleTypes.SPLASH,
+				targetPos.getX() + 0.5D,
+				targetPos.getY() + 0.8D,
+				targetPos.getZ() + 0.5D,
+				14,
+				0.3,
+				0.2,
+				0.3,
+				0.15
+			);
+		} else if (targetState.isOf(Blocks.LAVA)) {
+			serverWorld.spawnParticles(
+				ParticleTypes.LAVA,
+				targetPos.getX() + 0.5D,
+				targetPos.getY() + 0.8D,
+				targetPos.getZ() + 0.5D,
+				14,
+				0.3,
+				0.2,
+				0.3,
+				0.15
+			);
+		} else {
+			serverWorld.spawnParticles(
+				new BlockStateParticleEffect(ParticleTypes.BLOCK, targetState),
+				targetPos.getX() + 0.5D,
+				targetPos.getY() + 0.5D,
+				targetPos.getZ() + 0.5D,
+				14,
+				0.3,
+				0.3,
+				0.3,
+				0.15
+			);
+		}
 
 		SoundEvent placeSound;
 		if (targetState.isOf(Blocks.WATER)) {

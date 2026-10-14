@@ -193,6 +193,54 @@ public class FluidHandlingAndWaterBucketTest {
 		Assertions.assertTrue(goalSource.contains("boolean overFluid = this.minion.isTouchingWater() || this.minion.isInLava()"),
 			"MinionBuildGoal.stop must check if minion is over fluid to keep levitation active for gentle descent");
 	}
+
+	@Test
+	@DisplayName("Strict Structure & Blueprint Water Protection: Placed water in builds is never scooped by minions")
+	void testWaterSourceProtectionAgainstMinionScoopingContract() throws IOException {
+		String helperSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+		String goalSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java"));
+		String sessionSource = Files.readString(Path.of("src/main/java/com/example/construction/ConstructionSession.java"));
+
+		// 1. gatherWaterBucket must check isProtectedWaterSource
+		Assertions.assertTrue(helperSource.contains("isProtectedWaterSource(world, pos, session)"),
+			"MinionHarvestingHelper.gatherWaterBucket must check isProtectedWaterSource before scooping water");
+
+		// 2. isProtectedWaterSource must protect session volume and tasks
+		Assertions.assertTrue(helperSource.contains("session.containsBlockPos(pos)"),
+			"isProtectedWaterSource must protect blocks in current session tasks");
+		Assertions.assertTrue(helperSource.contains("session.getWorldBoundingBox().contains(pos)"),
+			"isProtectedWaterSource must protect blocks in current session bounding box");
+
+		// 3. isProtectedWaterSource must protect any active session on server
+		Assertions.assertTrue(helperSource.contains("ConstructionManager.getInstance().isPositionInAnyActiveSession(pos)"),
+			"isProtectedWaterSource must protect blocks across all active sessions");
+
+		// 4. isProtectedWaterSource must check adjacent processed architectural blocks
+		Assertions.assertTrue(helperSource.contains("isProcessedBlockId(neighborId)"),
+			"isProtectedWaterSource must protect water touching architectural building materials");
+
+		// 5. Architectural materials must include quartz, prismarine, copper, cut, smooth, polished, chiseled
+		Assertions.assertTrue(helperSource.contains("path.contains(\"quartz\")"),
+			"isProcessedBlockId must include quartz");
+		Assertions.assertTrue(helperSource.contains("path.contains(\"prismarine\")"),
+			"isProcessedBlockId must include prismarine");
+		Assertions.assertTrue(helperSource.contains("path.contains(\"copper\")"),
+			"isProcessedBlockId must include copper");
+		Assertions.assertTrue(helperSource.contains("path.contains(\"smooth_\")"),
+			"isProcessedBlockId must include smooth blocks");
+		Assertions.assertTrue(helperSource.contains("path.contains(\"polished_\")"),
+			"isProcessedBlockId must include polished blocks");
+
+		// 6. MinionBuildGoal must schedule fluid tick on water and lava placement
+		Assertions.assertTrue(goalSource.contains("serverWorld.scheduleFluidTick(targetPos, net.minecraft.fluid.Fluids.WATER"),
+			"MinionBuildGoal must schedule fluid tick immediately upon water placement");
+		Assertions.assertTrue(goalSource.contains("serverWorld.scheduleFluidTick(targetPos, net.minecraft.fluid.Fluids.LAVA"),
+			"MinionBuildGoal must schedule fluid tick immediately upon lava placement");
+
+		// 7. ConstructionSession must handle fluid isStill check in alreadyInPlace
+		Assertions.assertTrue(sessionSource.contains("task.getBlueprintBlock().state().isOf(Blocks.WATER) && world.getBlockState(task.getWorldPos()).isOf(Blocks.WATER) && world.getFluidState(task.getWorldPos()).isStill()"),
+			"ConstructionSession.claimNextTask must check isStill() when evaluating pre-placed water");
+	}
 }
 
 

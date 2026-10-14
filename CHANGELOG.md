@@ -25,8 +25,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - In Creative mode, minions place fluid source blocks freely without requiring item consumption.
   - Realistic bucket emptying sound effects (`SoundEvents.ITEM_BUCKET_EMPTY` / `SoundEvents.ITEM_BUCKET_EMPTY_LAVA`) play upon liquid placement.
 - **Autonomous Water Gathering & In-Inventory Bucket Crafting (`MinionHarvestingHelper.gatherWaterBucket`)**:
-  - When a builder minion needs a water bucket in Survival mode, it can autonomously scoop nearby water sources within 16 blocks using an empty bucket.
+  - When a builder minion needs a water bucket in Survival mode, it can autonomously scoop nearby natural water sources within 16 blocks using an empty bucket.
   - If the minion lacks an empty bucket but carries at least 3 iron ingots, it autonomously crafts a bucket on demand and scoops the water source.
+- **Structure & Blueprint Water Source Protection (`MinionHarvestingHelper.isProtectedWaterSource`, `gatherWaterBucket`)**:
+  - **Fixed Water Disappearance Bug**: Resolved an issue where builder minions carrying empty buckets would scoop up and delete water source blocks (`Blocks.WATER`) that were just placed into a structure (e.g. fountains, ponds) when searching for water for subsequent water placement tasks, causing placed water to vanish immediately after placement.
+  - **Comprehensive Session & Bounding Box Safeguards**: Minions are strictly barred from scooping water located within any active construction session's task coordinates or bounding box (`session.containsBlockPos`, `ConstructionManager.isPositionInAnyActiveSession`).
+  - **Architectural Material Contact Protection**: Water directly touching processed architectural materials (stone bricks, quartz, prismarine, purpur, copper, stairs, slabs, walls, polished/smooth stone) is classified as part of a structure and never harvested.
+  - **Immediate Fluid Ticking & Fluid Splash SFX (`MinionBuildGoal`)**: Placing water or lava now schedules immediate fluid ticks via `scheduleFluidTick` and emits realistic fluid splash particles (`ParticleTypes.SPLASH` / `ParticleTypes.LAVA`).
+  - **Precise Pre-Placed Fluid Verification (`ConstructionSession.claimNextTask`)**: Pre-completion checks now verify `isStill()` for fluids, preventing minions from walking over to re-place valid water sources already in the build.
 
 #### ⛏️ Mining & Dismantle Fluid Mechanics & Water Source Removal
 - **Liquid Block Tool Immunity (`ConstructionSession`, `MinionBuildGoal.executeDismantleWork`)**:
