@@ -8,6 +8,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
+import net.minecraft.item.Equipment;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.item.MaceItem;
@@ -290,6 +291,26 @@ public class MinionScreenHandler extends ScreenHandler {
 		return stack.getItem() instanceof ShieldItem || stack.isOf(Items.TOTEM_OF_UNDYING);
 	}
 
+	/**
+	 * Determines if the given stack can be equipped onto the head slot (helmets, mob heads, skulls, carved pumpkins).
+	 *
+	 * @param stack The item stack to check.
+	 * @return True if the item is equippable in the head slot.
+	 */
+	public static boolean isHeadEquippable(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) {
+			return false;
+		}
+		if (stack.isOf(Items.CARVED_PUMPKIN)) {
+			return true;
+		}
+		Equipment equipment = Equipment.fromStack(stack);
+		if (equipment != null && equipment.getSlotType() == EquipmentSlot.HEAD) {
+			return true;
+		}
+		return false;
+	}
+
 	private boolean canEquipSlot(ItemStack stack, EquipmentSlot slot) {
 		if (stack.isEmpty()) {
 			return false;
@@ -300,10 +321,13 @@ public class MinionScreenHandler extends ScreenHandler {
 		if (slot == EquipmentSlot.OFFHAND) {
 			return isShieldOrTotem(stack);
 		}
+		if (slot == EquipmentSlot.HEAD && isHeadEquippable(stack)) {
+			return true;
+		}
 		if (this.minion != null) {
 			return this.minion.getPreferredEquipmentSlot(stack) == slot;
 		}
-		return this.player.getPreferredEquipmentSlot(stack) == slot;
+		return this.player != null && this.player.getPreferredEquipmentSlot(stack) == slot;
 	}
 
 	@Override
@@ -347,7 +371,7 @@ public class MinionScreenHandler extends ScreenHandler {
 					? this.minion.getPreferredEquipmentSlot(originalStack)
 					: player.getPreferredEquipmentSlot(originalStack);
 
-				if (preferredSlot == EquipmentSlot.HEAD && !this.slots.get(HEAD_SLOT_INDEX).hasStack()) {
+				if ((preferredSlot == EquipmentSlot.HEAD || isHeadEquippable(originalStack)) && !this.slots.get(HEAD_SLOT_INDEX).hasStack()) {
 					inserted = this.insertItem(originalStack, HEAD_SLOT_INDEX, HEAD_SLOT_INDEX + 1, false);
 				} else if (preferredSlot == EquipmentSlot.CHEST && !this.slots.get(CHEST_SLOT_INDEX).hasStack()) {
 					inserted = this.insertItem(originalStack, CHEST_SLOT_INDEX, CHEST_SLOT_INDEX + 1, false);

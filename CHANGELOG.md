@@ -12,6 +12,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+#### 💀 Minion Skull & Mob Head Interaction, Inventory Access & 3D Rendering
+- **Client Prediction & Direct UUID Ownership Validation (`MinionEntity.isOwner`)**:
+  - Fixed an issue where players were unable to check a minion's inventory or interact with tamed minions wearing a wither skeleton skull, helmet, or armor in singleplayer or offline sessions.
+  - Added direct UUID equality checks (`ownerUuid.equals(entity.getUuid())`) that evaluate reliably across both client and server, preventing reference resolution failures in `ClientWorld`.
+  - Added client-side prediction allowing tamed minion interaction checks to pass on the client so that `PlayerInteractEntityC2SPacket` is dispatched to the authoritative server rather than silently aborting with `ActionResult.PASS`.
+- **Seamless Right-Click Inventory Access (`MinionEntity.interactMob`)**:
+  - Right-clicking an owned minion while holding items (weapons, armor, tools, blocks, skulls, or food when minion is full HP) now directly opens the `MinionScreen` inventory GUI rather than doing nothing (`ActionResult.PASS`).
+  - Shift + Right-Click remains available at all times to open the inventory GUI regardless of items held.
+- **Skull, Mob Head, and Carved Pumpkin Equipment Support (`MinionScreenHandler`, `MinionEntity.autoEquipFromInventory`)**:
+  - Added `MinionScreenHandler.isHeadEquippable(ItemStack)` to validate mob heads (wither skeleton skulls, skeleton skulls, zombie heads, creeper heads, piglin heads, player heads, dragon heads), carved pumpkins, and helmets.
+  - Head items can now be smoothly inserted, extracted, and shift-clicked (`quickMove`) into the helmet equipment slot (slot 0).
+  - Builder, Sentinel, and Warrior minions can now auto-equip skulls and head items from their internal backpack into their head slot when vacant.
+- **In-World & GUI 3D Head Feature Rendering (`MinionEntityRenderer`)**:
+  - Registered `HeadFeatureRenderer` on `MinionEntityRenderer` using the model loader and held item renderer.
+  - Minions equipped with wither skeleton skulls, mob heads, or carved pumpkins now visually render the head in full 3D in both the in-game world and the central 3D preview of `MinionScreen`.
+
+#### 🧱 Connectable Block Alignment & Clipping Resolution (`Block.postProcessState`, `MinionBuildGoal`)
+- Resolved an issue where fences, glass panes, and walls placed by builder minions appeared with open gaps and did not visually connect/clip to adjacent solid blocks.
+- Added `updateConnectableNeighbors` invoking `Block.postProcessState` to immediately recalculate connection properties (`north`, `south`, `east`, `west`) whenever connectable blocks or their adjacent neighbors are placed in the world.
+
 #### 💧 Water & Fluid Source Block Construction Logistics
 - **Water Bucket Material Mapping (`BlueprintBlock.getRequiredItem`, `StructureBlueprint.Builder.build`)**:
   - Blueprint water source blocks (`Blocks.WATER`) now properly resolve to `Items.WATER_BUCKET` instead of returning `Items.AIR`.

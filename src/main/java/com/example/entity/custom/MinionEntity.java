@@ -3027,6 +3027,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 			// 1. Check Armor slots (HEAD, CHEST, LEGS, FEET) - all roles equip available protective armor
 			EquipmentSlot preferredSlot = this.getPreferredEquipmentSlot(stack);
+			if (com.example.screen.MinionScreenHandler.isHeadEquippable(stack)) {
+				preferredSlot = EquipmentSlot.HEAD;
+			}
 			if (preferredSlot == EquipmentSlot.HEAD
 				|| preferredSlot == EquipmentSlot.CHEST
 				|| preferredSlot == EquipmentSlot.LEGS
@@ -3253,14 +3256,29 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 */
 	@Override
 	public boolean isOwner(LivingEntity entity) {
+		if (entity == null) {
+			return false;
+		}
 		if (super.isOwner(entity)) {
 			return true;
 		}
-		if (entity instanceof PlayerEntity player && this.getWorld() instanceof ServerWorld serverWorld) {
-			MinecraftServer server = serverWorld.getServer();
-			if (server != null && server.isSingleplayer() && server.isHost(player.getGameProfile())) {
+		UUID ownerUuid = this.getOwnerUuid();
+		if (ownerUuid != null && ownerUuid.equals(entity.getUuid())) {
+			return true;
+		}
+		if (entity instanceof PlayerEntity player) {
+			if (this.getWorld() instanceof ServerWorld serverWorld) {
+				MinecraftServer server = serverWorld.getServer();
+				if (server != null && server.isSingleplayer() && server.isHost(player.getGameProfile())) {
+					if (this.isTamed()) {
+						this.setOwner(player);
+						return true;
+					}
+				}
+			} else if (this.getWorld().isClient()) {
+				// Client-side prediction: if the minion is tamed, allow the interaction check
+				// to pass so the client sends the interact packet to the server for authoritative handling.
 				if (this.isTamed()) {
-					this.setOwner(player);
 					return true;
 				}
 			}
@@ -3305,11 +3323,14 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			return ActionResult.success(world.isClient());
 		}
 
-		// 2. Empty Hand: toggle stationed / following (yields to Command Scepter if held in off-hand)
+		// 2. Command Scepter priority (if held in main hand or off-hand, yield to scepter commands)
+		if (itemStack.getItem() instanceof com.example.item.custom.CommandScepterItem
+			|| (hand == Hand.MAIN_HAND && player.getOffHandStack().getItem() instanceof com.example.item.custom.CommandScepterItem)) {
+			return ActionResult.PASS;
+		}
+
+		// 3. Empty Hand: toggle stationed / following
 		if (itemStack.isEmpty()) {
-			if (hand == Hand.MAIN_HAND && player.getOffHandStack().getItem() instanceof com.example.item.custom.CommandScepterItem) {
-				return ActionResult.PASS;
-			}
 			boolean currentlyStationed = this.isHoldingPosition() || this.isSitting() || this.getGuardAnchorPos() != null;
 			boolean newStationed = !currentlyStationed;
 			this.setSitting(newStationed);
@@ -3336,7 +3357,7 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			return ActionResult.success(world.isClient());
 		}
 
-		// 3. Food / Gold Healing: heal wounded minion
+		// 4. Food / Gold Healing: heal wounded minion
 		if (this.getHealth() < this.getMaxHealth()) {
 			boolean isFood = itemStack.contains(DataComponentTypes.FOOD);
 			boolean isGold = itemStack.isOf(Items.GOLD_INGOT) || itemStack.isOf(Items.GOLD_NUGGET)
@@ -3370,8 +3391,12 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			}
 		}
 
-		// Direct item deposit has been removed in favor of the GUI screen.
-		return ActionResult.PASS;
+		// 5. Holding other items (or holding food/gold when already at full health):
+		// Directly open Minion Screen GUI so the player can check equipment and inventory.
+		if (!world.isClient()) {
+			this.openInventoryScreen(player);
+		}
+		return ActionResult.success(world.isClient());
 	}
 
 	/**

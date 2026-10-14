@@ -5,6 +5,7 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.BipedEntityRenderer;
 import net.minecraft.client.render.entity.EntityRendererFactory;
 import net.minecraft.client.render.entity.feature.ArmorFeatureRenderer;
+import net.minecraft.client.render.entity.feature.HeadFeatureRenderer;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.render.entity.model.EntityModelLayers;
 import net.minecraft.client.render.entity.model.PlayerEntityModel;
@@ -24,6 +25,7 @@ import net.minecraft.util.math.Vec3d;
  * Extends {@link BipedEntityRenderer} using a player model ({@link PlayerEntityModel}),
  * enabling full equipment visualization:
  * - Helmet, Chestplate, Leggings, and Boots via {@link ArmorFeatureRenderer}
+ * - Skulls, mob heads, player heads, and carved pumpkins via {@link HeadFeatureRenderer}
  * - Mainhand weapons/tools/blocks and Offhand items/shields via {@link net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer}
  * - Outer clothing layers via {@link MinionClothingFeatureRenderer}
  * - Dynamic arm poses for melee attacks, archery, blocking, and item usage
@@ -43,6 +45,9 @@ public class MinionEntityRenderer extends BipedEntityRenderer<MinionEntity, Play
 			new BipedEntityModel<>(context.getPart(EntityModelLayers.PLAYER_OUTER_ARMOR)),
 			context.getModelManager()
 		));
+
+		// Head feature renderer for skulls, player heads, mob heads, and carved pumpkins
+		this.addFeature(new HeadFeatureRenderer<>(this, context.getModelLoader(), context.getHeldItemRenderer()));
 
 		// Outer clothing feature renderer adapted for player biped models
 		this.addFeature(new MinionClothingFeatureRenderer(this));
