@@ -304,6 +304,21 @@ public class ConstructionSession {
 		return this.worldBoundingBox;
 	}
 
+	public boolean containsBlockPos(BlockPos pos) {
+		if (pos == null) return false;
+		if (this.worldBoundingBox != null && this.worldBoundingBox.contains(pos)) {
+			return true;
+		}
+		if (this.tasks != null) {
+			for (ConstructionTask task : this.tasks) {
+				if (task.getWorldPos().equals(pos)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * Checks whether any non-air, destructible blocks still remain within this session's
 	 * 3D bounding box in the world. Used by DISMANTLE mode to verify complete area clearance.

@@ -40,7 +40,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Builder minions now inspect existing nearby containers within 32 blocks (chests, barrels, trapped chests) for stored chest items before crafting new ones when offloading full backpacks.
   - **Anti-Redundancy Priority**: If nearby storage is full, the builder scavenges a stored chest item out of an existing container and places it down (merging into a Double Chest if adjacent to a single chest), preserving logs and planks.
   - **Crafting Fallback**: Only if no chest items are stored in nearby containers and none are held in the minion's inventory will the builder craft a new chest from 8 planks or 2 logs.
-
+- **Natural Tree Log Validation & Blueprint Build Log Protection (`isNaturalTreeLog`, `isPositionInAnyActiveSession`, `containsBlockPos`)**:
+  - Fixed builder minions felling or stealing log blocks from active blueprints or nearby player builds when harvesting timber in Survival mode.
+  - **Strict Living Tree Criteria (`isNaturalTreeLog`)**: Logs are strictly validated as part of a real living tree before felling. A valid tree log must be contiguous to a trunk rooted in natural soil (`BlockTags.DIRT`, moss, mud), have canopy leaves (`BlockTags.LEAVES`) near or above the trunk column, and cannot be attached to processed architectural building blocks (planks, bricks, stairs, slabs, glass, etc.).
+  - **Multi-Session Task & Volume Protection (`isPositionInAnyActiveSession`)**: Blocks at any coordinate designated by an active blueprint task or volume across any session on the server are strictly protected from harvesting.
+  - **Zero Build Cannibalization**: If no natural living trees exist in the area, builders strictly rely on agro-forestry (planting and bone-mealing saplings into full trees) rather than taking logs from buildings.
 
 ---
 

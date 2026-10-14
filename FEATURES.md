@@ -1843,6 +1843,11 @@ Builders synthesize architectural blocks on demand from raw harvested materials:
   - If existing containers are full, before spending planks or logs to craft a new chest, the builder searches inside those containers for stored chest items (`Items.CHEST`, `Items.BARREL`, `Items.TRAPPED_CHEST`).
   - If a chest item is found in another container, the builder withdraws it, places it down (merging into a Double Chest if adjacent to an existing single chest), and deposits excess materials into it.
   - Only if no chest items are stored in nearby containers and none are held in inventory will the builder craft a new chest from 8 planks or 2 logs.
+- **Natural Tree Log Validation & Blueprint Build Log Protection (`isNaturalTreeLog`, `isPositionInAnyActiveSession`, `containsBlockPos`)**:
+  - Builders strictly differentiate between genuine natural wild trees and placed structural building logs.
+  - Logs are validated as part of a real living tree only if contiguous to a trunk rooted in natural soil (`BlockTags.DIRT`, moss, mud), having canopy leaves (`BlockTags.LEAVES`) nearby or above the column, and with no attached processed building blocks (planks, bricks, stairs, slabs, glass, etc.).
+  - Coordinates belonging to any active blueprint session tasks or bounding box across the server are strictly protected from harvesting.
+  - When no natural trees exist in range, builders exclusively use agro-forestry (saplings + bone meal) rather than harvesting logs from builds.
 - **Container Ingredient Scavenging Fallback**: When nearby storage containers (chests, barrels, shulkers within 32m) lack the finished target block, minions scan for base ingredients (`getCraftingIngredients`), withdraw raw materials into their inventory, craft the required block on-demand, and consume it to place the block.
 - **Peer-to-Peer Cooperative Allied Crafting**: Allied minions within sharing range can craft requested blocks on-demand from their own inventory or share base crafting ingredients with requesting minions to assemble required blocks cooperatively.
 

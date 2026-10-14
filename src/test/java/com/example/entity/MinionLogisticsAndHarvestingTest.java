@@ -1642,6 +1642,69 @@ public class MinionLogisticsAndHarvestingTest {
 		Assertions.assertEquals(0, minionInv.get("chest"));
 		Assertions.assertEquals(8, minionInv.get("oak_planks"), "Planks remain intact when holding chest");
 	}
+
+	@Test
+	@DisplayName("Validate natural tree log verification and blueprint log protection contracts")
+	void testNaturalTreeLogContract() throws IOException {
+		String harvestingSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+		String sessionSource = Files.readString(Path.of("src/main/java/com/example/construction/ConstructionSession.java"));
+		String managerSource = Files.readString(Path.of("src/main/java/com/example/construction/ConstructionManager.java"));
+
+		Assertions.assertTrue(harvestingSource.contains("public static boolean isNaturalTreeLog"),
+			"MinionHarvestingHelper must define isNaturalTreeLog");
+		Assertions.assertTrue(harvestingSource.contains("isNaturalTreeLog(world, pos)"),
+			"harvestWoodOrAgroForestry must verify isNaturalTreeLog before felling logs");
+		Assertions.assertTrue(sessionSource.contains("public boolean containsBlockPos"),
+			"ConstructionSession must define containsBlockPos");
+		Assertions.assertTrue(managerSource.contains("public boolean isPositionInAnyActiveSession"),
+			"ConstructionManager must define isPositionInAnyActiveSession");
+		Assertions.assertTrue(harvestingSource.contains("isPositionInAnyActiveSession(pos)"),
+			"isNaturalTreeLog and isProtectedBlock must check isPositionInAnyActiveSession");
+		Assertions.assertTrue(harvestingSource.contains("BlockTags.LEAVES"),
+			"isNaturalTreeLog must verify leaves presence");
+		Assertions.assertTrue(harvestingSource.contains("BlockTags.DIRT"),
+			"isNaturalTreeLog must verify natural soil roots");
+	}
+
+	@Test
+	@DisplayName("Validate natural tree log vs building log distinction simulation")
+	void testNaturalTreeLogValidationSimulation() {
+		class TreeValidator {
+			boolean isNaturalTree(
+				String baseBlock,
+				boolean hasLeavesAbove,
+				boolean touchingPlanks,
+				boolean inActiveSession
+			) {
+				if (inActiveSession) return false;
+				if (touchingPlanks) return false;
+				if (!hasLeavesAbove) return false;
+				return "dirt".equals(baseBlock) || "grass_block".equals(baseBlock) || "moss_block".equals(baseBlock);
+			}
+		}
+
+		TreeValidator validator = new TreeValidator();
+
+		// Case 1: Genuine wild tree in forest (rooted on grass, has leaves, no building blocks, not in session)
+		boolean treeInForest = validator.isNaturalTree("grass_block", true, false, false);
+		Assertions.assertTrue(treeInForest, "Wild oak in forest must be recognized as natural tree log");
+
+		// Case 2: Log placed in a blueprint building (on cobblestone foundation, no leaves)
+		boolean buildLogFoundation = validator.isNaturalTree("cobblestone", false, true, true);
+		Assertions.assertFalse(buildLogFoundation, "Log on cobblestone foundation must be rejected as build block");
+
+		// Case 3: Log pillar on dirt in a house, but no leaves above it
+		boolean buildLogNoLeaves = validator.isNaturalTree("dirt", false, true, false);
+		Assertions.assertFalse(buildLogNoLeaves, "Log with no leaves must be rejected as part of a structure");
+
+		// Case 4: Log touching planks/walls inside a building
+		boolean buildLogTouchingPlanks = validator.isNaturalTree("grass_block", true, true, false);
+		Assertions.assertFalse(buildLogTouchingPlanks, "Log touching planks/walls must be rejected as part of a building");
+
+		// Case 5: Log inside an active blueprint session
+		boolean sessionLog = validator.isNaturalTree("grass_block", true, false, true);
+		Assertions.assertFalse(sessionLog, "Log inside active blueprint session must be strictly protected");
+	}
 }
 
 

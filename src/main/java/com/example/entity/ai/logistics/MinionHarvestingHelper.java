@@ -567,10 +567,10 @@ public final class MinionHarvestingHelper {
 	) {
 		BlockPos minionPos = minion.getBlockPos();
 
-		// 1. Scan for existing natural logs within 16 blocks
+		// 1. Scan for existing natural logs within 16 blocks (strictly natural trees with leaves and earth roots; never building logs!)
 		for (BlockPos pos : BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, 8, HARVEST_SEARCH_RADIUS)) {
 			BlockState state = world.getBlockState(pos);
-			if (state.isIn(BlockTags.LOGS) && !isProtectedBlock(world, pos, session, minion.getOwnerUuid())) {
+			if (state.isIn(BlockTags.LOGS) && isNaturalTreeLog(world, pos) && !isProtectedBlock(world, pos, session, minion.getOwnerUuid())) {
 				if (!hasAdjacentLava(world, pos)) {
 					fellLog(minion, world, pos.toImmutable(), state);
 					return true;
@@ -822,6 +822,83 @@ public final class MinionHarvestingHelper {
 	}
 
 	/**
+	 * Validates whether a log block belongs to an actual living tree in the natural world.
+	 * Strictly rejects logs that belong to player builds, structures, walls, or blueprints.
+	 *
+	 * A natural tree log must:
+	 * 1. Be rooted in natural soil (dirt, grass, moss, mud) at the base of its contiguous trunk column.
+	 * 2. Have leaf blocks (BlockTags.LEAVES) near or above the trunk.
+	 * 3. Not be attached to any processed architectural building blocks (planks, bricks, stairs, slabs, glass, etc.).
+	 * 4. Not be part of any active construction session tasks or bounding box.
+	 */
+	public static boolean isNaturalTreeLog(ServerWorld world, BlockPos pos) {
+		if (world == null || pos == null) return false;
+		BlockState state = world.getBlockState(pos);
+		if (!state.isIn(BlockTags.LOGS)) return false;
+
+		// 1. Never harvest logs inside any active construction session tasks or bounding boxes
+		if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyActiveSession(pos)) {
+			return false;
+		}
+
+		// 2. A natural tree trunk must be rooted in natural earth (dirt, grass, moss, mud)
+		// Trace downwards through contiguous logs to find the base of the trunk
+		BlockPos current = pos;
+		int downSteps = 0;
+		while (current.getY() > world.getBottomY() && downSteps < 32) {
+			BlockPos below = current.down();
+			BlockState belowState = world.getBlockState(below);
+			if (belowState.isIn(BlockTags.LOGS)) {
+				current = below;
+				downSteps++;
+			} else {
+				// Found the base under the bottom-most log.
+				// If the base is NOT natural soil (e.g. resting on planks, stone, bricks, slabs, or air),
+				// this is a building, floor, wall, or pillar, NOT a tree!
+				if (!belowState.isIn(BlockTags.DIRT) && !belowState.isOf(Blocks.MOSS_BLOCK) && !belowState.isOf(Blocks.MUD)) {
+					return false;
+				}
+				break;
+			}
+		}
+
+		// 3. A natural tree must have leaves (BlockTags.LEAVES) near/above its trunk
+		// Search from the current log pos upwards (up to 14 blocks) and within 3 blocks horizontally
+		boolean hasLeaves = false;
+		int searchYMax = Math.min(pos.getY() + 14, world.getTopY());
+		for (int dy = -1; dy <= 14 && (pos.getY() + dy) <= searchYMax; dy++) {
+			for (int dx = -3; dx <= 3; dx++) {
+				for (int dz = -3; dz <= 3; dz++) {
+					BlockPos leafCheck = pos.add(dx, dy, dz);
+					BlockState leafState = world.getBlockState(leafCheck);
+					if (leafState.isIn(BlockTags.LEAVES)) {
+						hasLeaves = true;
+						break;
+					}
+				}
+				if (hasLeaves) break;
+			}
+			if (hasLeaves) break;
+		}
+
+		if (!hasLeaves) {
+			return false; // No leaves anywhere near the column -> It's part of a build, NOT a tree!
+		}
+
+		// 4. Ensure no processed building materials are directly attached to this log
+		// If the log is connected to planks, bricks, glass, stairs, slabs, or fences, it is part of a build!
+		for (Direction dir : Direction.values()) {
+			BlockState neighbor = world.getBlockState(pos.offset(dir));
+			String neighborId = Registries.BLOCK.getId(neighbor.getBlock()).getPath();
+			if (isProcessedBlockId(neighborId)) {
+				return false; // Attached to a building block -> It's part of a structure!
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Comprehensive build protection rules:
 	 * 1. Never break blocks inside the active blueprint or any other active session of the owner.
 	 * 2. Never break human-crafted or processed architectural blocks (planks, bricks, slabs, glass, etc.).
@@ -842,7 +919,12 @@ public final class MinionHarvestingHelper {
 		}
 
 		// Inside current session bounding box or tasks
-		if (session != null && session.getWorldBoundingBox().contains(pos)) {
+		if (session != null && session.containsBlockPos(pos)) {
+			return true;
+		}
+
+		// Inside ANY active construction session in the world
+		if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyActiveSession(pos)) {
 			return true;
 		}
 

@@ -5,6 +5,7 @@ import com.example.blueprint.StructureBlueprint;
 import com.example.entity.custom.MinionEntity;
 import com.example.entity.custom.MinionRole;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -940,6 +941,26 @@ public class ConstructionManager {
 			return Collections.emptyList();
 		}
 		return Collections.unmodifiableList(list);
+	}
+
+	/**
+	 * Returns all active sessions across all owners on the server.
+	 */
+	public Collection<ConstructionSession> getAllActiveSessions() {
+		return Collections.unmodifiableCollection(this.activeSessions.values());
+	}
+
+	/**
+	 * Checks if the given position falls within any active construction session's volume or tasks.
+	 */
+	public boolean isPositionInAnyActiveSession(BlockPos pos) {
+		if (pos == null) return false;
+		for (ConstructionSession session : this.activeSessions.values()) {
+			if (session != null && session.containsBlockPos(pos)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
