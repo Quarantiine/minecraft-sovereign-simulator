@@ -31,6 +31,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Minions withdraw candidate ingredients (e.g., planks, logs, cobblestone, clay) from containers, craft the target block on site, and consume it to place the blueprint block.
 - **Peer-to-Peer Cooperative Allied Crafting (`MinionLogisticsHelper.requestItemFromAllies`)**:
   - Allied minions can now craft requested blocks on demand from their own inventory or share base crafting ingredients with requesting minions to assemble the target blocks cooperatively.
+- **Agro-Forestry Spaced-Out Sapling Planting (`hasNearbySaplingOrTrunk`, `findPlantingPosition`)**:
+  - Builder minions now intelligently space out planted saplings into spacious orchards instead of planting them directly adjacent to each other in crowded clusters.
+  - **Multi-Pass Spacing Strategy**: Evaluates generous orchard spacing (radius 4 blocks) before falling back to standard tree spacing (radius 3 blocks).
+  - **Trunk & Sapling Avoidance**: Actively scans for existing saplings (`BlockTags.SAPLINGS`) and tree trunks/logs (`BlockTags.LOGS`) within the horizontal radius, guaranteeing at least 3–4 blocks of clear distance between trees so canopies have room to grow naturally.
+  - **Expanded Agro-Forestry Search Area**: Expands planting search radius to 16 blocks across valid soil blocks (`BlockTags.DIRT`, moss, farmland, mud) with at least 6 blocks of vertical air clearance above each planting site.
 
 ---
 

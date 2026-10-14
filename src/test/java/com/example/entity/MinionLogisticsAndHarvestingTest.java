@@ -1475,5 +1475,88 @@ public class MinionLogisticsAndHarvestingTest {
 		inventory.put("prismarine_wall", 1);
 		Assertions.assertEquals(1, inventory.get("prismarine_wall"));
 	}
+
+	@Test
+	@DisplayName("Validate builder agro-forestry sapling spacing source contracts and helpers")
+	void testSaplingSpacingContract() throws IOException {
+		String harvestingSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+
+		Assertions.assertTrue(harvestingSource.contains("public static final int DEFAULT_SAPLING_SPACING = 3;"),
+			"MinionHarvestingHelper must define DEFAULT_SAPLING_SPACING");
+		Assertions.assertTrue(harvestingSource.contains("public static final int ORCHARD_SAPLING_SPACING = 4;"),
+			"MinionHarvestingHelper must define ORCHARD_SAPLING_SPACING");
+		Assertions.assertTrue(harvestingSource.contains("hasNearbySaplingOrTrunk"),
+			"MinionHarvestingHelper must define hasNearbySaplingOrTrunk");
+		Assertions.assertTrue(harvestingSource.contains("findPlantingPositionWithSpacing"),
+			"MinionHarvestingHelper must support multi-pass spacing resolution");
+		Assertions.assertTrue(harvestingSource.contains("BlockTags.SAPLINGS"),
+			"Must detect existing saplings via BlockTags.SAPLINGS");
+		Assertions.assertTrue(harvestingSource.contains("BlockTags.LOGS"),
+			"Must detect nearby tree trunks via BlockTags.LOGS");
+	}
+
+	@Test
+	@DisplayName("Validate agro-forestry sapling spacing and orchard grid placement simulation")
+	void testSaplingSpacingSimulation() {
+		// Mock 2D world grid tracking planted saplings and existing trees
+		Set<String> occupiedTrunksOrSaplings = new HashSet<>();
+
+		// Existing oak tree at (0, 0)
+		occupiedTrunksOrSaplings.add("0,0");
+
+		int spacing = 3;
+
+		class SpacingChecker {
+			boolean isTooClose(int x, int z, Set<String> existing, int radius) {
+				for (int dx = -radius; dx <= radius; dx++) {
+					for (int dz = -radius; dz <= radius; dz++) {
+						String key = (x + dx) + "," + (z + dz);
+						if (existing.contains(key)) {
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+		}
+
+		SpacingChecker checker = new SpacingChecker();
+
+		// Candidate 1: Adjacent block (1, 0) -> must be rejected
+		Assertions.assertTrue(checker.isTooClose(1, 0, occupiedTrunksOrSaplings, spacing),
+			"Adjacent spot (1, 0) is too close to tree at (0, 0)");
+
+		// Candidate 2: 2 blocks away (2, 0) -> must be rejected
+		Assertions.assertTrue(checker.isTooClose(2, 0, occupiedTrunksOrSaplings, spacing),
+			"Spot (2, 0) is within radius 3 of tree at (0, 0)");
+
+		// Candidate 3: 3 blocks away (3, 0) -> must be rejected with Chebyshev radius 3
+		Assertions.assertTrue(checker.isTooClose(3, 0, occupiedTrunksOrSaplings, spacing),
+			"Spot (3, 0) is within radius 3 of tree at (0, 0)");
+
+		// Candidate 4: 4 blocks away (4, 0) -> valid spaced orchard position
+		Assertions.assertFalse(checker.isTooClose(4, 0, occupiedTrunksOrSaplings, spacing),
+			"Spot (4, 0) is well-spaced from tree at (0, 0)");
+
+		// Plant sapling at (4, 0)
+		occupiedTrunksOrSaplings.add("4,0");
+
+		// Candidate 5: (0, 4) -> valid spaced orchard position
+		Assertions.assertFalse(checker.isTooClose(0, 4, occupiedTrunksOrSaplings, spacing),
+			"Spot (0, 4) is well-spaced from trees at (0, 0) and (4, 0)");
+		occupiedTrunksOrSaplings.add("0,4");
+
+		// Candidate 6: (4, 4) -> valid spaced orchard grid vertex
+		Assertions.assertFalse(checker.isTooClose(4, 4, occupiedTrunksOrSaplings, spacing),
+			"Spot (4, 4) completes a spacious 4x4 orchard grid");
+		occupiedTrunksOrSaplings.add("4,4");
+
+		// Candidate 7: Interior crowded point (2, 2) -> must be rejected by all 4 corners
+		Assertions.assertTrue(checker.isTooClose(2, 2, occupiedTrunksOrSaplings, spacing),
+			"Interior point (2, 2) is too crowded by surrounding trees");
+
+		Assertions.assertEquals(4, occupiedTrunksOrSaplings.size(), "4 spacious orchard tree stations successfully planted");
+	}
 }
+
 

@@ -1068,19 +1068,58 @@ public final class MinionHarvestingHelper {
 		}
 	}
 
-	private static BlockPos findPlantingPosition(ServerWorld world, BlockPos center, ConstructionSession session, UUID ownerUuid) {
-		for (BlockPos pos : BlockPos.iterateOutwards(center, 8, 2, 8)) {
+	public static final int DEFAULT_SAPLING_SPACING = 3;
+	public static final int ORCHARD_SAPLING_SPACING = 4;
+
+	public static boolean hasNearbySaplingOrTrunk(ServerWorld world, BlockPos pos, int horizontalRadius) {
+		if (world == null || pos == null || horizontalRadius <= 0) return false;
+		for (int dx = -horizontalRadius; dx <= horizontalRadius; dx++) {
+			for (int dz = -horizontalRadius; dz <= horizontalRadius; dz++) {
+				for (int dy = -1; dy <= 4; dy++) {
+					BlockPos checkPos = pos.add(dx, dy, dz);
+					if (checkPos.equals(pos)) continue;
+					BlockState state = world.getBlockState(checkPos);
+					if (state.isIn(BlockTags.SAPLINGS) || state.isIn(BlockTags.LOGS)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	public static BlockPos findPlantingPosition(ServerWorld world, BlockPos center, ConstructionSession session, UUID ownerUuid) {
+		// Pass 1: Try generous orchard spacing (radius 4)
+		BlockPos pos = findPlantingPositionWithSpacing(world, center, session, ownerUuid, ORCHARD_SAPLING_SPACING);
+		if (pos != null) return pos;
+
+		// Pass 2: Fall back to standard tree spacing (radius 3)
+		return findPlantingPositionWithSpacing(world, center, session, ownerUuid, DEFAULT_SAPLING_SPACING);
+	}
+
+	private static BlockPos findPlantingPositionWithSpacing(
+		ServerWorld world,
+		BlockPos center,
+		ConstructionSession session,
+		UUID ownerUuid,
+		int spacingRadius
+	) {
+		for (BlockPos pos : BlockPos.iterateOutwards(center, HARVEST_SEARCH_RADIUS, 4, HARVEST_SEARCH_RADIUS)) {
 			BlockState below = world.getBlockState(pos.down());
-			if ((below.isOf(Blocks.DIRT) || below.isOf(Blocks.GRASS_BLOCK)) && world.getBlockState(pos).isAir()) {
-				// Ensure clearance above for tree canopy
+			if ((below.isIn(BlockTags.DIRT) || below.isOf(Blocks.MOSS_BLOCK) || below.isOf(Blocks.FARMLAND) || below.isOf(Blocks.MUD))
+				&& world.getBlockState(pos).isAir()
+				&& world.getFluidState(pos).isEmpty()) {
+
+				// Ensure clearance above for tree canopy (at least 6 blocks vertical air)
 				boolean clear = true;
-				for (int y = 1; y <= 5; y++) {
+				for (int y = 1; y <= 6; y++) {
 					if (!world.getBlockState(pos.up(y)).isAir()) {
 						clear = false;
 						break;
 					}
 				}
-				if (clear && !isProtectedBlock(world, pos, session, ownerUuid)) {
+
+				if (clear && !hasNearbySaplingOrTrunk(world, pos, spacingRadius) && !isProtectedBlock(world, pos, session, ownerUuid)) {
 					return pos.toImmutable();
 				}
 			}
