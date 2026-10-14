@@ -1679,7 +1679,7 @@ public class MinionLogisticsAndHarvestingTest {
 				if (inActiveSession) return false;
 				if (touchingPlanks) return false;
 				if (!hasLeavesAbove) return false;
-				return "dirt".equals(baseBlock) || "grass_block".equals(baseBlock) || "moss_block".equals(baseBlock);
+				return "dirt".equals(baseBlock) || "grass_block".equals(baseBlock) || "moss_block".equals(baseBlock) || "crimson_nylium".equals(baseBlock);
 			}
 		}
 
@@ -1704,6 +1704,50 @@ public class MinionLogisticsAndHarvestingTest {
 		// Case 5: Log inside an active blueprint session
 		boolean sessionLog = validator.isNaturalTree("grass_block", true, false, true);
 		Assertions.assertFalse(sessionLog, "Log inside active blueprint session must be strictly protected");
+
+		// Case 6: Nether huge fungus on nylium
+		boolean netherFungus = validator.isNaturalTree("crimson_nylium", true, false, false);
+		Assertions.assertTrue(netherFungus, "Nether huge fungus on nylium must be recognized as natural");
+	}
+
+	@Test
+	@DisplayName("Validate whole trunk felling and structure contact protection contracts")
+	void testWholeTrunkFellingAndStructureContactContracts() throws IOException {
+		String harvestingSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+
+		// Structure contact protection in isProtectedBlock
+		Assertions.assertTrue(harvestingSource.contains("// Structure contact protection: If directly touching any processed architectural building blocks"),
+			"isProtectedBlock must protect any block directly touching processed building blocks");
+
+		// Contiguous whole-trunk felling
+		Assertions.assertTrue(harvestingSource.contains("logsCut < 24"),
+			"fellLog must fell contiguous trunk logs upwards to prevent floating tree remnants");
+
+		// Bottom-most trunk base tracing
+		Assertions.assertTrue(harvestingSource.contains("Trace down contiguous logs to find the bottom-most base log"),
+			"fellLog must trace down contiguous logs to bottom-most base log before felling");
+
+		// Multi-biome tree support
+		Assertions.assertTrue(harvestingSource.contains("MANGROVE_ROOTS"),
+			"isNaturalTreeLog must support mangrove swamp roots");
+		Assertions.assertTrue(harvestingSource.contains("BlockTags.NYLIUM"),
+			"isNaturalTreeLog must support Nether nylium roots");
+		Assertions.assertTrue(harvestingSource.contains("BlockTags.WART_BLOCKS"),
+			"isNaturalTreeLog must support Nether fungus canopies");
+
+		// Chest deployment headroom and trapped chest support
+		Assertions.assertTrue(harvestingSource.contains("!world.getBlockState(pos.up()).isSolidBlock"),
+			"deployAutonomousChest must ensure clear headroom so chest can open freely");
+		Assertions.assertTrue(harvestingSource.contains("Blocks.TRAPPED_CHEST"),
+			"deployAutonomousChest must support placing trapped chests accurately");
+
+		// Inventory overflow safe handling
+		Assertions.assertTrue(harvestingSource.contains("giveOrDropItem"),
+			"MinionHarvestingHelper must safely drop leftover items into the world on full inventory");
+
+		// Species-faithful timber and sapling matching
+		Assertions.assertTrue(harvestingSource.contains("getSaplingFromLog") && harvestingSource.contains("getLogFromSapling"),
+			"MinionHarvestingHelper must provide species-faithful timber and sapling matching");
 	}
 }
 

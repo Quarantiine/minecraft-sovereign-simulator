@@ -362,11 +362,13 @@ public final class MinionHarvestingHelper {
 	}
 
 	public static BlockPos deployAutonomousChest(MinionEntity minion, ServerWorld world, ConstructionSession session) {
-		// Find a solid ground spot within 5 blocks
+		// Find a solid ground spot within 5 blocks with clear headroom (cannot open chest under solid ceilings)
 		BlockPos minionPos = minion.getBlockPos();
 		BlockPos candidate = null;
 		for (BlockPos pos : BlockPos.iterateOutwards(minionPos, 5, 2, 5)) {
-			if (world.getBlockState(pos).isAir() && world.getBlockState(pos.down()).isSolidBlock(world, pos.down())) {
+			if (world.getBlockState(pos).isAir()
+				&& world.getBlockState(pos.down()).isSolidBlock(world, pos.down())
+				&& !world.getBlockState(pos.up()).isSolidBlock(world, pos.up())) {
 				if (!isProtectedBlock(world, pos, session, minion.getOwnerUuid())) {
 					candidate = pos.toImmutable();
 					break;
@@ -424,12 +426,13 @@ public final class MinionHarvestingHelper {
 		// Check if adjacent block is a single chest to form a Double Chest
 		Direction doubleChestFacing = null;
 		ChestType chestType = ChestType.SINGLE;
+		Block chestBlockToMatch = (itemToPlace == Items.TRAPPED_CHEST) ? Blocks.TRAPPED_CHEST : Blocks.CHEST;
 
-		if (itemToPlace == Items.CHEST) {
+		if (itemToPlace == Items.CHEST || itemToPlace == Items.TRAPPED_CHEST) {
 			for (Direction dir : Direction.Type.HORIZONTAL) {
 				BlockPos neighborPos = candidate.offset(dir);
 				BlockState neighborState = world.getBlockState(neighborPos);
-				if (neighborState.isOf(Blocks.CHEST) && neighborState.get(ChestBlock.CHEST_TYPE) == ChestType.SINGLE) {
+				if (neighborState.isOf(chestBlockToMatch) && neighborState.get(ChestBlock.CHEST_TYPE) == ChestType.SINGLE) {
 					Direction facing = neighborState.get(ChestBlock.FACING);
 					if (dir == facing.rotateYClockwise()) {
 						// Neighbor is right side, candidate is left
@@ -448,8 +451,16 @@ public final class MinionHarvestingHelper {
 			}
 		}
 
-		BlockState placedState = (itemToPlace == Items.BARREL) ? Blocks.BARREL.getDefaultState() : Blocks.CHEST.getDefaultState();
-		if (placedState.isOf(Blocks.CHEST)) {
+		BlockState placedState;
+		if (itemToPlace == Items.BARREL) {
+			placedState = Blocks.BARREL.getDefaultState();
+		} else if (itemToPlace == Items.TRAPPED_CHEST) {
+			placedState = Blocks.TRAPPED_CHEST.getDefaultState();
+		} else {
+			placedState = Blocks.CHEST.getDefaultState();
+		}
+
+		if (placedState.isOf(Blocks.CHEST) || placedState.isOf(Blocks.TRAPPED_CHEST)) {
 			if (doubleChestFacing != null) {
 				placedState = placedState.with(ChestBlock.FACING, doubleChestFacing).with(ChestBlock.CHEST_TYPE, chestType);
 			} else {
@@ -458,7 +469,7 @@ public final class MinionHarvestingHelper {
 		}
 
 		world.setBlockState(candidate, placedState, Block.NOTIFY_ALL);
-		if (hasItemInInventory(minion, Items.CHEST)) {
+		if (hasItemInInventory(minion, Items.CHEST) && itemToPlace == Items.CHEST) {
 			consumeItemFromInventory(minion.getInventory(), Items.CHEST, 1);
 		} else if (hasItemInInventory(minion, itemToPlace)) {
 			consumeItemFromInventory(minion.getInventory(), itemToPlace, 1);
@@ -588,15 +599,21 @@ public final class MinionHarvestingHelper {
 					world.setBlockState(plantPos, saplingBlock.getDefaultState(), Block.NOTIFY_ALL);
 					consumeItemFromInventory(minion.getInventory(), saplingItem, 1);
 
-					// Apply bone meal if minion has it
-					if (hasItemInInventory(minion, Items.BONE_MEAL)) {
+					// Apply bone meal up to 3 times or until tree spawns
+					for (int attempt = 0; attempt < 3; attempt++) {
 						BlockState currentSaplingState = world.getBlockState(plantPos);
+						if (currentSaplingState.isIn(BlockTags.LOGS)) {
+							break;
+						}
 						if (currentSaplingState.getBlock() instanceof Fertilizable fertilizable) {
 							fertilizable.grow(world, world.random, plantPos, currentSaplingState);
-							consumeItemFromInventory(minion.getInventory(), Items.BONE_MEAL, 1);
-
+							if (hasItemInInventory(minion, Items.BONE_MEAL)) {
+								consumeItemFromInventory(minion.getInventory(), Items.BONE_MEAL, 1);
+							}
 							world.playSound(null, plantPos, SoundEvents.ITEM_BONE_MEAL_USE, SoundCategory.BLOCKS, 1.0F, 1.0F);
-							world.spawnParticles(ParticleTypes.HAPPY_VILLAGER, plantPos.getX() + 0.5D, plantPos.getY() + 0.5D, plantPos.getZ() + 0.5D, 8, 0.3D, 0.3D, 0.3D, 0.05D);
+							world.spawnParticles(ParticleTypes.HAPPY_VILLAGER, plantPos.getX() + 0.5D, plantPos.getY() + 0.5D, plantPos.getZ() + 0.5D, 6, 0.3D, 0.3D, 0.3D, 0.05D);
+						} else {
+							break;
 						}
 					}
 
@@ -605,11 +622,12 @@ public final class MinionHarvestingHelper {
 					if (resultState.isIn(BlockTags.LOGS)) {
 						fellLog(minion, world, plantPos, resultState);
 						// Replenish a sapling for sustainable forestry
-						minion.getInventory().addStack(new ItemStack(saplingItem, 1));
+						giveOrDropItem(minion, new ItemStack(saplingItem, 1));
 						return true;
 					} else {
-						// Even if not fully grown yet, minion gathers initial timber
-						minion.getInventory().addStack(new ItemStack(Items.OAK_LOG, 2));
+						// Even if not fully grown yet, minion gathers initial timber corresponding to the sapling species
+						Item logItem = getLogFromSapling(saplingItem);
+						giveOrDropItem(minion, new ItemStack(logItem, 2));
 						return true;
 					}
 				}
@@ -619,32 +637,94 @@ public final class MinionHarvestingHelper {
 		return false;
 	}
 
-	private static void fellLog(MinionEntity minion, ServerWorld world, BlockPos pos, BlockState state) {
-		// Use loot-table-faithful drop computation so silk-touch axes and fortune yield correct items.
-		BlockEntity be = world.getBlockEntity(pos);
-		List<ItemStack> drops = Block.getDroppedStacks(state, world, pos, be, minion, minion.getMainHandStack());
-		world.breakBlock(pos, false, minion);
+	private static void giveOrDropItem(MinionEntity minion, ItemStack stack) {
+		if (stack.isEmpty()) return;
+		ItemStack leftover = minion.getInventory().addStack(stack);
+		if (!leftover.isEmpty()) {
+			minion.dropStack(leftover);
+		}
+	}
 
-		if (drops.isEmpty()) {
-			// Fallback: guaranteed at least one log unit for agro-forestry continuity
-			Item fallback = state.getBlock().asItem();
-			minion.getInventory().addStack(new ItemStack(fallback == Items.AIR ? Items.OAK_LOG : fallback, 1));
-		} else {
-			for (ItemStack drop : drops) {
-				if (!drop.isEmpty()) {
-					minion.getInventory().addStack(drop);
+	private static Item getSaplingFromLog(BlockState logState) {
+		if (logState.isOf(Blocks.BIRCH_LOG) || logState.isOf(Blocks.BIRCH_WOOD) || logState.isOf(Blocks.STRIPPED_BIRCH_LOG)) return Items.BIRCH_SAPLING;
+		if (logState.isOf(Blocks.SPRUCE_LOG) || logState.isOf(Blocks.SPRUCE_WOOD) || logState.isOf(Blocks.STRIPPED_SPRUCE_LOG)) return Items.SPRUCE_SAPLING;
+		if (logState.isOf(Blocks.JUNGLE_LOG) || logState.isOf(Blocks.JUNGLE_WOOD) || logState.isOf(Blocks.STRIPPED_JUNGLE_LOG)) return Items.JUNGLE_SAPLING;
+		if (logState.isOf(Blocks.ACACIA_LOG) || logState.isOf(Blocks.ACACIA_WOOD) || logState.isOf(Blocks.STRIPPED_ACACIA_LOG)) return Items.ACACIA_SAPLING;
+		if (logState.isOf(Blocks.DARK_OAK_LOG) || logState.isOf(Blocks.DARK_OAK_WOOD) || logState.isOf(Blocks.STRIPPED_DARK_OAK_LOG)) return Items.DARK_OAK_SAPLING;
+		if (logState.isOf(Blocks.MANGROVE_LOG) || logState.isOf(Blocks.MANGROVE_WOOD) || logState.isOf(Blocks.STRIPPED_MANGROVE_LOG)) return Items.MANGROVE_PROPAGULE;
+		if (logState.isOf(Blocks.CHERRY_LOG) || logState.isOf(Blocks.CHERRY_WOOD) || logState.isOf(Blocks.STRIPPED_CHERRY_LOG)) return Items.CHERRY_SAPLING;
+		if (logState.isOf(Blocks.WARPED_STEM) || logState.isOf(Blocks.WARPED_HYPHAE)) return Items.WARPED_FUNGUS;
+		if (logState.isOf(Blocks.CRIMSON_STEM) || logState.isOf(Blocks.CRIMSON_HYPHAE)) return Items.CRIMSON_FUNGUS;
+		return Items.OAK_SAPLING;
+	}
+
+	private static Item getLogFromSapling(Item sapling) {
+		if (sapling == Items.BIRCH_SAPLING) return Items.BIRCH_LOG;
+		if (sapling == Items.SPRUCE_SAPLING) return Items.SPRUCE_LOG;
+		if (sapling == Items.JUNGLE_SAPLING) return Items.JUNGLE_LOG;
+		if (sapling == Items.ACACIA_SAPLING) return Items.ACACIA_LOG;
+		if (sapling == Items.DARK_OAK_SAPLING) return Items.DARK_OAK_LOG;
+		if (sapling == Items.MANGROVE_PROPAGULE) return Items.MANGROVE_LOG;
+		if (sapling == Items.CHERRY_SAPLING) return Items.CHERRY_LOG;
+		if (sapling == Items.WARPED_FUNGUS) return Items.WARPED_STEM;
+		if (sapling == Items.CRIMSON_FUNGUS) return Items.CRIMSON_STEM;
+		return Items.OAK_LOG;
+	}
+
+	private static void fellLog(MinionEntity minion, ServerWorld world, BlockPos pos, BlockState state) {
+		// 1. Trace down contiguous logs to find the bottom-most base log of the trunk
+		BlockPos base = pos;
+		while (base.getY() > world.getBottomY()) {
+			BlockPos below = base.down();
+			if (!world.getBlockState(below).isIn(BlockTags.LOGS)) {
+				break;
+			}
+			base = below;
+		}
+
+		// 2. Fell contiguous logs upwards from base (up to 24 blocks) so no stumps or floating logs remain
+		BlockPos current = base;
+		int logsCut = 0;
+		Item treeSapling = null;
+		while (current.getY() < world.getTopY() && logsCut < 24) {
+			BlockState logState = world.getBlockState(current);
+			if (!logState.isIn(BlockTags.LOGS)) {
+				break;
+			}
+			if (treeSapling == null) {
+				treeSapling = getSaplingFromLog(logState);
+			}
+			BlockEntity be = world.getBlockEntity(current);
+			List<ItemStack> drops = Block.getDroppedStacks(logState, world, current, be, minion, minion.getMainHandStack());
+			world.breakBlock(current, false, minion);
+
+			if (drops.isEmpty()) {
+				Item fallback = logState.getBlock().asItem();
+				giveOrDropItem(minion, new ItemStack(fallback == Items.AIR ? Items.OAK_LOG : fallback, 1));
+			} else {
+				for (ItemStack drop : drops) {
+					if (!drop.isEmpty()) {
+						giveOrDropItem(minion, drop);
+					}
 				}
 			}
+
+			world.spawnParticles(new BlockStateParticleEffect(ParticleTypes.BLOCK, logState), current.getX() + 0.5D, current.getY() + 0.5D, current.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.1D);
+			world.playSound(null, current, logState.getSoundGroup().getBreakSound(), SoundCategory.BLOCKS, 0.8F, 1.0F);
+			logsCut++;
+			current = current.up();
+		}
+
+		// Provide a replenishment sapling for sustainable agro-forestry if minion has none
+		if (treeSapling != null && countItemInInventory(minion.getInventory(), ItemTags.SAPLINGS) == 0) {
+			giveOrDropItem(minion, new ItemStack(treeSapling, 1));
 		}
 
 		// Damage equipped axe if held
 		ItemStack mainhand = minion.getMainHandStack();
-		if (mainhand.getItem() instanceof AxeItem) {
-			mainhand.damage(1, minion, EquipmentSlot.MAINHAND);
+		if (mainhand.getItem() instanceof AxeItem && logsCut > 0) {
+			mainhand.damage(logsCut, minion, EquipmentSlot.MAINHAND);
 		}
-
-		world.spawnParticles(new BlockStateParticleEffect(ParticleTypes.BLOCK, state), pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, 10, 0.2D, 0.2D, 0.2D, 0.1D);
-		world.playSound(null, pos, state.getSoundGroup().getBreakSound(), SoundCategory.BLOCKS, 1.0F, 1.0F);
 	}
 
 	private static boolean quarryNaturalStone(
@@ -678,11 +758,11 @@ public final class MinionHarvestingHelper {
 					if (drops.isEmpty()) {
 						// Fallback to legacy resolution for no-loot-table edge cases
 						Item dropItem = resolveQuarryDrop(state, requiredItem);
-						minion.getInventory().addStack(new ItemStack(dropItem, 1));
+						giveOrDropItem(minion, new ItemStack(dropItem, 1));
 					} else {
 						for (ItemStack drop : drops) {
 							if (!drop.isEmpty()) {
-								minion.getInventory().addStack(drop);
+								giveOrDropItem(minion, drop);
 							}
 						}
 					}
@@ -841,7 +921,7 @@ public final class MinionHarvestingHelper {
 			return false;
 		}
 
-		// 2. A natural tree trunk must be rooted in natural earth (dirt, grass, moss, mud)
+		// 2. A natural tree trunk must be rooted in natural earth (dirt, grass, moss, mud, mangrove roots, nylium, netherrack)
 		// Trace downwards through contiguous logs to find the base of the trunk
 		BlockPos current = pos;
 		int downSteps = 0;
@@ -855,23 +935,31 @@ public final class MinionHarvestingHelper {
 				// Found the base under the bottom-most log.
 				// If the base is NOT natural soil (e.g. resting on planks, stone, bricks, slabs, or air),
 				// this is a building, floor, wall, or pillar, NOT a tree!
-				if (!belowState.isIn(BlockTags.DIRT) && !belowState.isOf(Blocks.MOSS_BLOCK) && !belowState.isOf(Blocks.MUD)) {
+				boolean isSoil = belowState.isIn(BlockTags.DIRT)
+					|| belowState.isOf(Blocks.MOSS_BLOCK)
+					|| belowState.isOf(Blocks.MUD)
+					|| belowState.isOf(Blocks.MANGROVE_ROOTS)
+					|| belowState.isOf(Blocks.MUDDY_MANGROVE_ROOTS)
+					|| belowState.isIn(BlockTags.NYLIUM)
+					|| belowState.isOf(Blocks.NETHERRACK)
+					|| (belowState.isAir() && world.getBlockState(below.down()).isIn(BlockTags.DIRT));
+				if (!isSoil) {
 					return false;
 				}
 				break;
 			}
 		}
 
-		// 3. A natural tree must have leaves (BlockTags.LEAVES) near/above its trunk
-		// Search from the current log pos upwards (up to 14 blocks) and within 3 blocks horizontally
+		// 3. A natural tree must have canopy foliage (leaves, wart blocks, shroomlight) near/above its trunk
+		// Search from the current log pos upwards (up to 16 blocks) and within 3 blocks horizontally
 		boolean hasLeaves = false;
-		int searchYMax = Math.min(pos.getY() + 14, world.getTopY());
-		for (int dy = -1; dy <= 14 && (pos.getY() + dy) <= searchYMax; dy++) {
+		int searchYMax = Math.min(pos.getY() + 16, world.getTopY());
+		for (int dy = -1; dy <= 16 && (pos.getY() + dy) <= searchYMax; dy++) {
 			for (int dx = -3; dx <= 3; dx++) {
 				for (int dz = -3; dz <= 3; dz++) {
 					BlockPos leafCheck = pos.add(dx, dy, dz);
 					BlockState leafState = world.getBlockState(leafCheck);
-					if (leafState.isIn(BlockTags.LEAVES)) {
+					if (leafState.isIn(BlockTags.LEAVES) || leafState.isIn(BlockTags.WART_BLOCKS) || leafState.isOf(Blocks.SHROOMLIGHT)) {
 						hasLeaves = true;
 						break;
 					}
@@ -902,8 +990,9 @@ public final class MinionHarvestingHelper {
 	 * Comprehensive build protection rules:
 	 * 1. Never break blocks inside the active blueprint or any other active session of the owner.
 	 * 2. Never break human-crafted or processed architectural blocks (planks, bricks, slabs, glass, etc.).
-	 * 3. Never break blocks within 12 blocks of beds, chests, or respawn anchors.
-	 * 4. Never break indestructible blocks (bedrock, barriers).
+	 * 3. Never break blocks directly attached to any processed architectural building blocks (walls, foundations).
+	 * 4. Never break blocks within 12 blocks of beds, chests, or respawn anchors.
+	 * 5. Never break indestructible blocks (bedrock, barriers).
 	 */
 	public static boolean isProtectedBlock(
 		ServerWorld world,
@@ -932,6 +1021,15 @@ public final class MinionHarvestingHelper {
 		String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
 		if (isProcessedBlockId(blockId)) {
 			return true;
+		}
+
+		// Structure contact protection: If directly touching any processed architectural building blocks, it is part of a build!
+		for (Direction dir : Direction.values()) {
+			BlockState neighbor = world.getBlockState(pos.offset(dir));
+			String neighborId = Registries.BLOCK.getId(neighbor.getBlock()).getPath();
+			if (isProcessedBlockId(neighborId)) {
+				return true;
+			}
 		}
 
 		// Within 12-block buffer of player beds, chests, or respawn anchors
@@ -971,7 +1069,14 @@ public final class MinionHarvestingHelper {
 			|| path.contains("shulker")
 			|| path.contains("furnace")
 			|| path.contains("crafting_table")
-			|| path.contains("stonecutter");
+			|| path.contains("stonecutter")
+			|| path.contains("bars")
+			|| path.contains("chain")
+			|| path.contains("pressure_plate")
+			|| path.contains("button")
+			|| path.contains("lever")
+			|| path.contains("sign")
+			|| path.contains("banner");
 	}
 
 	/**
