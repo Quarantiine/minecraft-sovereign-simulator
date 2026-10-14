@@ -93,9 +93,13 @@ public class ModClientNetworking {
 	 * @param activePatrolRoute The active patrol route channel index (0 to CHANNEL_COUNT - 1).
 	 * @param executeDirective  True if immediate directive execution is requested.
 	 */
-	public static void sendUpdateScepter(CommandMode mode, String blueprintId, SquadGroup targetSquad, int rotation, Optional<MinionRole> targetRole, int activePatrolRoute, boolean executeDirective) {
-		UpdateScepterPayload payload = new UpdateScepterPayload(mode, blueprintId, targetSquad, rotation, targetRole, activePatrolRoute, executeDirective);
+	public static void sendUpdateScepter(CommandMode mode, String blueprintId, SquadGroup targetSquad, int rotation, Optional<MinionRole> targetRole, int activePatrolRoute, boolean executeDirective, Optional<com.example.component.BuildingMode> buildingMode, Optional<com.example.component.MiningMode> miningMode) {
+		UpdateScepterPayload payload = new UpdateScepterPayload(mode, blueprintId, targetSquad, rotation, targetRole, activePatrolRoute, executeDirective, buildingMode, miningMode);
 		ClientPlayNetworking.send(payload);
+	}
+
+	public static void sendUpdateScepter(CommandMode mode, String blueprintId, SquadGroup targetSquad, int rotation, Optional<MinionRole> targetRole, int activePatrolRoute, boolean executeDirective) {
+		sendUpdateScepter(mode, blueprintId, targetSquad, rotation, targetRole, activePatrolRoute, executeDirective, Optional.empty(), Optional.empty());
 	}
 
 	/**

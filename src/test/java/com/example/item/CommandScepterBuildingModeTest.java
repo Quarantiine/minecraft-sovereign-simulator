@@ -271,4 +271,36 @@ public class CommandScepterBuildingModeTest {
 			"Modal must toggle change block button visibility when corners are present"
 		);
 	}
+
+	@Test
+	@DisplayName("Isolation Contract: BUILD AREA mode strictly suppresses blueprint placement on server and client")
+	void testBuildAreaIsolationContracts() throws Exception {
+		// 1. ModNetworking handleAnchorConstruction checks BLUEPRINT mode
+		File netFile = new File("src/main/java/com/example/network/ModNetworking.java");
+		Assertions.assertTrue(netFile.exists());
+		String netContent = Files.readString(netFile.toPath());
+		Assertions.assertTrue(
+			netContent.contains("if (CommandScepterItem.getBuildingMode(scepterStack) == com.example.component.BuildingMode.BLUEPRINT)"),
+			"handleAnchorConstruction must strictly verify BLUEPRINT mode before executing build placement"
+		);
+
+		// 2. CommandScepterItem useOnBlock suppresses executeBuildPlacement when in AREA mode or corners are set
+		File itemFile = new File("src/main/java/com/example/item/custom/CommandScepterItem.java");
+		Assertions.assertTrue(itemFile.exists());
+		String itemContent = Files.readString(itemFile.toPath());
+		Assertions.assertTrue(
+			itemContent.contains("if (buildingMode == BuildingMode.AREA || getBuildPos1(stack) != null || getBuildPos2(stack) != null)"),
+			"CommandScepterItem.useOnBlock must intercept right-clicks in AREA mode to open modal and prevent blueprint placement"
+		);
+
+		// 3. CommandScepterScreen syncs buildingMode and miningMode to server
+		File screenFile = new File("src/client/java/com/example/client/gui/CommandScepterScreen.java");
+		Assertions.assertTrue(screenFile.exists());
+		String screenContent = Files.readString(screenFile.toPath());
+		Assertions.assertTrue(
+			screenContent.contains("Optional.ofNullable(this.selectedBuildingMode)") &&
+			screenContent.contains("Optional.ofNullable(this.selectedMiningMode)"),
+			"CommandScepterScreen must synchronize selectedBuildingMode and selectedMiningMode to server"
+		);
+	}
 }

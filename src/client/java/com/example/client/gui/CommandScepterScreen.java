@@ -1065,7 +1065,14 @@ public class CommandScepterScreen extends Screen {
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.setBuildingMode(this.scepterStack, this.selectedBuildingMode);
 		}
+		if (this.client != null && this.client.player != null) {
+			ItemStack held = CommandScepterItem.getHeldScepter(this.client.player);
+			if (!held.isEmpty()) {
+				CommandScepterItem.setBuildingMode(held, this.selectedBuildingMode);
+			}
+		}
 		refreshButtonLabels();
+		syncToServer(false);
 	}
 
 	public void toggleBuildingModeGui() {
@@ -1074,9 +1081,14 @@ public class CommandScepterScreen extends Screen {
 			CommandScepterItem.setBuildingMode(this.scepterStack, this.selectedBuildingMode);
 		}
 		if (this.client != null && this.client.player != null) {
+			ItemStack held = CommandScepterItem.getHeldScepter(this.client.player);
+			if (!held.isEmpty()) {
+				CommandScepterItem.setBuildingMode(held, this.selectedBuildingMode);
+			}
 			this.client.player.sendMessage(Text.literal("§3✦ Building Mode: §r" + this.selectedBuildingMode.getFormattedName()), true);
 		}
 		refreshButtonLabels();
+		syncToServer(false);
 	}
 
 	public void openBuildAreaConfirmModal() {
@@ -1123,7 +1135,14 @@ public class CommandScepterScreen extends Screen {
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.setMiningMode(this.scepterStack, this.selectedMiningMode);
 		}
+		if (this.client != null && this.client.player != null) {
+			ItemStack held = CommandScepterItem.getHeldScepter(this.client.player);
+			if (!held.isEmpty()) {
+				CommandScepterItem.setMiningMode(held, this.selectedMiningMode);
+			}
+		}
 		refreshButtonLabels();
+		syncToServer(false);
 	}
 
 	public void toggleMiningModeGui() {
@@ -1132,9 +1151,14 @@ public class CommandScepterScreen extends Screen {
 			CommandScepterItem.setMiningMode(this.scepterStack, this.selectedMiningMode);
 		}
 		if (this.client != null && this.client.player != null) {
+			ItemStack held = CommandScepterItem.getHeldScepter(this.client.player);
+			if (!held.isEmpty()) {
+				CommandScepterItem.setMiningMode(held, this.selectedMiningMode);
+			}
 			this.client.player.sendMessage(Text.literal("§6✦ Mining Mode: §r" + this.selectedMiningMode.getFormattedName()), true);
 		}
 		refreshButtonLabels();
+		syncToServer(false);
 	}
 
 	public void openMiningConfirmModal() {
@@ -1465,7 +1489,9 @@ public class CommandScepterScreen extends Screen {
 				this.selectedRotation,
 				Optional.ofNullable(this.selectedRole),
 				this.activePatrolRouteId,
-				executeDirective
+				executeDirective,
+				Optional.ofNullable(this.selectedBuildingMode),
+				Optional.ofNullable(this.selectedMiningMode)
 			);
 		} catch (Throwable ignored) {}
 	}

@@ -55,6 +55,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Authoritative server validation verifies that bounding volumes stay strictly within world height limits (`world.getBottomY()` to `world.getTopY() - 1`) for both area building and mining, preventing out-of-bounds tasks.
 - **Modal Corner State Safety (`BuildAreaConfirmModalScreen`)**:
   - Dynamically hides the block picker button when corners are incomplete, ensuring a clean and error-free modal presentation.
+- **Strict Sub-Mode Isolation & Server Synchronization (`UpdateScepterPayload`, `ModNetworking`, `CommandScepterItem`)**:
+  - Completely isolated Area Fill mode from Blueprint mode: right-clicking in Area mode strictly opens the Area Fill confirmation modal and will never trigger blueprint placement or signal minions to build previous blueprints.
+  - Sub-modes (`buildingMode` and `miningMode`) are serialized and synchronized over the network via `UpdateScepterPayload`, ensuring server and client states stay 100% in sync and gating anchor construction packets exclusively to `BLUEPRINT` and `DIRECT` sub-modes.
 
 - **On-Demand Block-to-Block Crafting (`MinionHarvestingHelper.tryCraftBlockFromInventory`)**:
   - Builder minions in survival mode can now craft architectural, masonry, utility, and decorative blocks on demand directly from base materials in their own 9-slot inventory (functioning like a player using a crafting table).

@@ -2685,7 +2685,7 @@ public class CommandScepterItem extends Item {
 		// BUILD Mode: Anchor construction session at clicked block face or open confirm modal (AREA)
 		if (mode == CommandMode.BUILD) {
 			BuildingMode buildingMode = getBuildingMode(stack);
-			if (buildingMode == BuildingMode.AREA) {
+			if (buildingMode == BuildingMode.AREA || getBuildPos1(stack) != null || getBuildPos2(stack) != null) {
 				if (world.isClient() && BUILD_MODAL_OPENER != null) {
 					BlockPos p1 = getBuildPos1(stack);
 					BlockPos p2 = getBuildPos2(stack);
@@ -2939,7 +2939,7 @@ public class CommandScepterItem extends Item {
 			return TypedActionResult.success(stack, world.isClient());
 		}
 
-		if (mode == CommandMode.BUILD && getBuildingMode(stack) == BuildingMode.AREA) {
+		if (mode == CommandMode.BUILD && (getBuildingMode(stack) == BuildingMode.AREA || getBuildPos1(stack) != null || getBuildPos2(stack) != null)) {
 			if (world.isClient() && BUILD_MODAL_OPENER != null) {
 				BlockPos p1 = getBuildPos1(stack);
 				BlockPos p2 = getBuildPos2(stack);

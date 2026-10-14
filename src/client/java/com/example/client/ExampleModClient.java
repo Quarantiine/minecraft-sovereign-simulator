@@ -252,43 +252,54 @@ public class ExampleModClient implements ClientModInitializer {
 				}
 			}
 
-			if (mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA) {
-				BlockPos p1 = CommandScepterItem.getBuildPos1(stack);
-				if (p1 == null) p1 = com.example.client.renderer.ClientBuildCaptureTracker.getPos1();
-				BlockPos p2 = CommandScepterItem.getBuildPos2(stack);
-				if (p2 == null) p2 = com.example.client.renderer.ClientBuildCaptureTracker.getPos2();
-				if (p1 != null && p2 != null) {
-					if (CommandScepterItem.BUILD_MODAL_OPENER != null) {
-						CommandScepterItem.BUILD_MODAL_OPENER.openBuildModal(player, hand, stack, p1, p2);
+			if (mode == CommandMode.BUILD) {
+				if (CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA) {
+					BlockPos p1 = CommandScepterItem.getBuildPos1(stack);
+					if (p1 == null) p1 = com.example.client.renderer.ClientBuildCaptureTracker.getPos1();
+					BlockPos p2 = CommandScepterItem.getBuildPos2(stack);
+					if (p2 == null) p2 = com.example.client.renderer.ClientBuildCaptureTracker.getPos2();
+					if (p1 != null && p2 != null) {
+						if (CommandScepterItem.BUILD_MODAL_OPENER != null) {
+							CommandScepterItem.BUILD_MODAL_OPENER.openBuildModal(player, hand, stack, p1, p2);
+						} else {
+							MinecraftClient.getInstance().setScreen(new com.example.client.gui.BuildAreaConfirmModalScreen(p1, p2, stack, null));
+						}
+						player.getItemCooldownManager().set(stack.getItem(), 4);
+						player.swingHand(hand);
+						return TypedActionResult.success(stack);
 					} else {
-						MinecraftClient.getInstance().setScreen(new com.example.client.gui.BuildAreaConfirmModalScreen(p1, p2, stack, null));
+						player.sendMessage(Text.literal("§c✦ Left-click two blocks to set Pos1 and Pos2 before confirming area fill!§r"), true);
+						player.getItemCooldownManager().set(stack.getItem(), 4);
+						return TypedActionResult.success(stack);
 					}
-					player.getItemCooldownManager().set(stack.getItem(), 4);
-					player.swingHand(hand);
-					return TypedActionResult.success(stack);
 				} else {
-					player.sendMessage(Text.literal("§c✦ Left-click two blocks to set Pos1 and Pos2 before confirming area fill!§r"), true);
-					player.getItemCooldownManager().set(stack.getItem(), 4);
-					return TypedActionResult.success(stack);
+					// Strictly BLUEPRINT mode:
+					MinecraftClient client = MinecraftClient.getInstance();
+					BlockHitResult hit = TacticalBuildCameraController.getCameraTargetedBlock(client, 96.0F);
+					if (hit != null && hit.getType() == HitResult.Type.BLOCK) {
+						ModClientNetworking.sendAnchorConstruction(hit.getBlockPos(), hit.getSide(), false);
+						player.getItemCooldownManager().set(stack.getItem(), 10);
+						player.swingHand(hand);
+						if (client.world != null) {
+							client.world.playSound(player, hit.getBlockPos(), SoundEvents.BLOCK_STONE_PLACE, SoundCategory.BLOCKS, 1.0F, 1.0F);
+						}
+					}
+					return TypedActionResult.pass(stack);
 				}
 			}
 
-			if ((mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.BLUEPRINT) || (mode == CommandMode.MINE && CommandScepterItem.getMiningMode(stack) == com.example.component.MiningMode.DIRECT)) {
+			if (mode == CommandMode.MINE && CommandScepterItem.getMiningMode(stack) == com.example.component.MiningMode.DIRECT) {
 				MinecraftClient client = MinecraftClient.getInstance();
 				BlockHitResult hit = TacticalBuildCameraController.getCameraTargetedBlock(client, 96.0F);
 				if (hit != null && hit.getType() == HitResult.Type.BLOCK) {
-					boolean isDismantle = (mode == CommandMode.MINE);
-					ModClientNetworking.sendAnchorConstruction(hit.getBlockPos(), hit.getSide(), isDismantle);
+					ModClientNetworking.sendAnchorConstruction(hit.getBlockPos(), hit.getSide(), true);
 					player.getItemCooldownManager().set(stack.getItem(), 10);
 					player.swingHand(hand);
 					if (client.world != null) {
 						client.world.playSound(player, hit.getBlockPos(), SoundEvents.BLOCK_STONE_PLACE, SoundCategory.BLOCKS, 1.0F, 1.0F);
 					}
 				}
-				// In BUILD mode when aiming at sky/air, retain active blueprint without accidental cycling
-				if (mode == CommandMode.BUILD) {
-					return TypedActionResult.pass(stack);
-				}
+				return TypedActionResult.pass(stack);
 			}
 
 			return TypedActionResult.pass(stack);

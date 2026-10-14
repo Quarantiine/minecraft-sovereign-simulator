@@ -240,6 +240,14 @@ public class ModNetworking {
 			CommandScepterItem.setTargetRole(scepterStack, payload.targetRole().orElse(null));
 		}
 
+		// Apply building mode and mining mode sub-modes if provided in payload
+		if (payload.buildingMode() != null && payload.buildingMode().isPresent()) {
+			CommandScepterItem.setBuildingMode(scepterStack, payload.buildingMode().get());
+		}
+		if (payload.miningMode() != null && payload.miningMode().isPresent()) {
+			CommandScepterItem.setMiningMode(scepterStack, payload.miningMode().get());
+		}
+
 
 		// 3. Audio & actionbar feedback
 		CommandMode currentMode = CommandScepterItem.getMode(scepterStack);
@@ -617,9 +625,13 @@ public class ModNetworking {
 		ServerWorld world = player.getServerWorld();
 		CommandMode mode = CommandScepterItem.getMode(scepterStack);
 		if (mode == CommandMode.BUILD) {
-			CommandScepterItem.executeBuildPlacement(world, player, scepterStack, clickedPos, payload.side(), payload.isDismantle());
+			if (CommandScepterItem.getBuildingMode(scepterStack) == com.example.component.BuildingMode.BLUEPRINT) {
+				CommandScepterItem.executeBuildPlacement(world, player, scepterStack, clickedPos, payload.side(), payload.isDismantle());
+			}
 		} else if (mode == CommandMode.MINE) {
-			CommandScepterItem.executeMinePlacement(world, player, scepterStack, clickedPos);
+			if (CommandScepterItem.getMiningMode(scepterStack) == com.example.component.MiningMode.DIRECT) {
+				CommandScepterItem.executeMinePlacement(world, player, scepterStack, clickedPos);
+			}
 		}
 	}
 

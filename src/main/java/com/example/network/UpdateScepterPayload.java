@@ -1,7 +1,9 @@
 package com.example.network;
 
 import com.example.ExampleMod;
+import com.example.component.BuildingMode;
 import com.example.component.CommandMode;
+import com.example.component.MiningMode;
 import com.example.component.SquadGroup;
 import com.example.entity.custom.MinionRole;
 import java.util.Optional;
@@ -15,7 +17,7 @@ import net.minecraft.util.Identifier;
  * Client-to-server (C2S) networking payload dispatched by the Command Hub GUI
  * when the commanding player selects a new operating mode, active blueprint,
  * target squad filter, structure rotation angle, target minion archetype role,
- * active patrol route channel, or requests direct command execution.
+ * active patrol route channel, building mode, mining mode, or requests direct command execution.
  */
 public record UpdateScepterPayload(
 	CommandMode mode,
@@ -24,7 +26,9 @@ public record UpdateScepterPayload(
 	int rotation,
 	Optional<MinionRole> targetRole,
 	int activePatrolRoute,
-	boolean executeDirective
+	boolean executeDirective,
+	Optional<BuildingMode> buildingMode,
+	Optional<MiningMode> miningMode
 ) implements CustomPayload {
 
 	public static final CustomPayload.Id<UpdateScepterPayload> ID = new CustomPayload.Id<>(
@@ -41,6 +45,8 @@ public record UpdateScepterPayload(
 			PacketCodecs.optional(MinionRole.PACKET_CODEC.cast()).encode(buf, payload.targetRole());
 			PacketCodecs.INTEGER.encode(buf, payload.activePatrolRoute());
 			PacketCodecs.BOOL.encode(buf, payload.executeDirective());
+			PacketCodecs.optional(BuildingMode.PACKET_CODEC.cast()).encode(buf, payload.buildingMode());
+			PacketCodecs.optional(MiningMode.PACKET_CODEC.cast()).encode(buf, payload.miningMode());
 		}
 
 		@Override
@@ -52,10 +58,16 @@ public record UpdateScepterPayload(
 				PacketCodecs.INTEGER.decode(buf),
 				PacketCodecs.optional(MinionRole.PACKET_CODEC.cast()).decode(buf),
 				PacketCodecs.INTEGER.decode(buf),
-				PacketCodecs.BOOL.decode(buf)
+				PacketCodecs.BOOL.decode(buf),
+				PacketCodecs.optional(BuildingMode.PACKET_CODEC.cast()).decode(buf),
+				PacketCodecs.optional(MiningMode.PACKET_CODEC.cast()).decode(buf)
 			);
 		}
 	};
+
+	public UpdateScepterPayload(CommandMode mode, String blueprintId, SquadGroup targetSquad, int rotation, Optional<MinionRole> targetRole, int activePatrolRoute, boolean executeDirective) {
+		this(mode, blueprintId, targetSquad, rotation, targetRole, activePatrolRoute, executeDirective, Optional.empty(), Optional.empty());
+	}
 
 	public UpdateScepterPayload(CommandMode mode, String blueprintId, SquadGroup targetSquad, int rotation, Optional<MinionRole> targetRole, boolean executeDirective) {
 		this(mode, blueprintId, targetSquad, rotation, targetRole, 0, executeDirective);
