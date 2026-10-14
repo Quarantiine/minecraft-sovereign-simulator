@@ -113,12 +113,16 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - Set logistics or builder minions to `PASSIVE` so they never attack or provoke enemies, or assign dedicated assault units custom target lists.
 - **The Sovereign Command Scepter**:
   - Handheld tactical conduit supporting 64-block raycast targeting.
-  - Left-Click to select/deselect individual units or hold for 90° cone mass sweeps.
+  - Left-Click to select/deselect individual units or hold Right-Click for 90° cone sweeps.
   - Right-Click the ground to deploy military waypoint lines.
 - **Ranked Army Battle Formations**:
   - Minions automatically calculate disciplined, parallel 4-unit battle ranks: Warriors form the hard-hitting vanguard frontline ($+4.0\text{D}$) to intercept and shred threats, Sentinels form the protective midline escort ($+1.8\text{D}$) ready to shield and heal wounded units, and Builders bring up the rear support ($ -2.0\text{D}$).
 - **Minion Escort Hierarchy & Squad Leaders**:
   - Delegate minions to bodyguard fellow minions. Shift-Punch an owned minion with the Scepter to designate a **Squad Leader**; all selected escorts dynamically form protective flanking ranks around their leader with active cyan-to-magenta Arcane Tether Beams.
+- **Synchronized Minion Sneaking & Tactical Overhead Stealth**:
+  - When the player sneaks (holds `Shift`), all currently selected minions (and squad bodyguards) immediately drop into a synchronized crouching pose (`EntityPose.CROUCHING`).
+  - Completely suppresses and hides both vanilla nametags and modded overhead badges (`[HOLD]`, squad banners, role crests, health hearts) for covert night raids, stealth ambushes, and multiplayer scouting.
+  - Automatically paces following movement to matched crouch walking speed ($0.65\text{D}$) within 8 blocks, accelerating to catch-up speed ($1.15\text{D}$) when separated by $>8$ blocks.
 - **Custom In-World Blueprint Capture ('DESIGN' Mode)**:
   - Select two corners with left-clicks to enclose any building in a 3D holographic ghost prism.
   - Adjust height in real time with `Ctrl` + Scroll.
@@ -156,9 +160,10 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 | **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                 |
 | **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 5$ blocks high permitted.       |
 | **`Ctrl` + Scroll**    | `DESIGN` / `MINE`  | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).          |
-| **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault.      |
+| **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault (preserves hold position, patrol routes, and roaming). |
 | **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.    |
 | **Sneak + Left-Click** | `DESIGN` / `MINE`  | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.              |
+| **Sneak (Hold Shift)** | Leading Minions    | **Tactical Squad Sneak**: Minions crouch in sync; hides nametags and all overhead HUD badges.       |
 | **`Tab` / `F` Key**    | In 3D Explorer     | **Maximize Viewport**: Toggles full-width $404 \times 194$ px 3D inspection view.                   |
 | **Right-Click Drag**   | In 3D Explorer     | **Camera Pan**: Translates 3D model horizontally and vertically.                                    |
 | **`▲` / `▼` Slicer**   | In 3D Explorer     | **Architectural Floor Slicer**: Steps through floors to inspect interior room layouts.              |

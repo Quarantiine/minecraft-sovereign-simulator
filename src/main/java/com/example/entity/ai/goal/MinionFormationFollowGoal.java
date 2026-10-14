@@ -244,10 +244,16 @@ public class MinionFormationFollowGoal extends Goal {
 			return;
 		}
 
-		// Dynamic pacing: sprint at 1.35D when lagging behind (>8 blocks), else march at 1.15D
-		double speed = (distToOwnerSq > SPRINT_DISTANCE_THRESHOLD_SQ || distToStationSq > SPRINT_DISTANCE_THRESHOLD_SQ)
-			? SPRINT_SPEED
-			: MARCH_SPEED;
+		// Dynamic pacing: sprint at 1.35D when lagging behind (>8 blocks), else march at 1.15D.
+		// Stealth pacing: when sneaking, match commander's crouch pace (0.65D) unless significantly lagging (>8 blocks).
+		double speed;
+		if (this.minion.isSneaking() || owner.isSneaking()) {
+			speed = (distToOwnerSq > SPRINT_DISTANCE_THRESHOLD_SQ) ? MARCH_SPEED : 0.65D;
+		} else {
+			speed = (distToOwnerSq > SPRINT_DISTANCE_THRESHOLD_SQ || distToStationSq > SPRINT_DISTANCE_THRESHOLD_SQ)
+				? SPRINT_SPEED
+				: MARCH_SPEED;
+		}
 
 		if (--this.navigationTimer <= 0) {
 			this.navigationTimer = NAVIGATION_REPATH_INTERVAL;

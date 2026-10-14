@@ -6,7 +6,7 @@ This document provides a comprehensive technical breakdown of all gameplay featu
 
 ## Table of Contents
 
-1. [Loki Command Scepter (`CommandScepterItem`)](#1-loki-command-scepter-commandscepteritem)
+1. [Sovereign Command Scepter (`CommandScepterItem`)](#1-sovereign-command-scepter-commandscepteritem)
 2. [Autonomous Minion Thralls (`MinionEntity`) & Spawn Egg](#2-autonomous-minion-thralls-minionentity--spawn-egg)
 3. [Tactical Army Architecture: Roles, Squads & Formations](#3-tactical-army-architecture-roles-squads--formations)
 4. [Client Visuals, Holograms & Overhead Crest Badges](#4-client-visuals-holograms--overhead-crest-badges)
@@ -16,35 +16,67 @@ This document provides a comprehensive technical breakdown of all gameplay featu
    - [5.3 Clean & Crisp In-Game GUI Overlays (Universal Background Blur Removal)](#53-clean--crisp-in-game-gui-overlays-universal-background-blur-removal)
 6. [Multiblock Construction & Blueprint Engine](#6-multiblock-construction--blueprint-engine)
 7. [Structure Deconstruction, Mining Area Clearance & Bedrock Immunity](#7-structure-deconstruction-mining-area-clearance--bedrock-immunity)
+   - [7.1 Dual Operational Sub-Modes: DIRECT vs. AREA Mining](#71-dual-operational-sub-modes-direct-vs-area-mining)
+   - [7.2 Configurable 3D Area Boundary & Sequential Corner Invariants](#72-configurable-3d-area-boundary--sequential-corner-invariants)
+   - [7.3 Real-Time In-World Height Adjustment](#73-real-time-in-world-height-adjustment)
+   - [7.4 In-World Ghost Grid Wireframes & Semantic Highlighting](#74-in-world-ghost-grid-wireframes--semantic-highlighting-blueprinthologramrenderer)
+   - [7.5 Mining Confirmation Modal Screen](#75-mining-confirmation-modal-screen-miningconfirmmodalscreen)
+   - [7.6 Reverse Topological Top-Down Execution & Zero Air-Mining Guarantee](#76-reverse-topological-top-down-execution--zero-air-mining-guarantee)
+   - [7.7 Universal Block Type Fidelity Across Demolition](#77-universal-block-type-fidelity-across-demolition-mine-mode)
+   - [7.8 4-Tier Bedrock & Indestructible Immunity Safeguards](#78-4-tier-bedrock--indestructible-immunity-safeguards)
 8. [Arcane Builder Levitation & Player-Like Ground Navigation](#8-arcane-builder-levitation--player-like-ground-navigation)
 9. [Advanced Mob Pathfinding Engine](#9-advanced-mob-pathfinding-engine)
 10. [Tactical Ordnance & Warrior Thrown Weapon Arsenal](#10-tactical-ordnance--warrior-thrown-weapon-arsenal)
 11. [Data Components & Network Protocol Architecture](#11-data-components--network-protocol-architecture)
 12. [Survival vs. Creative Mode Economy & Mechanics](#12-survival-vs-creative-mode-economy--mechanics)
 13. [Builder Minion Stability, Anti-Oscillation & Placement Idempotency](#13-builder-minion-stability-anti-oscillation--placement-idempotency)
-14. [Multi-Modal Blueprint Rotation & Arcane Build Flight Controls](#14-multi-modal-blueprint-rotation--arcane-build-flight-controls)
+14. [Multi-Modal Blueprint Rotation & Arcane Build Flight Altitude Controls](#14-multi-modal-blueprint-rotation--arcane-build-flight-altitude-controls)
 15. [Builder Block Phasing, Post-Construction Structure Egress & Guaranteed Perimeter Flank Spread](#15-builder-block-phasing-post-construction-structure-egress--guaranteed-perimeter-flank-spread)
 16. [Free Survival Build Flight & Water Flight Cancellation Safeguard](#16-free-survival-build-flight--water-flight-cancellation-safeguard)
 17. [Visual Pathway Patrol System & Minion Escort Hierarchy](#17-visual-pathway-patrol-system--minion-escort-hierarchy)
+    - [Autonomous Waypoint Patrol Engine](#autonomous-waypoint-patrol-engine-minionpatrolgoal-patrolroutemanager-patrolroute)
+    - [Minion Escort Hierarchy & Squad Leaders](#minion-escort-hierarchy--squad-leaders-minionfollowleadergoal)
 18. [Autonomous Agent System (`MinionRole.AUTO` Dynamic Evaluation)](#18-autonomous-agent-system-minionroleauto-dynamic-evaluation)
 19. [Dual-Tier Panic Retreat & Emergency Citadel Call](#19-dual-tier-panic-retreat--emergency-citadel-call)
 20. [Custom Blueprint Catalog Lifecycle & Decommissioning Safeguards](#20-custom-blueprint-catalog-lifecycle--decommissioning-safeguards)
 21. [In-World Spatial Blueprint Capture ('DESIGN' Mode)](#21-in-world-spatial-blueprint-capture-design-mode)
+    - [21.1 Sequential Left-Click Corner Selection & Invariance](#211-sequential-left-click-corner-selection--invariance)
+    - [21.2 Real-Time 3D Holographic Volume Preview & Ghost Grid Rendering](#212-real-time-3d-holographic-volume-preview--ghost-grid-rendering-blueprinthologramrenderer)
+    - [21.3 In-World Real-Time Height Adjustment](#213-in-world-real-time-height-adjustment-no-blocks-required)
+    - [21.4 In-World Blueprint Capture Modal](#214-in-world-blueprint-capture-modal-blueprintcapturemodalscreen)
+    - [21.5 Coordinate Normalization & Air Block Exclusion Engine](#215-coordinate-normalization--air-block-exclusion-engine)
+    - [21.6 Deterministic Bottom-Up & Reverse Top-Down Topological Sorting](#216-deterministic-bottom-up--reverse-top-down-topological-sorting)
+    - [21.7 Spatial Safeguards & Limits](#217-spatial-safeguards--limits)
+    - [21.8 Server Synchronization & World Save Persistence](#218-server-synchronization--world-save-persistence)
+    - [21.9 Granular Blueprint Palette Remapping & Material Replacement](#219-granular-blueprint-palette-remapping--material-replacement-design-save-gui)
 22. [Unified Surface Anchoring Contract & Hollow Grid Mechanics](#22-unified-surface-anchoring-contract--hollow-grid-mechanics)
 23. [Survival Crafting Recipes & Progression](#23-survival-crafting-recipes--progression)
 24. [Cross-Version Compatibility Architecture (Minecraft 1.21.x Family)](#24-cross-version-compatibility-architecture-minecraft-121x-family)
 25. [Smart Builder Transformations, Workstation Tool Blocks & Multi-Tier Supply Chains](#25-smart-builder-transformations-workstation-tool-blocks--multi-tier-supply-chains)
 26. [Material Bill of Materials (BOM) & Resource Estimator GUI](#26-material-bill-of-materials-bom--resource-estimator-gui)
 27. [3D Architectural Blueprint Explorer & Clarity Viewport Engine](#27-3d-architectural-blueprint-explorer--clarity-viewport-engine)
+    - [27.1 Dedicated 3D Blueprint Explorer Screen](#271-dedicated-3d-blueprint-explorer-screen-blueprintexplorerscreen)
+    - [27.2 3D Blueprint Clarity Overhaul & Architectural Viewport Engine](#272-3d-blueprint-clarity-overhaul--architectural-viewport-engine)
+    - [27.3 Newest-First Custom Blueprint Ordering](#273-newest-first-custom-blueprint-ordering-slide-1-slot-1-default)
+    - [27.4 Minion Waypoint Navigation Anti-Teleport & Pathing Jitter Resolution](#274-minion-waypoint-navigation-anti-teleport--pathing-jitter-resolution)
+    - [27.5 Architectural 3D Palette Remapping & Save Choice Engine](#275-architectural-3d-palette-remapping--save-choice-engine)
+    - [27.6 Zero-Lag Large Structure 3D Mesh Rendering Engine](#276-zero-lag-large-structure-3d-mesh-rendering-engine-blueprintmeshcache)
+    - [27.7 Long-Range Container Logistics & Sub-Millisecond Chunk Querying](#277-long-range-container-logistics--sub-millisecond-chunk-querying)
+    - [27.8 Autonomous Minion Roaming on Patrol Route Deletion](#278-autonomous-minion-roaming-on-patrol-route-deletion)
+    - [27.9 Custom Blueprint Direct Renaming & Uncluttered Action Bar Architecture](#279-custom-blueprint-direct-renaming--uncluttered-action-bar-architecture)
+28. [Minion Tactical Sneaking & Overhead Stealth](#28-minion-tactical-sneaking--overhead-stealth)
+    - [28.1 Synchronized Commander Sneaking & Squad Posture](#281-synchronized-commander-sneaking--squad-posture)
+    - [28.2 Complete Name Tag & Overhead Badge Stealth Suppression](#282-complete-name-tag--overhead-badge-stealth-suppression)
+    - [28.3 Stealth Creep Pacing](#283-stealth-creep-pacing)
 
 ---
 
-## 1. Loki Command Scepter (`CommandScepterItem`)
+## 1. Sovereign Command Scepter (`CommandScepterItem`)
 
-The **Loki Command Scepter** is a high-tier tactical relic allowing players to command minion thralls, recruit mobs into servitude, and orchestrate automated multiblock construction.
+The **Sovereign Command Scepter** is a high-tier tactical relic allowing players to command minion thralls, recruit mobs into servitude, and orchestrate automated multiblock construction.
 
 ```
-                                         [Loki Command Scepter]
+                                       [Sovereign Command Scepter]
                                                    │
          ┌───────────────────┬─────────────────────┼─────────────────────┬───────────────────┐
          ▼                   ▼                     ▼                     ▼                   ▼
@@ -97,13 +129,17 @@ The scepter features an integrated 64-block line-of-sight raycasting engine:
   - All candidate hostile mobs inside the sector are marked with real-time targeting cues (`ANGRY_VILLAGER` and `CRIT` particles), providing full visual targeting confirmation. Innocent villagers (and wandering traders) and iron golems are strictly protected (`isSectorTargetableEntity`) and will never be marked as targets.
 - **Coordinated Mass Assault on Release**:
   - If hostile mobs are enclosed in the 90° sector upon release, minions automatically unleash a coordinated **Mass Attack**! Frontline enemies are assigned to melee fighters, while backline or ranged enemies are assigned to archers. The attack is heralded by a raid horn fanfare (`SoundEvents.EVENT_RAID_HORN`) and war drum cadences. Villagers and iron golems caught in the cone are never included in the mass assault.
-  - Any owned minions enclosed in the cone are simultaneously selected and rallied into the attack squad.
+  - **Minion State Preservation (No Forced Following)**: Minions do **not** follow the player when attacking. Minions in hold position, following patrol routes, or freely roaming remain in their respective states throughout combat:
+    - **Stationed / Hold Position Units**: Preserve their guard anchor post (`guardAnchorPos`). Sitting minions without an anchor are anchored at their current position before standing up to fight. Upon defeating the enemies, they return directly to their guard anchor post via `returnToOwnerPostCombat()`.
+    - **Patrol Route Units**: Retain their assigned route (`patrolRouteId`). Upon defeating enemies, `MinionPatrolGoal` naturally resumes their patrol loop without returning to the player.
+    - **Roaming Units**: Remain unselected (`isSelected() == false`) and resume ambient wandering once the sector hostiles are destroyed.
+    - **Following Units**: Previously selected minions remain selected and regroup into the player's marching ranks after combat.
 - **Persistent 90° Mass Assault Queue Targeting (Multi-Target Chaining)**:
   - When the 90° forward sector encloses multiple hostile mobs upon release, all enclosed hostiles are sorted frontline-to-backline and assigned to each participating minion as a persistent combat queue via `minion.setAssaultTargets(enclosedHostiles)`.
   - **Sequential Target Eradication**: Minions do not disengage after slaying a single mob. When an assigned mob is defeated (`onKilledOther`) or invalidated in `tick()`, the minion checks `hasAssaultTargets()`, immediately selects the nearest alive enemy in the queue within a 48-block engagement radius (`2304.0D` sq blocks) via `acquireNextAssaultTarget()`, sprints to engage at 1.35D velocity, and continues fighting relentlessly until **all selected enemies in the sector are eliminated**.
   - **Frontline vs. Backline Distribution**: Frontline melee combatants engage proximal targets, while ranged archers prioritize rearward and backline hostiles (`enclosedHostiles.size() - 1 - ...`).
   - **Formation Leash Preservation**: `MinionFormationFollowGoal` yields priority to the ongoing assault while alive queued targets remain in the engagement zone, preventing minions from prematurely disengaging back into marching formation during active combat.
-  - **Graceful Post-Combat Regrouping**: Only after the entire assault queue is cleared does `returnToOwnerPostCombat()` trigger, recalling thralls smoothly to the commander.
+  - **Graceful Post-Combat Regrouping**: Only after the entire assault queue is cleared does `returnToOwnerPostCombat()` trigger, returning stationed units to their guard posts, escorts to their squad leaders, and selected units to the commander while patrolling units resume their routes and roaming units wander.
   - **Tactical Override & Queue Flushing**: Issuing a panic retreat (Keybind `R` / `RetreatPayload`), dropping a ground waypoint ping, or commanding units to sit/hold immediately flushes the assault queue (`clearAssaultTargets()`), allowing instant tactical disengagement.
 - **War Horn Blast & Focused Rally**: When no hostiles are enclosed, releasing sounds a goat horn blast (`SoundEvents.ITEM_GOAT_HORN_PLAY`), gathering all enclosed minions strictly within the 90° sector into the active squad channel, clearing stale guard posts, commanding them to `FOLLOW`, and discharging an arcane release burst along the 90° perimeter arc and boundary rays.
 - **Channeled Mass Transfiguration**: If a target archetype role has been primed on the scepter (via the Command Hub GUI toggle bar or `TARGET_ROLE` data component), all minions enclosed in the 90° sector are automatically transfigured into that role, auto-equipped from their backpacks, enveloped in `ENCHANT` particles, and celebrated with a level-up chime (`SoundEvents.ENTITY_PLAYER_LEVELUP`).
@@ -113,7 +149,7 @@ The scepter features an integrated 64-block line-of-sight raycasting engine:
 
 In `BUILD` mode, commanders can rotate structures prior to placement:
 
-- **Rotation Cycling**: Sneak + Left-Click against any block cycles rotation through 0° → 90° → 180° → 270° around origin $(0, 0)$.
+- **Rotation Controls**: Pressing **`R`** (or clicking **`[ ↻ Rotate ]`** in the Command Hub GUI) rotates the structure 90° clockwise (0° → 90° → 180° → 270°). Left-clicking in `BUILD` mode performs standard attacks or block breaks and never accidentally rotates blueprints.
 - **Door Offset Discovery**: The rotation engine automatically tracks lower door coordinates, projecting vertical sparkle beams (`HAPPY_VILLAGER` + `END_ROD`) and displaying the door's facing compass direction in the HUD actionbar (`§6🏗 [Name] §8| §bRotation: [Deg]° §8| §a🚪 Door: [Dir]`).
 
 ### Arcane Mob Recruitment (`RECRUIT` Mode)
@@ -136,14 +172,16 @@ In `BUILD` mode, commanders can rotate structures prior to placement:
 | **Right-Click (Quick Tap)**     | Ground Block ($\le 64\text{D}$)       | Drops ground waypoint; selected squad units sprint, form up, hold station, and **automatically deselect**.                                                                             |
 | **Right-Click (Quick Tap)**     | Owned Minion ($\le 64\text{D}$)       | Toggles unit selection (chime/hearts vs bass/smoke).                                                                                                                                   |
 | **Right-Click (Quick Tap)**     | Open Sky / Air                        | Broadcasts active directive (`FOLLOW`, `STAY`) to 64-block radius.                                                                                                                     |
-| **Hold Right-Click (>8 ticks)** | Hostiles in Sector                    | Charges 90° forward sector; launches coordinated **Mass Attack** across enemy formation.                                                                                               |
+| **Hold Right-Click (>8 ticks)** | Hostiles in Sector                    | Charges 90° forward sector; launches coordinated **Mass Attack** across enemy formation while strictly preserving minion hold positions, patrol routes, and roaming states without forcing units to follow. |
 | **Hold Right-Click (>8 ticks)** | Minions in Sector                     | Charges 90° forward sector; rallies, selects, and transfigures enclosed minions into primed role.                                                                                      |
 | **Sneak + Right-Click**         | Aiming at Air                         | Cycles scepter command mode forward (`FOLLOW` → `STAY` → `MINE` → `BUILD` → `RECRUIT`).                                                                                                |
 | **Sneak + Right-Click**         | Owned Minion                          | Opens interactive **Minion Management GUI** (`MinionScreen`).                                                                                                                          |
 | **Sneak + Left-Click**          | Non-`BUILD`/`DESIGN` Modes            | Deselects all active minions immediately with bass/smoke feedback.                                                                                                                     |
-| **Sneak + Left-Click**          | `BUILD` Mode                          | Cycles blueprint rotation (0° → 90° → 180° → 270°) with actionbar HUD.                                                                                                                 |
+| **Left-Click**                  | `BUILD` Mode                          | Standard attack/break; does not rotate blueprint (blueprint rotation is done via **`R`** key or GUI).                                                                                 |
+| **Shift + Left-Click**          | `BUILD` Mode                          | Standard attack/break; does not rotate blueprint.                                                                                                                                      |
 | **Press [V] Key**               | In-Game Hotkey                        | Opens the **Command Hub GUI** (`CommandScepterScreen`).                                                                                                                                |
-| **Press [R] Key**               | In-Game Hotkey                        | **Tactical Panic Retreat**: Sounds warning bell, clears minion targets, and recalls all units to formation.                                                                            |
+| **Press [R] Key**               | `BUILD` Mode                          | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°).                                                                                                         |
+| **Press [R] Key**               | Other Modes                           | **Tactical Panic Retreat**: Sounds warning bell, clears minion targets, and recalls all units to formation.                                                                            |
 
 ---
 
@@ -1146,18 +1184,17 @@ The commander's active game mode dynamically dictates minion logistics, resource
 
 ## 14. Multi-Modal Blueprint Rotation & Arcane Build Flight Altitude Controls
 
-### 3 Intuitive Ways to Rotate Blueprints
+### Intuitive Ways to Rotate Blueprints
 
 - **Dedicated `R` Key Rotation**:
   - When holding the Command Scepter in **`BUILD`** mode, pressing **`R`** rotates the blueprint 90° clockwise (0° → 90° → 180° → 270° → 0°).
   - Emits note block chime audio feedback with pitch scaling per quadrant, action bar confirmation text (`🏗 Rotation: 90° (CLOCKWISE_90)`), and immediate server C2S packet synchronization (`UpdateScepterPayload`).
-  - In all other command modes (`FOLLOW`, `STAY`, `MINE`, `RECRUIT`), `R` continues to trigger Panic Retreat / Regroup.
-- **Direct Left-Click Rotation**:
-  - When holding the Command Scepter in **`BUILD`** mode, any left-click (whether aimed at the sky, ground terrain, distant wireframes, or blocks, with or without `Shift`) immediately rotates the blueprint 90° clockwise.
-  - Left-clicking only performs minion selection if the crosshair directly targets an owned `MinionEntity`.
+  - In all other command modes (`FOLLOW`, `STAY`, `MINE`, `RECRUIT`, `DESIGN`, `PATHWAY`), `R` continues to trigger Panic Retreat / Regroup.
 - **Interactive Command Hub GUI Button (`[ ↻ Rotate: 90° ]`)**:
   - Inside the Command Hub screen (**`V`** or **`Shift + Right-Click`**), when in `BUILD` mode, a dedicated **`[ ↻ Rotate: X° (Direction) ]`** button appears in the mode footer box.
   - Clicking cycles the rotation orientation with audio feedback and syncs the held scepter before placement.
+- **Protected Left-Click (Standard Hit / Break)**:
+  - Left-clicking (with or without `Shift`) while in **`BUILD`** mode performs standard entity attacks (survival) or block breaks (creative). Ground hitting or punching never rotates blueprints, ensuring you never accidentally alter your structure's orientation while interacting with the world.
 
 ### Arcane Build Flight Space / Shift Altitude Control
 
@@ -1592,7 +1629,7 @@ Performing **Right-Click** (or **Sneak + Right-Click**) on the ground or in the 
   - **Capture & Save Button**: Compiles the bounding volume, validates spatial limits, and dispatches `CaptureSpatialBlueprintPayload` to the server.
   - **Clear Corners Button**: Clears active corner coordinates without leaving the screen.
 
-### 21.4 Coordinate Normalization & Air Block Exclusion Engine
+### 21.5 Coordinate Normalization & Air Block Exclusion Engine
 
 When compiling captured blocks into a `StructureBlueprint`, the engine applies rigorous coordinate transformations:
 
@@ -1605,7 +1642,7 @@ When compiling captured blocks into a `StructureBlueprint`, the engine applies r
    - Iterates through the 3D volume and queries `BlockState.isAir()`.
    - All air, cave air, and void spaces are filtered out entirely, preventing minions from spending time attempting to place air blocks during construction.
 
-### 21.5 Deterministic Bottom-Up & Reverse Top-Down Topological Sorting
+### 21.6 Deterministic Bottom-Up & Reverse Top-Down Topological Sorting
 
 Captured structures are topologically sorted via `BlueprintBlock.compareTo` to guarantee structural buildability and dismantling safety:
 
@@ -1617,7 +1654,7 @@ Captured structures are topologically sorted via `BlueprintBlock.compareTo` to g
    - In dismantling mode, task queues are reversed topologically ($Y_{\text{apex}}$ first, foundations last).
    - Hanging fixtures and upper roofs are dismantled before supporting walls or foundation pillars are broken, preventing floating block collapses.
 
-### 21.6 Spatial Safeguards & Limits
+### 21.7 Spatial Safeguards & Limits
 
 - **Maximum Dimension Clamp (`MAX_SPATIAL_DIMENSION = 64`, `MAX_SPATIAL_HEIGHT = 96`)**:
   - Horizontal footprint length and width ($X$ and $Z$) cannot exceed 64 blocks ($64 \times 64$).
@@ -1626,7 +1663,7 @@ Captured structures are topologically sorted via `BlueprintBlock.compareTo` to g
   - Total bounding volume $(sizeX \times sizeY \times sizeZ)$ accommodates up to 393,216 voxels (supporting a full $64 \times 96 \times 64$ mega build), safeguarding server tick performance and network packet buffers.
 - **Safe Out-of-Bounds Rejection**: Attempts to capture regions exceeding these thresholds display informative warning alerts on the client action bar without server desynchronization.
 
-### 21.7 Server Synchronization & World Save Persistence
+### 21.8 Server Synchronization & World Save Persistence
 
 - **Networking Protocol**:
   - Dispatches `CaptureSpatialBlueprintPayload` (or `CreateCustomBlueprintPayload`) over Fabric C2S networking, transmitting corners `Pos1`/`Pos2`, title, description, and the optional `Map<Identifier, Identifier> blockReplacements` map.
@@ -1635,7 +1672,7 @@ Captured structures are topologically sorted via `BlueprintBlock.compareTo` to g
   - Synchronizes the new blueprint to all connected players via `SyncCustomBlueprintsPayload`.
   - The captured blueprint instantly appears in the Command Hub's **Blueprint Catalog** and is ready for immediate deployment in `BUILD` mode!
 
-### 21.8 Granular Blueprint Palette Remapping & Material Replacement (Design Save GUI)
+### 21.9 Granular Blueprint Palette Remapping & Material Replacement (Design Save GUI)
 
 To bridge the gap between in-world capture and survival mode practical construction, commanders can selectively remap block types or erase unwanted blocks directly within the save modal before compilation:
 
@@ -2051,4 +2088,37 @@ Deficient items (`delta < 0`) are dynamically tagged using `MinionHarvestingHelp
     - **`[ 🗑 Del ]`** (40px)
     - **`[ Close ]`** (40px)
   - In maximized / fullscreen mode, seamlessly integrates **`[ ✏ Rename ]`** into the wide 376px bottom action bar alongside Arm, Remap, BOM, Del, and Close with generous spacing.
+
+---
+
+## 28. Minion Tactical Sneaking & Overhead Stealth
+
+```
+                                [Commander Sneaking (Shift)]
+                                             │
+                       ┌─────────────────────┴─────────────────────┐
+                       ▼                                           ▼
+             [Selected Minions]                           [Unselected Minions]
+             • Automatically Crouch                       • Maintain Normal Posture
+             • EntityPose.CROUCHING                       • Standard Pacing
+             • Stealth Speed (0.65D)                      • Standard Badges Visible
+             • Suppress Name Tags                         
+             • Suppress Overhead Badges                   
+             • Escorts Crouch with Leader                 
+```
+
+### 28.1 Synchronized Commander Sneaking & Squad Posture
+- **Selection-Coupled Stealth**: When a commander crouches (`Shift`), all currently selected minions (`isSelected() == true`) immediately mirror the posture by entering sneaking pose (`setSneaking(true)` and `setPose(EntityPose.CROUCHING)`).
+- **Squad Escort Inheritance**: Squad members escorting a designated Squad Leader actively observe their leader's posture: when the leader sneaks, all subordinate escorts synchronize into sneaking pose.
+- **Client Prediction with Authoritative Server Sync**: Evaluated in `MinionEntity.tick()` on both sides—the commander's client immediately triggers crouching animations with zero network latency, while server ticks authoritatively synchronize tracked entity flags (`FLAGS` and `POSE`) to all observing players across multiplayer.
+- **Posture Conflict Exemptions**: Sitting minions (`isSitting()`), actively building workers (`isActivelyBuilding()`), and builders flying in 3D Arcane Levitation are strictly exempted from crouching to maintain building kinematics and sitting postures.
+
+### 28.2 Complete Name Tag & Overhead Badge Stealth Suppression
+- **Name Tag Occlusion**: Overrides `hasLabel` and `renderLabelIfPresent` in `MinionEntityRenderer` to return `false` and abort rendering while an entity is sneaking or in crouching pose (`isInSneakingPose()`). Both default and custom nametags are completely invisible.
+- **Overhead Crest Badge Suppression**: `MinionOverheadBadgeFeatureRenderer.render()` immediately aborts if `entity.isSneaking() || entity.isInSneakingPose()`. Squad channel banners, tactical role crests, status text (such as `[HOLD]` or `[Stationed]`), and real-time health heart bars are suppressed completely, providing tactical stealth when sneaking through hostile territory or around enemy players.
+
+### 28.3 Stealth Creep Pacing
+- **Matching Crouch Speed**: `MinionFormationFollowGoal` and `MinionFollowLeaderGoal` reduce cruising speed to `0.65D` (stealth creep) when sneaking, perfectly matching the commander's crouching pace without jostling or overrunning the leader.
+- **Dynamic Catch-Up March**: If sneaking minions fall farther than 8 blocks behind their station (`distToOwnerSq > 64.0D`), they temporarily march at `1.15D` to close the gap while remaining crouched, seamlessly dropping back to `0.65D` upon rejoining formation.
+
 

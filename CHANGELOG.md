@@ -35,6 +35,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Catalog Order Preservation**:
   - Updating or renaming an existing custom blueprint preserves its exact slot position in `customBlueprints` and `BlueprintRegistry` rather than bumping it to index 0, keeping the player's browsing context intact.
 
+#### 🥷 Selected Minion Sneaking & Tactical Overhead Stealth (`MinionEntity`, `MinionEntityRenderer`, `MinionOverheadBadgeFeatureRenderer`)
+- **Commander Synchronized Sneaking**:
+  - Selected minions (`isSelected() == true`) now automatically sneak and crouch whenever their commanding player sneaks (`owner.isSneaking() == true`).
+  - Escort minions following a designated squad leader dynamically sneak when their leader is sneaking, enabling synchronized squad-wide stealth maneuvers.
+  - Zero-latency client prediction updates sneaking state instantly on the local client when the commander holds Shift, while server-side ticks ensure authoritative synchronization over the network (`Entity.FLAGS` and `EntityPose.CROUCHING`).
+- **Complete Overhead Tag & Name Tag Suppression**:
+  - Overrode `hasLabel` and `renderLabelIfPresent` in `MinionEntityRenderer` to completely hide default and custom name tags while a minion is sneaking or in crouching pose.
+  - Updated `MinionOverheadBadgeFeatureRenderer` to abort rendering when sneaking, completely hiding all overhead badges (squad banner, role crest, health hearts, and `[HOLD]`/`[Stationed]` status indicators).
+- **Stealth Creep Movement Pacing**:
+  - Updated `MinionFormationFollowGoal` and `MinionFollowLeaderGoal` to adjust movement speed to stealth pace (`0.65D`) when sneaking, matching the commander's crouch-walking speed and preventing minions from overrunning or colliding with the player. If minions fall behind by > 8 blocks, they safely accelerate to standard march speed (`1.15D`) while remaining crouched.
+- **Kinematic & Activity Exemptions**:
+  - Minions that are sitting, actively constructing buildings (`isActivelyBuilding()`), or navigating in 3D Arcane Levitation are cleanly exempted from sneaking to prevent posture conflicts and maintain building throughput.
+
+#### ⚔️ 90° Mass Assault State Preservation (`CommandScepterItem`, `MinionEntity`)
+- **Non-Intrusive Tactical Mass Assault**:
+  - Channeling the 90° forward sector (Banner of Courage) over hostile mobs now directs combat-capable minions into a coordinated Mass Assault without converting them into a following squad or setting `selected = true`.
+- **Stationed Post Preservation (`guardAnchorPos`)**:
+  - Minions holding position or stationed at guard posts maintain their anchor coordinates during combat. Sitting minions without an explicit anchor automatically anchor at their current post before standing up to engage. Once all queued assault targets are eradicated, minions automatically return to their guard posts via `returnToOwnerPostCombat()`.
+- **Patrol Route Preservation (`patrolRouteId`)**:
+  - Minions running waypoint patrol routes engage hostiles in the sector without having their route assignment cleared. Upon eliminating the threats, `MinionPatrolGoal` naturally resumes their patrol loop.
+- **Ambient Roaming Preservation**:
+  - Freely roaming minions remain unselected and resume wandering ambiently once combat concludes.
+- **Following Squad Integrity**:
+  - Minions that were already following the commander retain their selected status and reform ranks once targets are eliminated.
+- **Strict Peaceful Rally Partitioning**:
+  - The squad rally logic (which marshals minions into a following squad and sets `selected = true`) now triggers strictly when **no** hostiles are enclosed in the sector, preventing accidental disbanding of defensive garrisons and patrols during combat orders.
+
+
 
 #### 🎨 Granular Blueprint Palette Remapping & Material Replacement (`DESIGN` Mode)
 - **Dedicated Palette Remapping Modal (`BlueprintPaletteRemapModalScreen`)**:
@@ -104,6 +132,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Spacious Bottom Action Bar**:
   - The bottom bar in split-pane mode now houses exactly 5 full-word action buttons across the 238px pane with 3px margins: **`[ ✔ Arm ]`** (48px), **`[ 🎨 Remap ]`** (54px), **`[ 📋 BOM ]`** (44px), **`[ 🗑 Del ]`** (40px), and **`[ Close ]`** (40px).
   - Maximized mode seamlessly distributes all 6 actions across the expanded 376px bottom toolbar with spacious gaps and zero visual clutter.
+
+#### 📚 Documentation Organization & Numbering Harmonization (`COMMANDS.md`, `FEATURES.md`)
+- **COMMANDS.md Structure & Categorized Cheat Sheets**:
+  - Implemented an interactive Table of Contents linking to all 13 core sections.
+  - Deconstructed the monolithic cheat sheet into 7 focused, categorized control tables (Core Scepter Directives, Tactical Combat & Retreat, Multiblock Construction & Flight, Custom Blueprint Capture & Palette Remap, Mining & Area Clearance, Visual Pathway Patrols, and Minion Direct Interactions & Squad Escorts).
+  - Harmonized and sequentialized all section headings 1 through 13, eliminating duplicate numbers and missing dividers.
+- **FEATURES.md Technical Hierarchy & Section 28 Integration**:
+  - Added full Table of Contents entries for Section 28 (Minion Tactical Sneaking & Overhead Stealth) and comprehensive subsection links for Sections 7, 17, 21, and 27.
+  - Standardized naming across documents from "Loki Command Scepter" to "Sovereign Command Scepter".
+  - Normalized subsection numbering across in-world spatial capture (21.1 through 21.9).
 
 #### 📋 Material Bill of Materials (BOM) Cleanup
 - Removed the redundant category tallies section (`Stone 0/N | Timber 0/N | Glass 0/N | Organic 0/N`) from `BlueprintResourceEstimatorModalScreen`, shifting table rows up and displaying 5 rows per page for a cleaner layout.

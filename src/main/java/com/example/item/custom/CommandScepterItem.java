@@ -18,6 +18,7 @@ import com.example.patrol.PatrolRouteManager;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1756,7 +1757,7 @@ public class CommandScepterItem extends Item {
 			List<MinionEntity> candidates = serverWorld.getEntitiesByClass(
 				MinionEntity.class,
 				rallyBox,
-				m -> m.isAlive() && m.isOwner(player) && (mode == CommandMode.PATHWAY || m.getPatrolRouteId() < 0)
+				m -> m.isAlive() && m.isOwner(player)
 			);
 
 			List<MinionEntity> enclosedMinions = new ArrayList<>();
@@ -1826,20 +1827,6 @@ public class CommandScepterItem extends Item {
 				}
 			}
 
-			MinionRole targetRole = getTargetRole(stack);
-			for (MinionEntity minion : enclosedMinions) {
-				if (!targetSquad.isWildcard()) {
-					minion.setSquad(targetSquad);
-				}
-				if (targetRole != null) {
-					minion.setRole(targetRole);
-					minion.autoEquipFromInventory();
-				}
-				minion.setSelected(true);
-				minion.setGuardAnchorPos(null);
-				minion.setSitting(false);
-			}
-
 			// Arcane release burst: 90° forward sector perimeter arc and boundary rays burst
 			float yawRad = player.getYaw() * 0.017453292F;
 			double lookX = -Math.sin(yawRad);
@@ -1870,22 +1857,38 @@ public class CommandScepterItem extends Item {
 
 			if (!enclosedHostiles.isEmpty()) {
 				// MASS ASSAULT: Distribute combat tasks across active forces
-				List<MinionEntity> attackMinions = new ArrayList<>(enclosedMinions);
-				if (attackMinions.isEmpty()) {
-					Box searchBox = player.getBoundingBox().expand(MINION_COMMAND_RADIUS);
-					attackMinions = serverWorld.getEntitiesByClass(
-						MinionEntity.class,
-						searchBox,
-						m -> m.isAlive() && m.isOwner(player) && m.isSelected() && targetSquad.matches(m.getSquad())
-					);
-					if (attackMinions.isEmpty()) {
-						attackMinions = serverWorld.getEntitiesByClass(
-							MinionEntity.class,
-							searchBox,
-							m -> m.isAlive() && m.isOwner(player) && !m.isSitting() && m.getPatrolRouteId() < 0 && targetSquad.matches(m.getSquad())
-						);
+				// Gather combat minions:
+				// 1. Minions enclosed in the forward 90° sector (matching squad, non-builder, non-passive)
+				LinkedHashSet<MinionEntity> attackMinionsSet = new LinkedHashSet<>();
+				for (MinionEntity m : enclosedMinions) {
+					if (targetSquad.matches(m.getSquad()) && !m.matchesRole(MinionRole.BUILDER) && m.getCombatPolicy() != com.example.entity.custom.MinionCombatPolicy.PASSIVE) {
+						attackMinionsSet.add(m);
 					}
 				}
+
+				Box searchBox = player.getBoundingBox().expand(MINION_COMMAND_RADIUS);
+				// 2. Also include currently selected squad minions following the player within command range
+				List<MinionEntity> selectedMinions = serverWorld.getEntitiesByClass(
+					MinionEntity.class,
+					searchBox,
+					m -> m.isAlive() && m.isOwner(player) && m.isSelected() && targetSquad.matches(m.getSquad())
+						&& !m.matchesRole(MinionRole.BUILDER) && m.getCombatPolicy() != com.example.entity.custom.MinionCombatPolicy.PASSIVE
+				);
+				attackMinionsSet.addAll(selectedMinions);
+
+				// 3. Fallback: If no minions in cone and 0 minions currently selected, mobilize nearby combat minions
+				// (including minions in hold position, following patrol routes, or roaming freely)
+				if (attackMinionsSet.isEmpty()) {
+					List<MinionEntity> nearbyMinions = serverWorld.getEntitiesByClass(
+						MinionEntity.class,
+						searchBox,
+						m -> m.isAlive() && m.isOwner(player) && targetSquad.matches(m.getSquad())
+							&& !m.matchesRole(MinionRole.BUILDER) && m.getCombatPolicy() != com.example.entity.custom.MinionCombatPolicy.PASSIVE
+					);
+					attackMinionsSet.addAll(nearbyMinions);
+				}
+
+				List<MinionEntity> attackMinions = new ArrayList<>(attackMinionsSet);
 				attackMinions.removeIf(m -> m.matchesRole(MinionRole.BUILDER));
 				attackMinions.removeIf(m -> m.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE);
 
@@ -1894,9 +1897,22 @@ public class CommandScepterItem extends Item {
 
 				for (int i = 0; i < attackMinions.size(); i++) {
 					MinionEntity minion = attackMinions.get(i);
-					minion.setSitting(false);
-					minion.setSelected(true);
-					minion.setGuardAnchorPos(null);
+
+					// If sitting without an anchor pos, anchor at current position to preserve hold post
+					if (minion.isSitting() && minion.getGuardAnchorPos() == null) {
+						minion.setGuardAnchorPos(minion.getBlockPos());
+					}
+					// Stand up from sitting stance so AI and navigation can move to attack
+					if (minion.isSitting()) {
+						minion.setSitting(false);
+					}
+
+					// CRITICAL: DO NOT call minion.setSelected(true)!
+					// Minions that are in hold position, following patrol routes, or roaming MUST remain
+					// in their respective states and NEVER be made to follow the commander!
+					// CRITICAL: DO NOT call minion.setGuardAnchorPos(null)!
+					// Preserves their stationed position so they return post-combat via returnToOwnerPostCombat().
+
 					minion.setAssaultTargets(enclosedHostiles);
 					boolean isArcher = minion.matchesRole(MinionRole.WARRIOR) && MinionEntity.isRangedWeapon(minion.getMainHandStack());
 					LivingEntity assignedTarget;
@@ -1928,7 +1944,32 @@ public class CommandScepterItem extends Item {
 					true
 				);
 			} else {
-				// STANDARD BANNER OF COURAGE RALLY
+				// STANDARD BANNER OF COURAGE RALLY (No hostiles enclosed in sector)
+				MinionRole targetRole = getTargetRole(stack);
+				List<MinionEntity> ralliedMinions = new ArrayList<>();
+				for (MinionEntity minion : enclosedMinions) {
+					// Patrolling minions are protected from peaceful squad rally unless explicitly in PATHWAY mode
+					if (mode != CommandMode.PATHWAY && minion.getPatrolRouteId() >= 0) {
+						continue;
+					}
+					if (!targetSquad.isWildcard()) {
+						minion.setSquad(targetSquad);
+					}
+					if (targetRole != null) {
+						minion.setRole(targetRole);
+						minion.autoEquipFromInventory();
+					}
+					minion.setSelected(true);
+					minion.setGuardAnchorPos(null);
+					minion.setSitting(false);
+					minion.getNavigation().startMovingTo(player, 1.35D);
+					serverWorld.spawnParticles(ParticleTypes.HAPPY_VILLAGER, minion.getX(), minion.getY() + 1.0D, minion.getZ(), 6, 0.2, 0.3, 0.2, 0.02);
+					if (targetRole != null) {
+						serverWorld.spawnParticles(ParticleTypes.ENCHANT, minion.getX(), minion.getY() + 1.2D, minion.getZ(), 10, 0.25, 0.4, 0.25, 0.1);
+					}
+					ralliedMinions.add(minion);
+				}
+
 				SoundEvent hornSound = !SoundEvents.GOAT_HORN_SOUNDS.isEmpty()
 					? SoundEvents.GOAT_HORN_SOUNDS.get(0).value()
 					: SoundEvents.ITEM_GOAT_HORN_PLAY;
@@ -1944,25 +1985,17 @@ public class CommandScepterItem extends Item {
 					1.0F
 				);
 
-				for (MinionEntity minion : enclosedMinions) {
-					minion.getNavigation().startMovingTo(player, 1.35D);
-					serverWorld.spawnParticles(ParticleTypes.HAPPY_VILLAGER, minion.getX(), minion.getY() + 1.0D, minion.getZ(), 6, 0.2, 0.3, 0.2, 0.02);
-					if (targetRole != null) {
-						serverWorld.spawnParticles(ParticleTypes.ENCHANT, minion.getX(), minion.getY() + 1.2D, minion.getZ(), 10, 0.25, 0.4, 0.25, 0.1);
-					}
-				}
-
 				MinionFormationFollowGoal.refreshFormationAnchor(player);
 
 				if (targetRole != null) {
 					serverWorld.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 0.9F, 1.4F);
 					player.sendMessage(
-						Text.literal("§6📯 Banner of Courage! Transfigured " + enclosedMinions.size() + " minion(s) to " + targetRole.getFormattedName() + "§6 into " + squadLabel + "§6!§r"),
+						Text.literal("§6📯 Banner of Courage! Transfigured " + ralliedMinions.size() + " minion(s) to " + targetRole.getFormattedName() + "§6 into " + squadLabel + "§6!§r"),
 						true
 					);
 				} else {
 					player.sendMessage(
-						Text.literal("§6📯 Banner of Courage! Gathered and selected " + enclosedMinions.size() + " minion(s) into " + squadLabel + "§6!§r"),
+						Text.literal("§6📯 Banner of Courage! Gathered and selected " + ralliedMinions.size() + " minion(s) into " + squadLabel + "§6!§r"),
 						true
 					);
 				}

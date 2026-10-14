@@ -37,6 +37,7 @@ import net.minecraft.world.LocalDifficulty;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.InventoryOwner;
@@ -1509,9 +1510,47 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		this.targetSelector.add(4, new MinionActiveTargetGoal(this, 24.0D));
 	}
 
+	/**
+	 * Updates minion sneaking state and pose.
+	 * Selected minions sneak whenever their commanding player is sneaking (and squad escorts sneak with their leader),
+	 * crouching and hiding overhead crest badges and name tags for tactical stealth.
+	 */
+	public void tickSneakState() {
+		boolean shouldSneak = false;
+		if (this.isAlive() && !this.isSitting() && !this.isActivelyBuilding() && !this.isArcaneLevitating()) {
+			LivingEntity owner = this.getOwner();
+			boolean isCommanderSneaking = this.isSelected() && owner != null && owner.isSneaking();
+			boolean isLeaderSneaking = false;
+			if (this.hasLeader()) {
+				MinionEntity leader = this.resolveLeader();
+				if (leader != null && leader.isSneaking()) {
+					isLeaderSneaking = true;
+				}
+			}
+			shouldSneak = isCommanderSneaking || isLeaderSneaking;
+		}
+
+		if (this.isSneaking() != shouldSneak) {
+			this.setSneaking(shouldSneak);
+		}
+		if (shouldSneak) {
+			if (this.getPose() != EntityPose.CROUCHING) {
+				this.setPose(EntityPose.CROUCHING);
+			}
+		} else if (this.getPose() == EntityPose.CROUCHING) {
+			this.setPose(EntityPose.STANDING);
+		}
+	}
+
+	@Override
+	public boolean isInSneakingPose() {
+		return this.isSneaking() || this.getPose() == EntityPose.CROUCHING;
+	}
+
 	@Override
 	public void tick() {
 		super.tick();
+		this.tickSneakState();
 
 		if (this.levitationCooldown > 0) {
 			this.levitationCooldown--;

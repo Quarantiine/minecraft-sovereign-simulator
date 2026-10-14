@@ -12,6 +12,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.CrossbowItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.text.Text;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
@@ -81,6 +82,29 @@ public class MinionEntityRenderer extends BipedEntityRenderer<MinionEntity, Play
 	) {
 		this.setModelPose(entity);
 		super.render(entity, entityYaw, tickDelta, matrices, vertexConsumers, light);
+	}
+
+	@Override
+	protected boolean hasLabel(MinionEntity entity) {
+		if (entity.isSneaking() || entity.isInSneakingPose()) {
+			return false;
+		}
+		return super.hasLabel(entity);
+	}
+
+	@Override
+	protected void renderLabelIfPresent(
+		MinionEntity entity,
+		Text text,
+		MatrixStack matrices,
+		VertexConsumerProvider vertexConsumers,
+		int light,
+		float tickDelta
+	) {
+		if (entity.isSneaking() || entity.isInSneakingPose()) {
+			return;
+		}
+		super.renderLabelIfPresent(entity, text, matrices, vertexConsumers, light, tickDelta);
 	}
 
 	/**

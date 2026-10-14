@@ -93,7 +93,7 @@ public class MinionOverheadBadgeFeatureRenderer extends FeatureRenderer<MinionEn
 		float headYaw,
 		float headPitch
 	) {
-		if (entity.isInvisible() || entity.isSpectator()) {
+		if (entity.isInvisible() || entity.isSpectator() || entity.isSneaking() || entity.isInSneakingPose()) {
 			return;
 		}
 
