@@ -36,6 +36,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Multi-Pass Spacing Strategy**: Evaluates generous orchard spacing (radius 4 blocks) before falling back to standard tree spacing (radius 3 blocks).
   - **Trunk & Sapling Avoidance**: Actively scans for existing saplings (`BlockTags.SAPLINGS`) and tree trunks/logs (`BlockTags.LOGS`) within the horizontal radius, guaranteeing at least 3–4 blocks of clear distance between trees so canopies have room to grow naturally.
   - **Expanded Agro-Forestry Search Area**: Expands planting search radius to 16 blocks across valid soil blocks (`BlockTags.DIRT`, moss, farmland, mud) with at least 6 blocks of vertical air clearance above each planting site.
+- **Smart Autonomous Supply Depot Deployment & Container Chest Scavenging (`findChestInNearbyContainers`, `withdrawChestItemFromContainer`)**:
+  - Builder minions now inspect existing nearby containers within 32 blocks (chests, barrels, trapped chests) for stored chest items before crafting new ones when offloading full backpacks.
+  - **Anti-Redundancy Priority**: If nearby storage is full, the builder scavenges a stored chest item out of an existing container and places it down (merging into a Double Chest if adjacent to a single chest), preserving logs and planks.
+  - **Crafting Fallback**: Only if no chest items are stored in nearby containers and none are held in the minion's inventory will the builder craft a new chest from 8 planks or 2 logs.
+
 
 ---
 

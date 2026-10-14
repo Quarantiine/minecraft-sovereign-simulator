@@ -322,28 +322,47 @@ public final class MinionHarvestingHelper {
 		}
 	}
 
-	public static BlockPos deployAutonomousChest(MinionEntity minion, ServerWorld world, ConstructionSession session) {
-		// Ensure minion has or can craft a chest
-		boolean hasChest = hasItemInInventory(minion, Items.CHEST);
-		if (!hasChest) {
-			int totalPlanks = countItemInInventory(minion.getInventory(), ItemTags.PLANKS);
-			if (totalPlanks >= 8) {
-				consumeItemFromInventory(minion.getInventory(), ItemTags.PLANKS, 8);
-				hasChest = true;
-			} else {
-				int logs = countItemInInventory(minion.getInventory(), ItemTags.LOGS);
-				if (logs >= 2) {
-					consumeItemFromInventory(minion.getInventory(), ItemTags.LOGS, 2);
-					hasChest = true;
+	public static BlockPos findChestInNearbyContainers(ServerWorld world, BlockPos center, int radius) {
+		if (world == null || center == null) return null;
+		int verticalRadius = 8;
+		for (BlockPos pos : BlockPos.iterateOutwards(center, radius, verticalRadius, radius)) {
+			BlockState state = world.getBlockState(pos);
+			if (state.isOf(Blocks.CHEST) || state.isOf(Blocks.BARREL) || state.isOf(Blocks.TRAPPED_CHEST)) {
+				BlockEntity be = world.getBlockEntity(pos);
+				if (be instanceof Inventory containerInv) {
+					for (int i = 0; i < containerInv.size(); i++) {
+						ItemStack stack = containerInv.getStack(i);
+						if (!stack.isEmpty() && (stack.isOf(Items.CHEST) || stack.isOf(Items.BARREL) || stack.isOf(Items.TRAPPED_CHEST))) {
+							return pos.toImmutable();
+						}
+					}
 				}
 			}
 		}
+		return null;
+	}
 
-		if (!hasChest) {
-			return null;
+	public static Item withdrawChestItemFromContainer(ServerWorld world, BlockPos containerPos) {
+		if (world == null || containerPos == null) return null;
+		BlockEntity be = world.getBlockEntity(containerPos);
+		if (be instanceof Inventory containerInv) {
+			for (int i = 0; i < containerInv.size(); i++) {
+				ItemStack stack = containerInv.getStack(i);
+				if (!stack.isEmpty() && (stack.isOf(Items.CHEST) || stack.isOf(Items.BARREL) || stack.isOf(Items.TRAPPED_CHEST))) {
+					Item foundItem = stack.getItem();
+					containerInv.removeStack(i, 1);
+					containerInv.markDirty();
+					world.playSound(null, containerPos, SoundEvents.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.5F, 1.2F);
+					world.spawnParticles(ParticleTypes.CLOUD, containerPos.getX() + 0.5D, containerPos.getY() + 0.8D, containerPos.getZ() + 0.5D, 4, 0.1D, 0.1D, 0.1D, 0.02D);
+					return foundItem;
+				}
+			}
 		}
+		return null;
+	}
 
-		// Find a solid ground spot within 6 blocks
+	public static BlockPos deployAutonomousChest(MinionEntity minion, ServerWorld world, ConstructionSession session) {
+		// Find a solid ground spot within 5 blocks
 		BlockPos minionPos = minion.getBlockPos();
 		BlockPos candidate = null;
 		for (BlockPos pos : BlockPos.iterateOutwards(minionPos, 5, 2, 5)) {
@@ -359,41 +378,90 @@ public final class MinionHarvestingHelper {
 			return null;
 		}
 
-		// Check if adjacent block is a single chest to form a Double Chest
-		Direction doubleChestFacing = null;
-		ChestType chestType = ChestType.SINGLE;
+		// 1. Check if minion already has a chest/barrel in its inventory
+		boolean hasChest = hasItemInInventory(minion, Items.CHEST) || hasItemInInventory(minion, Items.BARREL) || hasItemInInventory(minion, Items.TRAPPED_CHEST);
+		Item itemToPlace = null;
+		if (hasChest) {
+			if (hasItemInInventory(minion, Items.CHEST)) itemToPlace = Items.CHEST;
+			else if (hasItemInInventory(minion, Items.BARREL)) itemToPlace = Items.BARREL;
+			else itemToPlace = Items.TRAPPED_CHEST;
+		}
 
-		for (Direction dir : Direction.Type.HORIZONTAL) {
-			BlockPos neighborPos = candidate.offset(dir);
-			BlockState neighborState = world.getBlockState(neighborPos);
-			if (neighborState.isOf(Blocks.CHEST) && neighborState.get(ChestBlock.CHEST_TYPE) == ChestType.SINGLE) {
-				Direction facing = neighborState.get(ChestBlock.FACING);
-				if (dir == facing.rotateYClockwise()) {
-					// Neighbor is right side, candidate is left
-					chestType = ChestType.LEFT;
-					doubleChestFacing = facing;
-					world.setBlockState(neighborPos, neighborState.with(ChestBlock.CHEST_TYPE, ChestType.RIGHT), Block.NOTIFY_ALL);
-					break;
-				} else if (dir == facing.rotateYCounterclockwise()) {
-					// Neighbor is left side, candidate is right
-					chestType = ChestType.RIGHT;
-					doubleChestFacing = facing;
-					world.setBlockState(neighborPos, neighborState.with(ChestBlock.CHEST_TYPE, ChestType.LEFT), Block.NOTIFY_ALL);
-					break;
+		// 2. If not in inventory, check if existing nearby chests/containers contain stored chests to place down
+		// (prevents creating redundant chests when chests already exist inside other chests)
+		if (!hasChest) {
+			BlockPos sourceContainer = findChestInNearbyContainers(world, minion.getBlockPos(), 32);
+			if (sourceContainer != null) {
+				Item scavengedChest = withdrawChestItemFromContainer(world, sourceContainer);
+				if (scavengedChest != null) {
+					hasChest = true;
+					itemToPlace = scavengedChest;
 				}
 			}
 		}
 
-		BlockState chestState = Blocks.CHEST.getDefaultState();
-		if (doubleChestFacing != null) {
-			chestState = chestState.with(ChestBlock.FACING, doubleChestFacing).with(ChestBlock.CHEST_TYPE, chestType);
-		} else {
-			chestState = chestState.with(ChestBlock.FACING, Direction.NORTH);
+		// 3. If no chest in inventory and no chest in other chests, craft its own chest from planks or logs
+		if (!hasChest) {
+			int totalPlanks = countItemInInventory(minion.getInventory(), ItemTags.PLANKS);
+			if (totalPlanks >= 8) {
+				consumeItemFromInventory(minion.getInventory(), ItemTags.PLANKS, 8);
+				hasChest = true;
+				itemToPlace = Items.CHEST;
+			} else {
+				int logs = countItemInInventory(minion.getInventory(), ItemTags.LOGS);
+				if (logs >= 2) {
+					consumeItemFromInventory(minion.getInventory(), ItemTags.LOGS, 2);
+					hasChest = true;
+					itemToPlace = Items.CHEST;
+				}
+			}
 		}
 
-		world.setBlockState(candidate, chestState, Block.NOTIFY_ALL);
+		if (!hasChest || itemToPlace == null) {
+			return null;
+		}
+
+		// Check if adjacent block is a single chest to form a Double Chest
+		Direction doubleChestFacing = null;
+		ChestType chestType = ChestType.SINGLE;
+
+		if (itemToPlace == Items.CHEST) {
+			for (Direction dir : Direction.Type.HORIZONTAL) {
+				BlockPos neighborPos = candidate.offset(dir);
+				BlockState neighborState = world.getBlockState(neighborPos);
+				if (neighborState.isOf(Blocks.CHEST) && neighborState.get(ChestBlock.CHEST_TYPE) == ChestType.SINGLE) {
+					Direction facing = neighborState.get(ChestBlock.FACING);
+					if (dir == facing.rotateYClockwise()) {
+						// Neighbor is right side, candidate is left
+						chestType = ChestType.LEFT;
+						doubleChestFacing = facing;
+						world.setBlockState(neighborPos, neighborState.with(ChestBlock.CHEST_TYPE, ChestType.RIGHT), Block.NOTIFY_ALL);
+						break;
+					} else if (dir == facing.rotateYCounterclockwise()) {
+						// Neighbor is left side, candidate is right
+						chestType = ChestType.RIGHT;
+						doubleChestFacing = facing;
+						world.setBlockState(neighborPos, neighborState.with(ChestBlock.CHEST_TYPE, ChestType.LEFT), Block.NOTIFY_ALL);
+						break;
+					}
+				}
+			}
+		}
+
+		BlockState placedState = (itemToPlace == Items.BARREL) ? Blocks.BARREL.getDefaultState() : Blocks.CHEST.getDefaultState();
+		if (placedState.isOf(Blocks.CHEST)) {
+			if (doubleChestFacing != null) {
+				placedState = placedState.with(ChestBlock.FACING, doubleChestFacing).with(ChestBlock.CHEST_TYPE, chestType);
+			} else {
+				placedState = placedState.with(ChestBlock.FACING, Direction.NORTH);
+			}
+		}
+
+		world.setBlockState(candidate, placedState, Block.NOTIFY_ALL);
 		if (hasItemInInventory(minion, Items.CHEST)) {
 			consumeItemFromInventory(minion.getInventory(), Items.CHEST, 1);
+		} else if (hasItemInInventory(minion, itemToPlace)) {
+			consumeItemFromInventory(minion.getInventory(), itemToPlace, 1);
 		}
 
 		world.playSound(null, candidate, SoundEvents.BLOCK_WOOD_PLACE, SoundCategory.BLOCKS, 1.0F, 1.0F);

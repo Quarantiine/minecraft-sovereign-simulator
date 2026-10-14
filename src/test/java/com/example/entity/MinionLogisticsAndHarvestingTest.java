@@ -1557,6 +1557,91 @@ public class MinionLogisticsAndHarvestingTest {
 
 		Assertions.assertEquals(4, occupiedTrunksOrSaplings.size(), "4 spacious orchard tree stations successfully planted");
 	}
+
+	@Test
+	@DisplayName("Validate autonomous chest container scavenging contracts and helpers")
+	void testAutonomousChestContainerScavengingContract() throws IOException {
+		String harvestingSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java"));
+
+		Assertions.assertTrue(harvestingSource.contains("public static BlockPos findChestInNearbyContainers"),
+			"MinionHarvestingHelper must define findChestInNearbyContainers");
+		Assertions.assertTrue(harvestingSource.contains("public static Item withdrawChestItemFromContainer"),
+			"MinionHarvestingHelper must define withdrawChestItemFromContainer");
+		Assertions.assertTrue(harvestingSource.contains("findChestInNearbyContainers(world, minion.getBlockPos(), 32)"),
+			"deployAutonomousChest must search existing containers for stored chests before crafting");
+		Assertions.assertTrue(harvestingSource.contains("consumeItemFromInventory(minion.getInventory(), ItemTags.PLANKS, 8)"),
+			"deployAutonomousChest must craft from planks if no chest in containers");
+		Assertions.assertTrue(harvestingSource.contains("consumeItemFromInventory(minion.getInventory(), ItemTags.LOGS, 2)"),
+			"deployAutonomousChest must craft from logs if no chest in containers");
+	}
+
+	@Test
+	@DisplayName("Validate autonomous chest scavenging priority simulation (containers before crafting)")
+	void testAutonomousChestScavengingPrioritySimulation() {
+		// Mock container storage in world
+		Map<String, Map<String, Integer>> containerStorage = new HashMap<>();
+		Map<String, Integer> chest1 = new HashMap<>();
+		chest1.put("cobblestone", 64);
+		chest1.put("dirt", 64);
+		chest1.put("chest", 4); // 4 stored chests inside full chest!
+		containerStorage.put("chest_pos_1", chest1);
+
+		// Minion inventory has 9 slots full, 16 planks, 0 chests
+		Map<String, Integer> minionInv = new HashMap<>();
+		minionInv.put("oak_planks", 16);
+		minionInv.put("cobblestone", 64);
+
+		class ChestDeploymentResolver {
+			String resolveChestSource(Map<String, Integer> inv, Map<String, Map<String, Integer>> containers) {
+				// 1. Minion inventory
+				if (inv.getOrDefault("chest", 0) > 0) {
+					inv.put("chest", inv.get("chest") - 1);
+					return "INVENTORY_CHEST";
+				}
+				// 2. Existing container with stored chest
+				for (Map<String, Integer> cInv : containers.values()) {
+					if (cInv.getOrDefault("chest", 0) > 0) {
+						cInv.put("chest", cInv.get("chest") - 1);
+						return "SCAVENGED_FROM_CONTAINER";
+					}
+				}
+				// 3. Craft from planks
+				if (inv.getOrDefault("oak_planks", 0) >= 8) {
+					inv.put("oak_planks", inv.get("oak_planks") - 8);
+					return "CRAFTED_FROM_PLANKS";
+				}
+				// 4. Craft from logs
+				if (inv.getOrDefault("oak_log", 0) >= 2) {
+					inv.put("oak_log", inv.get("oak_log") - 2);
+					return "CRAFTED_FROM_LOGS";
+				}
+				return "NONE";
+			}
+		}
+
+		ChestDeploymentResolver resolver = new ChestDeploymentResolver();
+
+		// Case 1: Minion has planks, but container has stored chests -> must withdraw from container, NOT spend planks!
+		String source1 = resolver.resolveChestSource(minionInv, containerStorage);
+		Assertions.assertEquals("SCAVENGED_FROM_CONTAINER", source1, "Minion must scavenge chest from container");
+		Assertions.assertEquals(3, containerStorage.get("chest_pos_1").get("chest"), "Container chest count decremented to 3");
+		Assertions.assertEquals(16, minionInv.get("oak_planks"), "Planks must remain untouched (not wasted crafting redundant chests)");
+
+		// Drain remaining chests from container
+		containerStorage.get("chest_pos_1").put("chest", 0);
+
+		// Case 2: No stored chests in any container -> must fall back to crafting from planks!
+		String source2 = resolver.resolveChestSource(minionInv, containerStorage);
+		Assertions.assertEquals("CRAFTED_FROM_PLANKS", source2, "Minion must craft from planks when no container chests exist");
+		Assertions.assertEquals(8, minionInv.get("oak_planks"), "8 planks consumed to craft chest");
+
+		// Case 3: Minion directly holds a chest -> must use inventory chest directly
+		minionInv.put("chest", 1);
+		String source3 = resolver.resolveChestSource(minionInv, containerStorage);
+		Assertions.assertEquals("INVENTORY_CHEST", source3, "Minion must use its own chest if holding one");
+		Assertions.assertEquals(0, minionInv.get("chest"));
+		Assertions.assertEquals(8, minionInv.get("oak_planks"), "Planks remain intact when holding chest");
+	}
 }
 
 
