@@ -684,6 +684,8 @@ public class MinionBuildGoal extends Goal {
 			alreadyPlaced = serverWorld.getBlockState(targetPos).isOf(Blocks.WATER) && serverWorld.getFluidState(targetPos).isStill();
 		} else if (targetState.isOf(Blocks.LAVA)) {
 			alreadyPlaced = serverWorld.getBlockState(targetPos).isOf(Blocks.LAVA) && serverWorld.getFluidState(targetPos).isStill();
+		} else if (ConstructionSession.isConnectableBlock(targetState)) {
+			alreadyPlaced = ConstructionSession.isConnectableMatching(serverWorld.getBlockState(targetPos), targetState);
 		} else {
 			alreadyPlaced = serverWorld.getBlockState(targetPos).equals(targetState);
 		}
@@ -807,7 +809,17 @@ public class MinionBuildGoal extends Goal {
 				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_LISTENERS);
 				serverWorld.setBlockState(otherPos, otherState, Block.NOTIFY_ALL);
 			} else {
+				if (ConstructionSession.isConnectableBlock(targetState)) {
+					targetState = Block.postProcessState(targetState, serverWorld, targetPos);
+				}
 				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+			}
+
+			// Post-placement bidirectional clipping: notify adjacent connectable blocks (fences, glass panes, walls, stairs)
+			// so they immediately connect and clip to this newly placed block with no visual gap.
+			updateConnectableNeighbors(serverWorld, targetPos);
+			if (targetState.getBlock() instanceof DoorBlock) {
+				updateConnectableNeighbors(serverWorld, targetPos.up());
 			}
 
 			if (targetState.isOf(Blocks.WATER)) {
@@ -1874,6 +1886,7 @@ public class MinionBuildGoal extends Goal {
 
 		if (this.currentSession.isCreative()) {
 			serverWorld.breakBlock(targetPos, false, this.minion);
+			updateConnectableNeighbors(serverWorld, targetPos);
 			Box cleanBox = new Box(targetPos).expand(4.0D);
 			List<ItemEntity> strayItems = serverWorld.getEntitiesByClass(ItemEntity.class, cleanBox, e -> true);
 			for (ItemEntity stray : strayItems) {
@@ -1890,6 +1903,7 @@ public class MinionBuildGoal extends Goal {
 				this.minion.getMainHandStack()
 			);
 			serverWorld.breakBlock(targetPos, false, this.minion);
+			updateConnectableNeighbors(serverWorld, targetPos);
 
 			for (ItemStack drop : drops) {
 				int beforeCount = drop.getCount();
@@ -2213,6 +2227,29 @@ public class MinionBuildGoal extends Goal {
 		return item == Items.DIAMOND_PICKAXE || item == Items.NETHERITE_PICKAXE ||
 			   item == Items.IRON_PICKAXE || item == Items.GOLDEN_PICKAXE ||
 			   item == Items.STONE_PICKAXE || item == Items.WOODEN_PICKAXE;
+	}
+
+	/**
+	 * Updates adjacent connectable blocks (fences, glass panes, walls, stairs, gates)
+	 * so their visual connection shapes immediately adapt and clip to the block at pos.
+	 *
+	 * @param world The server world.
+	 * @param pos   The position of the placed or modified block.
+	 */
+	public static void updateConnectableNeighbors(World world, BlockPos pos) {
+		if (world == null || pos == null) {
+			return;
+		}
+		for (Direction dir : Direction.values()) {
+			BlockPos neighborPos = pos.offset(dir);
+			BlockState neighborState = world.getBlockState(neighborPos);
+			if (ConstructionSession.isConnectableBlock(neighborState)) {
+				BlockState updated = Block.postProcessState(neighborState, world, neighborPos);
+				if (!updated.equals(neighborState)) {
+					world.setBlockState(neighborPos, updated, Block.NOTIFY_ALL);
+				}
+			}
+		}
 	}
 
 }

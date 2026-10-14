@@ -376,6 +376,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Minions safely egress from completed structures/quarries onto solid ground, land cleanly from Arcane Levitation, and naturally engage `WanderAroundFarGoal` on foot without displaying `[HOLD]` or `[Stationed]` overhead badges.
   - Placing down a subsequent blueprint or mining area within 128 blocks immediately mobilizes the wandering minions via `MinionBuildGoal.canStart()` (AI priority 4) without requiring manual interaction.
 
+### Fixed
+
+#### 🪵 Connectable Block Seamless Clipping & Bidirectional Neighbor Updates (`MinionBuildGoal`, `ConstructionSession`)
+- **Seamless Fence, Pane, Wall, and Stair Snapping**:
+  - Fixed an issue where fences, glass panes, and iron bars placed by builder minions did not clip to adjacent solid blocks or neighboring connectable blocks, leaving an unnatural visual air gap.
+  - Builder minions now execute `Block.postProcessState(targetState, serverWorld, targetPos)` prior to placing any connectable block (`HorizontalConnectingBlock` including fences, glass panes, iron bars; `WallBlock`; `StairsBlock`; `FenceGateBlock`; `ConnectingBlock`; `RedstoneWireBlock`; `TripwireBlock`). Connectable blocks immediately query their 6-directional neighbors and connect seamlessly upon world placement.
+- **Bidirectional Neighbor Shape Updates (`MinionBuildGoal.updateConnectableNeighbors`)**:
+  - Placing ANY block in the world (such as a solid stone or wooden plank wall next to an existing fence or glass pane) immediately updates all 6 adjacent connectable neighbors via `updateConnectableNeighbors`, adapting their connection flags (`north`, `south`, `east`, `west`, wall shapes, or stair inner/outer corner turns) so pre-placed fences and glass panes clip directly to the newly placed solid blocks.
+  - Symmetrically updates adjacent connectable neighbors when blocks are dismantled in `executeDismantleWork`, preventing orphaned connection posts.
+- **Dynamic Connection Invariant Matching (`ConstructionSession.isConnectableMatching`, `alreadyPlaced`)**:
+  - Updated `alreadyPlaced` in `MinionBuildGoal` and `ConstructionSession.claimNextTask` so that connectable blocks in the world with active connection flags (`north=true`, etc.) match unplaced blueprint states (`north=false`), preventing minions from endlessly re-placing or getting stuck attempting to replace connected fences and glass panes.
+  - Strictly preserves orientation properties (`FACING` and `HALF` for stairs, `FACING` for fence gates) while dynamically adapting connection shapes.
+
 ---
 
 ## [1.0.1] - 2026-10-11

@@ -14,7 +14,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ConnectingBlock;
 import net.minecraft.block.DoorBlock;
+import net.minecraft.block.FenceGateBlock;
+import net.minecraft.block.HorizontalConnectingBlock;
+import net.minecraft.block.RedstoneWireBlock;
+import net.minecraft.block.StairsBlock;
+import net.minecraft.block.TripwireBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
@@ -412,7 +419,10 @@ public class ConstructionSession {
 
 				// BUILD mode: if the block is already in place (placed by a peer minion, the player, or a
 				// stolen task finished elsewhere), mark it done so nobody walks over to re-place it.
-				boolean isMatchingBlock = world != null && world.getBlockState(task.getWorldPos()).equals(task.getBlueprintBlock().state());
+				boolean isMatchingBlock = world != null && (
+					world.getBlockState(task.getWorldPos()).equals(task.getBlueprintBlock().state())
+					|| (isConnectableBlock(task.getBlueprintBlock().state()) && isConnectableMatching(world.getBlockState(task.getWorldPos()), task.getBlueprintBlock().state()))
+				);
 				boolean isMatchingFluid = world != null && (
 					(task.getBlueprintBlock().state().isOf(Blocks.WATER) && world.getBlockState(task.getWorldPos()).isOf(Blocks.WATER) && world.getFluidState(task.getWorldPos()).isStill())
 					|| (task.getBlueprintBlock().state().isOf(Blocks.LAVA) && world.getBlockState(task.getWorldPos()).isOf(Blocks.LAVA) && world.getFluidState(task.getWorldPos()).isStill())
@@ -899,5 +909,53 @@ public class ConstructionSession {
 	 */
 	public Set<UUID> getParticipatingMinions() {
 		return Collections.unmodifiableSet(this.participatingMinions);
+	}
+
+	/**
+	 * Determines whether a block state represents a connectable structure whose shape or connections
+	 * adapt dynamically to adjacent neighbors (fences, panes, walls, stairs, gates, wire).
+	 *
+	 * @param state The block state to evaluate.
+	 * @return True if this block's connections or shapes dynamically adapt to neighbors.
+	 */
+	public static boolean isConnectableBlock(BlockState state) {
+		if (state == null) {
+			return false;
+		}
+		Block block = state.getBlock();
+		return block instanceof HorizontalConnectingBlock
+			|| block instanceof WallBlock
+			|| block instanceof FenceGateBlock
+			|| block instanceof StairsBlock
+			|| block instanceof ConnectingBlock
+			|| block instanceof RedstoneWireBlock
+			|| block instanceof TripwireBlock;
+	}
+
+	/**
+	 * Determines whether an existing world state matches the target blueprint state for a connectable block,
+	 * accounting for dynamic neighbor-dependent connection properties (e.g. north/south/east/west flags,
+	 * wall shapes, or stair corner shapes).
+	 *
+	 * @param worldState  The existing block state in the world.
+	 * @param targetState The desired blueprint block state.
+	 * @return True if the world block matches the target blueprint block type and required orientation.
+	 */
+	public static boolean isConnectableMatching(BlockState worldState, BlockState targetState) {
+		if (worldState == null || targetState == null) {
+			return false;
+		}
+		if (!worldState.isOf(targetState.getBlock())) {
+			return false;
+		}
+		Block block = targetState.getBlock();
+		if (block instanceof StairsBlock) {
+			return worldState.get(StairsBlock.FACING) == targetState.get(StairsBlock.FACING)
+				&& worldState.get(StairsBlock.HALF) == targetState.get(StairsBlock.HALF);
+		}
+		if (block instanceof FenceGateBlock) {
+			return worldState.get(FenceGateBlock.FACING) == targetState.get(FenceGateBlock.FACING);
+		}
+		return true;
 	}
 }
