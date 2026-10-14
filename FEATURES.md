@@ -15,6 +15,12 @@ This document provides a comprehensive technical breakdown of all gameplay featu
    - [5.2 Minion Management GUI (`MinionScreen`)](#52-minion-management-gui-minionscreen)
    - [5.3 Clean & Crisp In-Game GUI Overlays (Universal Background Blur Removal)](#53-clean--crisp-in-game-gui-overlays-universal-background-blur-removal)
 6. [Multiblock Construction & Blueprint Engine](#6-multiblock-construction--blueprint-engine)
+   - [6.1 Dual Operational Sub-Modes: BLUEPRINT vs. AREA Building](#61-dual-operational-sub-modes-blueprint-vs-area-building)
+   - [6.2 Configurable 3D Area Boundary & Sequential Corner Invariants](#62-configurable-3d-area-boundary--sequential-corner-invariants)
+   - [6.3 Real-Time In-World Height Adjustment](#63-real-time-in-world-height-adjustment-1)
+   - [6.4 In-World Ghost Grid Wireframes & Cyan/Aqua Highlighting](#64-in-world-ghost-grid-wireframes--cyanaqua-highlighting-blueprinthologramrenderer)
+   - [6.5 Area Fill Confirmation Modal Screen (`BuildAreaConfirmModalScreen`)](#65-area-fill-confirmation-modal-screen-buildareaconfirmmodalscreen)
+   - [6.6 Deterministic Bottom-Up Layer-by-Layer Topological Ordering](#66-deterministic-bottom-up-layer-by-layer-topological-ordering)
 7. [Structure Deconstruction, Mining Area Clearance & Bedrock Immunity](#7-structure-deconstruction-mining-area-clearance--bedrock-immunity)
    - [7.1 Dual Operational Sub-Modes: DIRECT vs. AREA Mining](#71-dual-operational-sub-modes-direct-vs-area-mining)
    - [7.2 Configurable 3D Area Boundary & Sequential Corner Invariants](#72-configurable-3d-area-boundary--sequential-corner-invariants)
@@ -571,6 +577,76 @@ Opened via **Sneak + Right-Click** directly on an owned minion. Features an expa
 ---
 
 ## 6. Multiblock Construction & Blueprint Engine
+
+### 6.1 Dual Operational Sub-Modes: BLUEPRINT vs. AREA Building
+
+The **`BUILD`** operational mode features two complementary construction paradigms designed with **perfect architectural symmetry to `MINE` mode's `DIRECT` vs. `AREA` duality**:
+
+```
+                                  [BUILD Operating Mode]
+                                            │
+                    ┌───────────────────────┴───────────────────────┐
+                    ▼                                               ▼
+         [BLUEPRINT Sub-Mode]                            [AREA Sub-Mode]
+   • Multiblock structure placement                • Volumetric area filling & solid construction
+   • Armed from player custom blueprint catalog    • Arbitrary block selection (Stone, Bricks, etc.)
+   • Rotatable 3D holograms (0°, 90°, 180°, 270°)  • Sequential Left-Clicks: Pos1 ➔ Pos2
+   • 96m crosshair reach aerial placement          • Real-time height adjustment (Ctrl + Scroll)
+   • Multi-tier material Bill of Materials (BOM)   • Cyan/Aqua ghost grid bounding wireframe
+   • Persistent blueprint chaining                 • Dedicated Confirmation Modal Screen
+```
+
+- **Seamless Sub-Mode Cycling**: Commanders toggle between `BLUEPRINT` and `AREA` building modes directly within the Command Hub GUI (`CommandScepterScreen`) via the `[ 🏛 Blue ]` vs `[ ◫ Area ]` selector buttons, or by cycling building sub-modes on the Command Scepter (`CommandScepterItem.cycleBuildingMode()`).
+- **NBT Component Backing**: Synchronized across client and server via the `BUILDING_MODE` item component (`ModDataComponents.BUILDING_MODE`), preserving active sub-mode state across weapon swaps, deaths, and world restarts.
+
+### 6.2 Configurable 3D Area Boundary & Sequential Corner Invariants
+
+In **`AREA`** building mode, commanders define the target construction volume in the world using the Command Scepter without opening menus:
+
+1. **Sequential Left-Click Selection Protocol**:
+   - **Corner 1 (`Pos1`)**: Aim at any world block and left-click. Anchors `Pos1` directly on top of the targeted surface adhering to the Unified Surface Anchoring Contract. Emits cyan sparkle particles, plays an energetic chime (`BLOCK_AMETHYST_BLOCK_CHIME`), and logs `✦ Build Pos1: [X, Y, Z]` to the action bar.
+   - **Candidate Bounding Preview**: Aiming across the world dynamically renders a candidate bounding wireframe and live ghost grid from `Pos1` to the targeted crosshair position.
+   - **Corner 2 (`Pos2`)**: Left-clicking a second block sets `Pos2` on the opposite diagonal, locking the base boundary. Emits celebratory particles, plays resonant chime audio, and updates the action bar with locked dimensions (`✦ Build Area Defined: WxHxL (V blocks)`).
+   - **Cycle Stepping (`stepCorner`)**: Subsequent left-clicks seamlessly initiate a new selection cycle (`Pos1` updated to new target, `Pos2` cleared), allowing rapid re-targeting.
+   - **Instant Reset (`clearBuildCorners`)**: Pressing **`Shift + Left-Click`** in air or on ground instantly wipes both corners with a low bass tone (`BLOCK_NOTE_BLOCK_BASS`), resetting to empty state.
+
+### 6.3 Real-Time In-World Height Adjustment
+
+Commanders can customize the vertical height and depth of the construction volume directly in the world without placing temporary scaffolding or nerd-poling dirt towers:
+
+- **In-World Scroll Keybinds**: Holding **`Ctrl` + Mouse Scroll** dynamically expands or contracts the vertical height of the bounding volume.
+- **Keyboard Shortcuts**: Pressing **`[`** / **`]`** or **`PageUp`** / **`PageDown`** steps height incrementally.
+- **Fast Stepping**: Holding **`Shift`** accelerates adjustments by 5 blocks per tick ($\pm 5$).
+- **Live HUD Feedback**: The action bar displays real-time dimension feedback during adjustments (`✦ Build Area Height: H (WxHxL - V blocks)`).
+
+### 6.4 In-World Ghost Grid Wireframes & Cyan/Aqua Highlighting (`BlueprintHologramRenderer`)
+
+- **High-Contrast Cyan / Dark Aqua Color Palette**:
+  - Outlines render with glowing Cyan (`#00E5FF`, RGB `0.0F, 0.9F, 1.0F`) outer bounding borders and Dark Aqua (`#00A3CC`, RGB `0.0F, 0.65F, 0.85F`) internal voxel grid cells.
+  - Distinguishes construction zones from Amber (`#FF7700`) mining excavation quarries and Magenta (`#FF00FF`) design captures.
+- **Depth-Tested Hologram Pipeline**: Renders with translucent alpha blending (`GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA`) and selective depth-testing, ensuring complete visibility through terrain and cavern walls while preserving spatial depth perception.
+
+### 6.5 Area Fill Confirmation Modal Screen (`BuildAreaConfirmModalScreen`)
+
+Right-clicking with both `Pos1` and `Pos2` armed opens the dedicated glassmorphic confirmation modal:
+
+- **Volume & Dimension Inspection**: Displays clear width, height, length, and total volume calculation (`W × H × L • V blocks`).
+- **Interactive Fine-Tuning Steppers**: Provides quick `[-5]`, `[-1]`, `[+1]`, and `[+5]` height stepper buttons to adjust volume boundaries directly within the GUI.
+- **Block Selection & Slot Preview**:
+  - Displays the active fill block (defaulting to Stone Bricks `minecraft:stone_bricks`) with an interactive **`[ 🔍 Change ]`** button.
+  - Clicking `[ 🔍 Change ]` opens `BlockPickerModalScreen`, enabling commanders to search and select any valid block in Minecraft.
+- **Action Buttons**:
+  - **`[ ✔ Fill Area ]`**: Dispatches `StartBuildAreaPayload` to the server to initiate construction.
+  - **`[ ⌫ Reset ]`**: Wipes corners and returns to selection.
+  - **`[ ✖ Cancel ]`**: Closes the dialog while retaining armed corners.
+- **Universal Blur Removal**: Inherits the zero-blur architecture, rendering cleanly with dark slate styling (`0xEE111822`) and cyan glowing borders without obscuring the background world.
+
+### 6.6 Deterministic Bottom-Up Layer-by-Layer Topological Ordering
+
+- **Foundation-First Construction (`StructureBlueprint.createAreaFillBlueprint`)**:
+  - Generates an in-memory volumetric blueprint where block placement tasks are deterministically sorted bottom-to-top layer-by-layer ($Y = 0 \to H-1$), then along $Z$ and $X$.
+  - Guarantees that minions erect solid foundation layers first, enabling upper layers, walls, and ceilings to rest on completed substructures.
+- **Autonomous Supply Integration**: Builder minions leverage their autonomous quarrying, timber harvesting, on-demand crafting, and container scavenging to procure the designated fill blocks in Survival mode, or place them freely in Creative mode.
 
 ### 100% Exact Block Fidelity & Custom Blueprint Architecture (`BlueprintRegistry`, `StructureBlueprint`)
 

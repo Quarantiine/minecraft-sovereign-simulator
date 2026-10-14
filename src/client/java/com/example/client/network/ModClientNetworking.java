@@ -438,6 +438,18 @@ public class ModClientNetworking {
 	}
 
 	/**
+	 * Dispatches a {@link com.example.network.StartBuildAreaPayload} to initiate an Area Fill / Volumetric Construction session on the server.
+	 *
+	 * @param pos1    First corner position.
+	 * @param pos2    Second corner position.
+	 * @param blockId Selected block identifier to fill the volume with.
+	 */
+	public static void sendStartBuildArea(net.minecraft.util.math.BlockPos pos1, net.minecraft.util.math.BlockPos pos2, net.minecraft.util.Identifier blockId) {
+		com.example.network.StartBuildAreaPayload payload = new com.example.network.StartBuildAreaPayload(pos1, pos2, blockId);
+		ClientPlayNetworking.send(payload);
+	}
+
+	/**
 	 * Dispatches a {@link com.example.network.RequestResourceEstimationPayload} to calculate live material delta
 	 * across player inventory and nearby minion backpacks.
 	 *

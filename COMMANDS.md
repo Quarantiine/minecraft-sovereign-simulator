@@ -82,13 +82,19 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 
 | Input                               | Target / Context         | Action                                                                                                                                                                                                       |
 | :---------------------------------- | :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Right-Click** _(Quick Tap)_       | Ground Block (up to 96m) | **Anchor Construction**: Deploys armed blueprint at targeted ground block. Builders activate 3D Arcane Levitation and block phasing to construct persistently to 100% completion.                            |
+| **Sub-Mode Toggle**                 | Command Hub / Scepter    | **Toggle Sub-Mode**: Toggle between `BLUEPRINT` (structure paste) and `AREA` (volumetric fill) with `[ 🏛 Blue ]` / `[ ◫ Area ]`.                                                                          |
+| **Right-Click** _(Quick Tap)_       | Ground Block (up to 96m) | **Anchor Construction** _(BLUEPRINT)_: Deploys armed blueprint at targeted ground block. Builders activate 3D Arcane Levitation and block phasing to construct persistently to 100% completion.            |
+| **1st Left-Click**                  | Ground Block             | **Set Corner 1 (`Pos1`)** _(AREA)_: Sets Corner 1 on targeted surface for volumetric fill.                                                                                                                   |
+| **2nd Left-Click**                  | Ground Block             | **Set Corner 2 (`Pos2`)** _(AREA)_: Sets Corner 2, locking the 3D fill footprint and rendering Cyan/Aqua ghost grid wireframes.                                                                              |
+| **Ctrl + Mouse Scroll**             | In `AREA` Sub-Mode       | **Adjust Fill Height**: Expands or contracts fill height live in-world without scaffolding (hold `Shift` for $\pm 5$ fast stepping).                                                                         |
+| **Right-Click**                     | Pos1 & Pos2 Selected     | **Open Fill Confirmation Modal** _(AREA)_: Opens `BuildAreaConfirmModalScreen` to choose block type, inspect volume/dimensions, and confirm construction.                                                    |
+| **Shift + Left-Click**              | In `AREA` Sub-Mode       | **Reset Build Corners**: Instantly clears `Pos1` and `Pos2` selection with bass tone.                                                                                                                        |
 | **Right-Click** _(Quick Tap)_       | Open Sky                 | **Retains Armed Blueprint**: Retains blueprint selection without accidental cycling or dropping.                                                                                                             |
 | **Keybind `R`**                     | In `BUILD` Mode          | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°).                                                                                                                               |
-| **Left-Click / Shift + Left-Click** | In `BUILD` Mode          | **Normal Hit / Break**: Standard survival attack or creative block break; does **not** rotate blueprint.                                                                                                     |
+| **Left-Click / Shift + Left-Click** | In `BLUEPRINT` Sub-Mode  | **Normal Hit / Break**: Standard survival attack or creative block break; does **not** rotate blueprint.                                                                                                     |
 | **Arcane Build Flight**             | Scepter in `BUILD` Mode  | **Survival 3D Flight**: Free unconstrained vanilla flight (Space to ascend, Shift to descend, WASD flight). Shallow water $\le 5$ blocks permitted; deep water (>5 blocks) cancels flight with safe descent. |
 | **Keybind `H`**                     | In `BUILD` Mode          | **Tactical RTS Camera Zoom**: Cycles zoom presets (`0.75x`, `1.0x` default, `1.5x`, `2.0x`).                                                                                                                 |
-| **Ctrl + Mouse Scroll**             | In `BUILD` Mode          | **Smooth Camera Zoom**: Smoothly zooms tactical perspective without hotbar cycling conflicts.                                                                                                                |
+| **Ctrl + Mouse Scroll**             | In `BLUEPRINT` Sub-Mode  | **Smooth Camera Zoom**: Smoothly zooms tactical perspective without hotbar cycling conflicts.                                                                                                                |
 | **`[ 📋 BOM ]` Button**             | In Command Hub           | **Material BOM Modal**: Live resource readiness & inventory delta calculator across bags and nearby minion backpacks within 64m.                                                                             |
 | **`[ 🔍 3D View ]` Button**         | In Command Hub           | **3D Architectural Blueprint Explorer**: Interactive 3D voxel inspection, floor slicer, palette remapping (`[ 🎨 Remap ]`), direct renaming (`[ ✏ Rename ]` / `[R]`), and mega-structure pre-caching.        |
 | **Catalog Delete `[ ✕ ]`**          | In Command Hub           | **Delete Custom Blueprint**: Permanently deletes player-captured blueprint with safety confirmation modal.                                                                                                   |
@@ -429,7 +435,25 @@ Commanders can customize the rules of engagement for individual minions, allowin
 
 ## 🏛️ 7. Building Structures (`BUILD` Mode)
 
-1. Select **`BUILD`** mode (**Shift + Right-Click** or press **`V`**).
+The **`BUILD`** mode features two distinct operational sub-modes for construction: **`BLUEPRINT`** (Structure Placement) and **`AREA`** (Volumetric Area Fill & Dimensional Construction). You can toggle between these modes inside the Command Hub GUI (**`V`** key) via the `[ 🏛 Blue ]` vs `[ ◫ Area ]` buttons, or via scepter controls.
+
+```
+                                  [BUILD Operating Mode]
+                                            │
+                    ┌───────────────────────┴───────────────────────┐
+                    ▼                                               ▼
+         [BLUEPRINT Sub-Mode]                            [AREA Sub-Mode]
+   • Multiblock structure placement                • Volumetric area filling & solid construction
+   • Armed from player custom blueprint catalog    • Arbitrary block selection (Stone, Bricks, etc.)
+   • Rotatable 3D holograms (0°, 90°, 180°, 270°)  • Sequential Left-Clicks: Pos1 ➔ Pos2
+   • 96m crosshair reach aerial placement          • Real-time height adjustment (Ctrl + Scroll)
+   • Multi-tier material Bill of Materials (BOM)   • Cyan/Aqua ghost grid bounding wireframe
+   • Persistent blueprint chaining                 • Dedicated Confirmation Modal Screen
+```
+
+### A. BLUEPRINT Sub-Mode (Structure Placement)
+
+1. Select **`BUILD`** mode with **`BLUEPRINT`** sub-mode active (**Shift + Right-Click** or press **`V`**).
 2. **Arcane Build Flight (Free Survival Flight & Water Safety)**:
    - When in `BUILD` mode, you automatically enter physical Arcane Flight in both Survival and Creative modes.
    - **Free 3D Survival Flight**: Enjoy unconstrained, responsive 3D vanilla flight mechanics in Survival mode. Ascend with **`Space`**, descend with **`Shift`**, and glide freely in any direction with WASD without rigid altitude clamping or velocity locks.
@@ -511,6 +535,29 @@ Commanders can customize the rules of engagement for individual minions, allowin
 - **Autonomous Stationed Mobilization**: When you place a new blueprint down nearby (within 112–128 blocks horizontally and vertically), stationed builder minions automatically wake up (`setSitting = false`) and mobilize to build immediately without requiring you to walk over and re-select them—easily reaching across mega structure construction sites! A single right-click on any stationed builder still commands them to follow if desired.
 - **Creative Mode**: Builders place blocks freely at zero material cost. Any existing blocks (grass, flowers, snow, dirt) are automatically pre-cleared with zero dropped items, eliminating all clutter.
 - **Survival Mode**: Builders resolve construction materials through a multi-stage logistics pipeline (Backpack → Local Containers → Peer Sharing → Autonomous Quarrying/Timber → Mob Hunting Contracts commissioned to Warriors).
+
+### B. AREA Sub-Mode (Volumetric Area Fill & Dimensional Construction)
+
+The **`AREA`** building mode allows commanders to define exact 3D construction boundaries in the world, pick any block type to fill the volume, adjust vertical height in real time, and confirm construction through a dedicated confirmation modal:
+
+1. **Sequential Left-Click Corner Selection**:
+   - **1st Left-Click (Corner 1 / `Pos1`)**: Sets `Pos1` anchored on the targeted block surface adhering to the Unified Surface Anchoring Contract. A vibrant cyan anchor marker illuminates, sparkle particles burst, an amethyst chime sounds, and the action bar confirms `✦ Build Pos1: [X, Y, Z]`.
+   - **Aiming Candidate Preview**: Aiming around the world dynamically renders an expanding candidate bounding wireframe and live ghost grid block outlines from `Pos1` to your crosshair.
+   - **2nd Left-Click (Corner 2 / `Pos2`)**: Sets `Pos2` on the opposite diagonal, completing the 3D volume footprint. Sparkle particles erupt, resonant chime audio plays, and the full cyan/dark aqua (`#00E5FF` / `#00A3CC`) 3D bounding wireframe and internal ghost grid outlines illuminate.
+   - **Subsequent Left-Clicks (Cycle)**: Left-clicking again automatically starts a new selection cycle (`Pos1` updated, `Pos2` cleared).
+   - **Shift + Left-Click (Reset)**: Instantly clears both `Pos1` and `Pos2` with a bass tone, guaranteeing the very next click places `Pos1` afresh.
+2. **In-World Real-Time Height Adjustment**:
+   - Hold **`Ctrl` + Mouse Scroll** (or use **`[`** / **`]`** or **`PageUp`** / **`PageDown`** keys) to expand or contract the fill height in real time without placing temporary scaffolding or dirt towers (hold **`Shift`** for $\pm 5$ fast stepping).
+   - HUD actionbar displays live height updates and total bounding dimensions (`✦ Build Area Height: H (WxHxL - V blocks)`).
+3. **Area Fill Confirmation Modal (`BuildAreaConfirmModalScreen`)**:
+   - With `Pos1` and `Pos2` defined, **Right-Click** the ground or air (or click **`[ ✦ Fill ]`** in the Command Hub) to open the confirmation modal.
+   - **Volume Verification**: View exact width, height, length, and total volume block count (`W × H × L • V blocks`).
+   - **Height Steppers**: Fine-tune dimensions using `[-5]`, `[-1]`, `[+1]`, and `[+5]` buttons directly within the GUI.
+   - **Block Selector**: View current fill block preview (default: Stone Bricks) and click **`[ 🔍 Change ]`** to open the `BlockPickerModalScreen` to search and select any block.
+   - **Confirmation Action**: Click **`[ ✔ Fill Area ]`** to authorize construction, **`[ ⌫ Reset ]`** to clear corners, or **`[ ✖ Cancel ]`** to dismiss.
+4. **Autonomous Minion Volumetric Construction**:
+   - Builder minions receive the authoritative area blueprint, sorted bottom-up layer-by-layer ($Y = 0 \to H-1$, $Z$, $X$).
+   - Builders take flight via 3D Arcane Levitation, phase through blocks, retrieve or craft the required fill blocks on demand, and construct the entire volume block-by-block to 100% completion.
 
 ---
 

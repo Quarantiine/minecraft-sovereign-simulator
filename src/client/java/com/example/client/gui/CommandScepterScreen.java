@@ -4,9 +4,11 @@ import com.example.blueprint.BlueprintRegistry;
 import com.example.blueprint.StructureBlueprint;
 import com.example.client.ExampleModClient;
 import com.example.client.network.ModClientNetworking;
+import com.example.client.renderer.ClientBuildCaptureTracker;
 import com.example.client.renderer.ClientDesignCaptureTracker;
 import com.example.client.renderer.ClientMiningCaptureTracker;
 import com.example.client.resource.ClientResourceEstimatorTracker;
+import com.example.component.BuildingMode;
 import com.example.component.CommandMode;
 import com.example.network.SyncResourceEstimationPayload;
 import com.example.component.MiningMode;
@@ -50,6 +52,7 @@ public class CommandScepterScreen extends Screen {
 	private ItemStack scepterStack;
 	private CommandMode selectedMode;
 	private MiningMode selectedMiningMode = MiningMode.AREA;
+	private BuildingMode selectedBuildingMode = BuildingMode.BLUEPRINT;
 	private String selectedBlueprintId;
 	private SquadGroup selectedSquad;
 	private MinionRole selectedRole;
@@ -77,6 +80,9 @@ public class CommandScepterScreen extends Screen {
 	private ButtonWidget nextPathwayPageBtn;
 	private ButtonWidget rotateBtn;
 	private ButtonWidget materialBomBtn;
+	private ButtonWidget buildingModeBtn;
+	private ButtonWidget buildConfirmModalBtn;
+	private ButtonWidget clearBuildCornersBtn;
 	private ButtonWidget captureModalBtn;
 	private ButtonWidget clearCornersBtn;
 	private ButtonWidget miningModeBtn;
@@ -112,6 +118,7 @@ public class CommandScepterScreen extends Screen {
 		if (scepterStack != null && !scepterStack.isEmpty()) {
 			this.selectedMode = CommandScepterItem.getMode(scepterStack);
 			this.selectedMiningMode = CommandScepterItem.getMiningMode(scepterStack);
+			this.selectedBuildingMode = CommandScepterItem.getBuildingMode(scepterStack);
 			this.selectedBlueprintId = CommandScepterItem.getBlueprintId(scepterStack);
 			if ((this.selectedBlueprintId == null || this.selectedBlueprintId.isBlank()) && !BlueprintRegistry.getAll().isEmpty()) {
 				this.selectedBlueprintId = BlueprintRegistry.getAll().iterator().next().getId();
@@ -136,6 +143,7 @@ public class CommandScepterScreen extends Screen {
 		} else {
 			this.selectedMode = CommandMode.FOLLOW;
 			this.selectedMiningMode = MiningMode.AREA;
+			this.selectedBuildingMode = BuildingMode.BLUEPRINT;
 			this.selectedBlueprintId = BlueprintRegistry.getAll().isEmpty() ? "" : BlueprintRegistry.getAll().iterator().next().getId();
 			this.selectedSquad = SquadGroup.ALL;
 			this.selectedRole = null;
@@ -334,27 +342,60 @@ public class CommandScepterScreen extends Screen {
 		.build();
 		this.addDrawableChild(this.nextPageBtn);
 
-		// Blueprint Rotation Button (visible in BUILD mode)
+		// Building Mode Toggle Button (visible in BUILD mode)
+		this.buildingModeBtn = ButtonWidget.builder(
+			getBuildingModeButtonText(),
+			b -> toggleBuildingModeGui()
+		)
+		.dimensions(startX + 16, pageControlsY, 44, 19)
+		.tooltip(getBuildingModeTooltip())
+		.build();
+		this.buildingModeBtn.visible = this.selectedMode == CommandMode.BUILD;
+		this.addDrawableChild(this.buildingModeBtn);
+
+		// Blueprint Rotation Button (visible in BUILD mode with BLUEPRINT sub-mode)
 		this.rotateBtn = ButtonWidget.builder(
 			getRotateButtonText(),
 			b -> cycleRotationGui()
 		)
-		.dimensions(startX + 16, pageControlsY, 68, 19)
+		.dimensions(startX + 62, pageControlsY, 46, 19)
 		.tooltip(Tooltip.of(Text.literal("§6✦ Rotate Blueprint 90° Clockwise\n§7In-Game: Press [R] or Left-Click with Scepter.")))
 		.build();
-		this.rotateBtn.visible = this.selectedMode == CommandMode.BUILD;
+		this.rotateBtn.visible = this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.BLUEPRINT;
 		this.addDrawableChild(this.rotateBtn);
 
-		// Material Bill of Materials (BOM) & Resource Estimator Button (visible in BUILD mode)
+		// Material Bill of Materials (BOM) & Resource Estimator Button (visible in BUILD mode with BLUEPRINT sub-mode)
 		this.materialBomBtn = ButtonWidget.builder(
 			Text.literal("§e📋 BOM"),
 			b -> openResourceEstimatorModal()
 		)
-		.dimensions(startX + 88, pageControlsY, 70, 19)
+		.dimensions(startX + 110, pageControlsY, 48, 19)
 		.tooltip(Tooltip.of(Text.literal("§e📋 Material Bill of Materials (BOM)\n§7Inspect live raw material delta across your inventory\nand nearby minion backpacks before anchoring.")))
 		.build();
-		this.materialBomBtn.visible = this.selectedMode == CommandMode.BUILD;
+		this.materialBomBtn.visible = this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.BLUEPRINT;
 		this.addDrawableChild(this.materialBomBtn);
+
+		// Build Area Confirm Modal Button (visible in BUILD mode with AREA sub-mode)
+		this.buildConfirmModalBtn = ButtonWidget.builder(
+			Text.literal("§3✦ Fill"),
+			b -> openBuildAreaConfirmModal()
+		)
+		.dimensions(startX + 62, pageControlsY, 52, 19)
+		.tooltip(Tooltip.of(Text.literal("§3✦ Confirm Area Fill\n§7Open modal to choose block and start volumetric construction.")))
+		.build();
+		this.buildConfirmModalBtn.visible = this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.AREA;
+		this.addDrawableChild(this.buildConfirmModalBtn);
+
+		// Clear Build Corners Button (visible in BUILD mode with AREA sub-mode)
+		this.clearBuildCornersBtn = ButtonWidget.builder(
+			Text.literal("§6⌫ Reset"),
+			b -> clearBuildCornersGui()
+		)
+		.dimensions(startX + 116, pageControlsY, 42, 19)
+		.tooltip(Tooltip.of(Text.literal("§6⌫ Reset Build Corners\n§7Clears Pos1 and Pos2 fill selection.")))
+		.build();
+		this.clearBuildCornersBtn.visible = this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.AREA;
+		this.addDrawableChild(this.clearBuildCornersBtn);
 
 		// 3D Architectural Blueprint Explorer Button (visible in BUILD mode)
 		this.explorerBtn = ButtonWidget.builder(
@@ -745,11 +786,23 @@ public class CommandScepterScreen extends Screen {
 		for (ButtonWidget btn : this.roleButtons) {
 			btn.visible = !isBuild && !isDesign && !isMine;
 		}
+		if (this.buildingModeBtn != null) {
+			this.buildingModeBtn.visible = isBuild;
+		}
 		if (this.rotateBtn != null) {
-			this.rotateBtn.visible = isBuild;
+			this.rotateBtn.visible = isBuild && (this.selectedBuildingMode == BuildingMode.BLUEPRINT);
 		}
 		if (this.materialBomBtn != null) {
-			this.materialBomBtn.visible = isBuild;
+			this.materialBomBtn.visible = isBuild && (this.selectedBuildingMode == BuildingMode.BLUEPRINT);
+		}
+		if (this.explorerBtn != null) {
+			this.explorerBtn.visible = isBuild && (this.selectedBuildingMode == BuildingMode.BLUEPRINT);
+		}
+		if (this.buildConfirmModalBtn != null) {
+			this.buildConfirmModalBtn.visible = isBuild && (this.selectedBuildingMode == BuildingMode.AREA);
+		}
+		if (this.clearBuildCornersBtn != null) {
+			this.clearBuildCornersBtn.visible = isBuild && (this.selectedBuildingMode == BuildingMode.AREA);
 		}
 		if (this.captureModalBtn != null) {
 			this.captureModalBtn.visible = isDesign;
@@ -767,17 +820,18 @@ public class CommandScepterScreen extends Screen {
 			this.clearMineCornersBtn.visible = isMine && (this.selectedMiningMode == MiningMode.AREA);
 		}
 
+		boolean hideBlueprints = isPathway || (isBuild && this.selectedBuildingMode == BuildingMode.AREA);
 		for (ButtonWidget btn : this.blueprintButtons) {
-			btn.visible = !isPathway;
+			btn.visible = !hideBlueprints;
 		}
 		for (ButtonWidget btn : this.blueprintDeleteButtons) {
-			btn.visible = !isPathway && btn.visible;
+			btn.visible = !hideBlueprints && btn.visible;
 		}
 		if (this.prevPageBtn != null) {
-			this.prevPageBtn.visible = !isPathway;
+			this.prevPageBtn.visible = !hideBlueprints;
 		}
 		if (this.nextPageBtn != null) {
-			this.nextPageBtn.visible = !isPathway;
+			this.nextPageBtn.visible = !hideBlueprints;
 		}
 
 		for (ButtonWidget btn : this.pathwayWidgets) {
@@ -990,6 +1044,76 @@ public class CommandScepterScreen extends Screen {
 		return this.clearMineCornersBtn;
 	}
 
+	public ButtonWidget getBuildingModeButton() {
+		return this.buildingModeBtn;
+	}
+
+	public ButtonWidget getBuildConfirmModalButton() {
+		return this.buildConfirmModalBtn;
+	}
+
+	public ButtonWidget getClearBuildCornersButton() {
+		return this.clearBuildCornersBtn;
+	}
+
+	public BuildingMode getSelectedBuildingMode() {
+		return this.selectedBuildingMode;
+	}
+
+	public void setSelectedBuildingMode(BuildingMode mode) {
+		this.selectedBuildingMode = mode != null ? mode : BuildingMode.BLUEPRINT;
+		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
+			CommandScepterItem.setBuildingMode(this.scepterStack, this.selectedBuildingMode);
+		}
+		refreshButtonLabels();
+	}
+
+	public void toggleBuildingModeGui() {
+		this.selectedBuildingMode = this.selectedBuildingMode == BuildingMode.BLUEPRINT ? BuildingMode.AREA : BuildingMode.BLUEPRINT;
+		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
+			CommandScepterItem.setBuildingMode(this.scepterStack, this.selectedBuildingMode);
+		}
+		if (this.client != null && this.client.player != null) {
+			this.client.player.sendMessage(Text.literal("§3✦ Building Mode: §r" + this.selectedBuildingMode.getFormattedName()), true);
+		}
+		refreshButtonLabels();
+	}
+
+	public void openBuildAreaConfirmModal() {
+		if (this.client != null) {
+			this.client.setScreen(new BuildAreaConfirmModalScreen(this.scepterStack, this));
+		}
+	}
+
+	public void clearBuildCornersGui() {
+		ClientBuildCaptureTracker.clear();
+		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
+			CommandScepterItem.clearBuildCorners(this.scepterStack);
+		}
+		if (this.client != null && this.client.player != null) {
+			ItemStack held = CommandScepterItem.getHeldScepter(this.client.player);
+			if (!held.isEmpty()) {
+				CommandScepterItem.clearBuildCorners(held);
+			}
+			this.client.player.sendMessage(Text.literal("§6✦ Cleared BUILD corner selections (Pos1 & Pos2) - Ready for Pos1!§r"), true);
+		}
+		refreshButtonLabels();
+	}
+
+	private Text getBuildingModeButtonText() {
+		if (this.selectedBuildingMode == BuildingMode.AREA) {
+			return Text.literal("§3◫ Area");
+		}
+		return Text.literal("§b🏛 Blue");
+	}
+
+	private Tooltip getBuildingModeTooltip() {
+		if (this.selectedBuildingMode == BuildingMode.AREA) {
+			return Tooltip.of(Text.literal("§3✦ Building Sub-Mode: Volumetric Area Fill\n§7Click to switch to Blueprint / Structure mode."));
+		}
+		return Tooltip.of(Text.literal("§b✦ Building Sub-Mode: Blueprint / Structure\n§7Click to switch to Volumetric Area Fill mode."));
+	}
+
 	public MiningMode getSelectedMiningMode() {
 		return this.selectedMiningMode;
 	}
@@ -1178,6 +1302,9 @@ public class CommandScepterScreen extends Screen {
 		for (ButtonWidget b : this.blueprintButtons) b.active = !isConfirming;
 		for (ButtonWidget b : this.blueprintDeleteButtons) b.active = !isConfirming;
 		for (ButtonWidget b : this.pathwayWidgets) b.active = !isConfirming;
+		if (this.buildingModeBtn != null) this.buildingModeBtn.active = !isConfirming;
+		if (this.buildConfirmModalBtn != null) this.buildConfirmModalBtn.active = !isConfirming;
+		if (this.clearBuildCornersBtn != null) this.clearBuildCornersBtn.active = !isConfirming;
 		if (this.rotateBtn != null) this.rotateBtn.active = !isConfirming;
 		if (this.materialBomBtn != null) this.materialBomBtn.active = !isConfirming;
 		if (this.captureModalBtn != null) this.captureModalBtn.active = !isConfirming;
@@ -1358,6 +1485,11 @@ public class CommandScepterScreen extends Screen {
 
 		if (this.rotateBtn != null) {
 			this.rotateBtn.setMessage(getRotateButtonText());
+		}
+
+		if (this.buildingModeBtn != null) {
+			this.buildingModeBtn.setMessage(getBuildingModeButtonText());
+			this.buildingModeBtn.setTooltip(getBuildingModeTooltip());
 		}
 
 		if (this.miningModeBtn != null) {
@@ -1599,8 +1731,17 @@ public class CommandScepterScreen extends Screen {
 
 		// Section: Mode-specific Sub-header (Architecture Style or Mass Role Archetype or Design or Mining)
 		if (this.selectedMode == CommandMode.BUILD) {
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§b✦ Active Blueprint Construction Directives"), startX + 16, startY + 69, 0x55FFFF);
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Constructs 100% exact captured blocks - zero substitutions."), startX + 16, startY + 84, 0xAAAAAA);
+			if (this.selectedBuildingMode == BuildingMode.BLUEPRINT) {
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§b✦ Active Blueprint Construction Directives"), startX + 16, startY + 69, 0x55FFFF);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§7Constructs 100% exact captured blocks - zero substitutions."), startX + 16, startY + 84, 0xAAAAAA);
+			} else {
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§3✦ Volumetric Area Fill Construction"), startX + 16, startY + 69, 0x00E5FF);
+				BlockPos p1 = ClientBuildCaptureTracker.getPos1();
+				BlockPos p2 = ClientBuildCaptureTracker.getPos2();
+				String p1Str = p1 != null ? ("[" + p1.getX() + "," + p1.getY() + "," + p1.getZ() + "]") : "Not Set";
+				String p2Str = p2 != null ? ("[" + p2.getX() + "," + p2.getY() + "," + p2.getZ() + "]") : "Not Set";
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§7Pos1: §f" + p1Str + "  §7Pos2: §f" + p2Str + " §8(L-Click Step, R-Click Confirm)"), startX + 16, startY + 84, 0xAAAAAA);
+			}
 		} else if (this.selectedMode == CommandMode.DESIGN) {
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§d✦ In-World Spatial Design Studio"), startX + 16, startY + 69, 0xFF55FF);
 			BlockPos p1 = ClientDesignCaptureTracker.getPos1();
@@ -1643,6 +1784,23 @@ public class CommandScepterScreen extends Screen {
 
 		if (this.selectedMode == CommandMode.PATHWAY) {
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§d✦ Patrol Route Dashboard:"), startX + 165, startY + 106, 0xFF55FF);
+		} else if (this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.AREA) {
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§3✦ Area Fill Volume:"), startX + 165, startY + 106, 0x00E5FF);
+			BlockPos p1 = ClientBuildCaptureTracker.getPos1();
+			BlockPos p2 = ClientBuildCaptureTracker.getPos2();
+			if (p1 != null && p2 != null) {
+				int sx = Math.abs(p1.getX() - p2.getX()) + 1;
+				int sy = Math.abs(p1.getY() - p2.getY()) + 1;
+				int sz = Math.abs(p1.getZ() - p2.getZ()) + 1;
+				long vol = (long) sx * sy * sz;
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§3" + sx + "x" + sy + "x" + sz + " §8(§e" + vol + "b§8)"), startX + 245, startY + 140, 0x00E5FF);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§a✔ Ready to Fill!"), startX + 245, startY + 158, 0x55FF55);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Click §3[✦ Fill] §7below"), startX + 245, startY + 174, 0xAAAAAA);
+			} else {
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§8[ No Selection ]"), startX + 245, startY + 140, 0x888888);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Left-click 2 blocks in world"), startX + 245, startY + 158, 0xAAAAAA);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7to set Pos1 & Pos2 corners"), startX + 245, startY + 174, 0xAAAAAA);
+			}
 		} else {
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§bBlueprint Catalog:"), startX + 165, startY + 106, 0x55FFFF);
 			Collection<StructureBlueprint> allBlueprints = BlueprintRegistry.getAll();
@@ -1742,11 +1900,15 @@ public class CommandScepterScreen extends Screen {
 		if (hasBottomControls) {
 			Text bannerText = Text.literal("§f" + this.selectedMode.getFormattedName() + " §8| " + modeDesc);
 			if (this.selectedMode == CommandMode.BUILD) {
-				SyncResourceEstimationPayload est = ClientResourceEstimatorTracker.getEstimation(this.selectedBlueprintId);
-				if (est != null && est.totalBlocks() > 0) {
-					int pct = est.getReadinessPercentage();
-					String color = pct >= 100 ? "§a" : (pct >= 50 ? "§6" : "§c");
-					bannerText = Text.literal("§bBUILD §8| " + color + pct + "% Ready §7(" + est.totalAvailable() + "/" + est.totalBlocks() + "b) §8[📋BOM]");
+				if (this.selectedBuildingMode == BuildingMode.AREA) {
+					bannerText = Text.literal("§3BUILD AREA §8| §fVolumetric Fill §7[✦Fill]");
+				} else {
+					SyncResourceEstimationPayload est = ClientResourceEstimatorTracker.getEstimation(this.selectedBlueprintId);
+					if (est != null && est.totalBlocks() > 0) {
+						int pct = est.getReadinessPercentage();
+						String color = pct >= 100 ? "§a" : (pct >= 50 ? "§6" : "§c");
+						bannerText = Text.literal("§bBUILD §8| " + color + pct + "% Ready §7(" + est.totalAvailable() + "/" + est.totalBlocks() + "b) §8[📋BOM]");
+					}
 				}
 			}
 			int rawWidth = this.textRenderer.getWidth(bannerText);

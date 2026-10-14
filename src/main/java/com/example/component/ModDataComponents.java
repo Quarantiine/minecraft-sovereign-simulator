@@ -150,6 +150,42 @@ public class ModDataComponents {
 	);
 
 	/**
+	 * Data component storing the active {@link BuildingMode} sub-mode on an item (e.g. Command Scepter).
+	 */
+	public static final ComponentType<BuildingMode> BUILDING_MODE = Registry.register(
+		Registries.DATA_COMPONENT_TYPE,
+		Identifier.of(ExampleMod.MOD_ID, "building_mode"),
+		ComponentType.<BuildingMode>builder()
+			.codec(BuildingMode.CODEC)
+			.packetCodec(BuildingMode.PACKET_CODEC)
+			.build()
+	);
+
+	/**
+	 * Data component storing the active BUILD mode corner 1 (Pos1) coordinate on an item (for Area Fill).
+	 */
+	public static final ComponentType<net.minecraft.util.math.BlockPos> BUILD_POS1 = Registry.register(
+		Registries.DATA_COMPONENT_TYPE,
+		Identifier.of(ExampleMod.MOD_ID, "build_pos1"),
+		ComponentType.<net.minecraft.util.math.BlockPos>builder()
+			.codec(net.minecraft.util.math.BlockPos.CODEC)
+			.packetCodec(net.minecraft.util.math.BlockPos.PACKET_CODEC)
+			.build()
+	);
+
+	/**
+	 * Data component storing the active BUILD mode corner 2 (Pos2) coordinate on an item (for Area Fill).
+	 */
+	public static final ComponentType<net.minecraft.util.math.BlockPos> BUILD_POS2 = Registry.register(
+		Registries.DATA_COMPONENT_TYPE,
+		Identifier.of(ExampleMod.MOD_ID, "build_pos2"),
+		ComponentType.<net.minecraft.util.math.BlockPos>builder()
+			.codec(net.minecraft.util.math.BlockPos.CODEC)
+			.packetCodec(net.minecraft.util.math.BlockPos.PACKET_CODEC)
+			.build()
+	);
+
+	/**
 	 * Legacy migration component for architecture_style to prevent vanilla NBT deserialization errors on existing saves.
 	 */
 	public static final ComponentType<String> LEGACY_ARCHITECTURE_STYLE = Registry.register(

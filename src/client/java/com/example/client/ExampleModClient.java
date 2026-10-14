@@ -54,6 +54,8 @@ public class ExampleModClient implements ClientModInitializer {
 	public static long lastDesignClickTick = -1L;
 	public static long lastMineClickTime = 0L;
 	public static long lastMineClickTick = -1L;
+	public static long lastBuildClickTime = 0L;
+	public static long lastBuildClickTick = -1L;
 	public static long lastHeightKeyTime = 0L;
 
 	@Override
@@ -106,6 +108,17 @@ public class ExampleModClient implements ClientModInitializer {
 			}
 		};
 
+		// Register the Build Area Confirm Modal opener callback for CommandScepterItem right-click in BUILD AREA mode
+		CommandScepterItem.BUILD_MODAL_OPENER = (player, hand, stack, p1, p2) -> {
+			if (p1 == null) p1 = com.example.client.renderer.ClientBuildCaptureTracker.getPos1();
+			if (p2 == null) p2 = com.example.client.renderer.ClientBuildCaptureTracker.getPos2();
+			if (p1 != null && p2 != null) {
+				MinecraftClient.getInstance().setScreen(new com.example.client.gui.BuildAreaConfirmModalScreen(p1, p2, stack, null));
+			} else if (player != null) {
+				player.sendMessage(Text.literal("§c✦ Left-click two blocks to set Pos1 and Pos2 before confirming area fill!§r"), true);
+			}
+		};
+
 		// Hook client-side design corner stepper and resetter into CommandScepterItem for DESIGN mode
 		CommandScepterItem.DESIGN_CORNER_STEPPER = ClientDesignCaptureTracker::stepCorner;
 		CommandScepterItem.DESIGN_CORNER_RESETTER = ClientDesignCaptureTracker::clear;
@@ -113,6 +126,10 @@ public class ExampleModClient implements ClientModInitializer {
 		// Hook client-side mining corner stepper and resetter into CommandScepterItem for MINE AREA mode
 		CommandScepterItem.MINE_CORNER_STEPPER = ClientMiningCaptureTracker::stepCorner;
 		CommandScepterItem.MINE_CORNER_RESETTER = ClientMiningCaptureTracker::clear;
+
+		// Hook client-side build corner stepper and resetter into CommandScepterItem for BUILD AREA mode
+		CommandScepterItem.BUILD_CORNER_STEPPER = com.example.client.renderer.ClientBuildCaptureTracker::stepCorner;
+		CommandScepterItem.BUILD_CORNER_RESETTER = com.example.client.renderer.ClientBuildCaptureTracker::clear;
 
 		// Hook client-side patrol route provider into CommandScepterItem for route cycling
 		CommandScepterItem.CLIENT_ROUTE_PROVIDER = com.example.client.renderer.ClientPatrolRouteTracker::getAllRoutesList;
@@ -136,6 +153,16 @@ public class ExampleModClient implements ClientModInitializer {
 			lastMineClickTime = System.currentTimeMillis();
 			lastMineClickTick = mc.world != null ? mc.world.getTime() : 0L;
 			CommandScepterItem.recordMineClick();
+		};
+		CommandScepterItem.BUILD_CLICK_CONSUMER = () -> {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			while (mc.options.attackKey.wasPressed()) {}
+			try {
+				mc.options.attackKey.setPressed(false);
+			} catch (Throwable ignored) {}
+			lastBuildClickTime = System.currentTimeMillis();
+			lastBuildClickTick = mc.world != null ? mc.world.getTime() : 0L;
+			CommandScepterItem.recordBuildClick();
 		};
 
 		// Hook client-side camera raycast target resolver into CommandScepterItem
@@ -224,7 +251,28 @@ public class ExampleModClient implements ClientModInitializer {
 				}
 			}
 
-			if (mode == CommandMode.BUILD || (mode == CommandMode.MINE && CommandScepterItem.getMiningMode(stack) == com.example.component.MiningMode.DIRECT)) {
+			if (mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA) {
+				BlockPos p1 = CommandScepterItem.getBuildPos1(stack);
+				if (p1 == null) p1 = com.example.client.renderer.ClientBuildCaptureTracker.getPos1();
+				BlockPos p2 = CommandScepterItem.getBuildPos2(stack);
+				if (p2 == null) p2 = com.example.client.renderer.ClientBuildCaptureTracker.getPos2();
+				if (p1 != null && p2 != null) {
+					if (CommandScepterItem.BUILD_MODAL_OPENER != null) {
+						CommandScepterItem.BUILD_MODAL_OPENER.openBuildModal(player, hand, stack, p1, p2);
+					} else {
+						MinecraftClient.getInstance().setScreen(new com.example.client.gui.BuildAreaConfirmModalScreen(p1, p2, stack, null));
+					}
+					player.getItemCooldownManager().set(stack.getItem(), 4);
+					player.swingHand(hand);
+					return TypedActionResult.success(stack);
+				} else {
+					player.sendMessage(Text.literal("§c✦ Left-click two blocks to set Pos1 and Pos2 before confirming area fill!§r"), true);
+					player.getItemCooldownManager().set(stack.getItem(), 4);
+					return TypedActionResult.success(stack);
+				}
+			}
+
+			if ((mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.BLUEPRINT) || (mode == CommandMode.MINE && CommandScepterItem.getMiningMode(stack) == com.example.component.MiningMode.DIRECT)) {
 				MinecraftClient client = MinecraftClient.getInstance();
 				BlockHitResult hit = TacticalBuildCameraController.getCameraTargetedBlock(client, 96.0F);
 				if (hit != null && hit.getType() == HitResult.Type.BLOCK) {
@@ -473,6 +521,42 @@ public class ExampleModClient implements ClientModInitializer {
 										client.options.attackKey.setPressed(false);
 									} catch (Throwable ignored) {}
 									CommandScepterItem.handleMineReset(client.player, client.world, heldScepter);
+								}
+							}
+						}
+					} else if (heldMode.ordinal() == CommandMode.BUILD.ordinal() && CommandScepterItem.getBuildingMode(heldScepter) == com.example.component.BuildingMode.AREA) {
+						long currentTick = client.world != null ? client.world.getTime() : 0L;
+						long currentTime = System.currentTimeMillis();
+						if (currentTick == lastBuildClickTick || (currentTime - lastBuildClickTime) < 350L || CommandScepterItem.isBuildClickDebounced()) {
+							while (client.options.attackKey.wasPressed()) {}
+						} else {
+							// Tactical camera extended-range raycasting (blocks beyond normal reach)
+							boolean tacticalActive = com.example.client.camera.TacticalBuildCameraController.isEnabled();
+							if (tacticalActive) {
+								BlockHitResult hit = TacticalBuildCameraController.getCameraTargetedBlock(client, 96.0F);
+								if (hit != null && hit.getType() == HitResult.Type.BLOCK) {
+									BlockPos clicked = hit.getBlockPos();
+									BlockPos effectiveClicked = (client.world != null && client.world.getBlockState(clicked).isReplaceable())
+										? clicked
+										: (hit.getSide() != null ? clicked.offset(hit.getSide()) : clicked.up());
+									lastBuildClickTick = currentTick;
+									lastBuildClickTime = currentTime;
+									while (client.options.attackKey.wasPressed()) {}
+									try {
+										client.options.attackKey.setPressed(false);
+									} catch (Throwable ignored) {}
+									CommandScepterItem.handleBuildClick(client.player, client.world, heldScepter, effectiveClicked, physicalSneak);
+								}
+							} else if (physicalSneak) {
+								// Open-air Shift + Left-Click reset (AttackBlockCallback only fires for targeted blocks)
+								if (client.crosshairTarget == null || client.crosshairTarget.getType() != HitResult.Type.BLOCK) {
+									lastBuildClickTick = currentTick;
+									lastBuildClickTime = currentTime;
+									while (client.options.attackKey.wasPressed()) {}
+									try {
+										client.options.attackKey.setPressed(false);
+									} catch (Throwable ignored) {}
+									CommandScepterItem.handleBuildReset(client.player, client.world, heldScepter);
 								}
 							}
 						}

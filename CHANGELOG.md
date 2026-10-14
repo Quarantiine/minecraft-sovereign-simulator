@@ -8,11 +8,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [1.1.1] - 2026-10-14
 
-### 🔨 Builder Minion Survival On-Demand Block Crafting & Multi-Block Transformations
+### 🔨 Area Fill / Volumetric Construction & Builder Minion Survival Crafting
 
 ### Added
 
-#### 🔨 Builder Minion Survival On-Demand Block Crafting & Multi-Block Transformations
+#### ◫ Area Fill / Volumetric Construction Mode (`BUILD` Mode Duality)
+
+- **Dual Operational Sub-Modes (`BuildingMode.BLUEPRINT` vs `BuildingMode.AREA`)**:
+  - `BUILD` mode now features two dedicated construction modes designed with **perfect architectural symmetry to `MINE` mode's `DIRECT` vs `AREA` duality**:
+    1. **`BLUEPRINT` Sub-Mode**: Standard structure placement from custom captured blueprints or catalog presets.
+    2. **`AREA` Sub-Mode**: Direct volumetric construction and area filling with any chosen block in the game.
+  - Command Scepters track the active sub-mode via the `BUILDING_MODE` data component, cycling seamlessly via Command Hub GUI controls or contextual hotkeys.
+- **Sequential In-World Corner Capture (`Pos1` and `Pos2`)**:
+  - Symmetrical to `MINE` and `DESIGN` modes, commanders define a 3D building volume using sequential left-clicks with the Command Scepter:
+    - **1st Left-Click (`Pos1`)**: Anchors Corner 1 directly on top of the targeted block surface, bursts cyan sparkle particles, rings an amethyst chime, and alerts the action bar (`✦ Build Pos1: [X, Y, Z]`).
+    - **Candidate Preview**: Aiming across the world renders an expanding candidate bounding wireframe and live ghost grid to the crosshair.
+    - **2nd Left-Click (`Pos2`)**: Anchors Corner 2, completing the base footprint and locking in the 3D construction volume.
+    - **Subsequent Left-Clicks**: Initiates a fresh selection cycle (`Pos1` updated, `Pos2` cleared).
+    - **Shift + Left-Click**: Instantly resets both `Pos1` and `Pos2` with a deep bass note.
+- **In-World Real-Time Height Adjustment**:
+  - Commanders can expand or contract the fill height in real time by holding **`Ctrl` + Mouse Scroll** (or using **`[`** / **`]`** or **`PageUp`** / **`PageDown`** keys) without placing dirt towers or temporary scaffolding.
+  - Hold **`Shift`** for fast $\pm 5$ stepping, with real-time dimensions displayed in the action bar.
+- **3D Cyan / Dark Aqua Hologram & Ghost Grid (`BlueprintHologramRenderer`)**:
+  - Enclosed construction volumes illuminate in the world with a vibrant Cyan / Dark Aqua (`#00E5FF` / `#00A3CC`) bounding wireframe and internal voxel ghost grid, distinguishing build areas from amber mining quarries and magenta design captures.
+- **Dedicated Area Fill Confirmation Modal (`BuildAreaConfirmModalScreen`)**:
+  - Right-clicking with `Pos1` and `Pos2` selected immediately opens the glassmorphic Area Fill Confirmation dialog:
+    - **Dimension & Volume Inspection**: Displays clear width, height, length (`W × H × L`), and total block volume.
+    - **Interactive Height Steppers**: Quick `[-5]`, `[-1]`, `[+1]`, and `[+5]` buttons to fine-tune volume height directly from the GUI.
+    - **Block Selector & Visual Slot Preview**: Renders the selected fill block with an interactive **`[ 🔍 Change ]`** button opening `BlockPickerModalScreen` to choose any block in Minecraft.
+    - **Action Controls**: One-click **`[ ✔ Fill Area ]`** to authorize construction, **`[ ⌫ Reset ]`** to clear corners, and **`[ ✖ Cancel ]`** to dismiss.
+- **Bottom-to-Top Layer-by-Layer Execution (`StructureBlueprint.createAreaFillBlueprint`)**:
+  - Dynamically synthesizes an in-memory area blueprint ordered deterministically bottom-up layer-by-layer ($Y = 0 \to H-1$, $Z$, $X$), ensuring builder minions erect stable foundations before working upwards.
+- **Autonomous Minion Volumetric Construction (`ConstructionManager.startAreaBuildSession`)**:
+  - Authoritative server session mobilizes nearby Builder minions within 112 blocks.
+  - Builders activate 3D Arcane Levitation and block phasing (`noClip = true`), query materials, craft necessary blocks on demand, and place every block in the volume until 100% completed.
+- **Command Hub GUI (`CommandScepterScreen`) Integration**:
+  - Features dedicated `[ 🏛 Blue ]` vs `[ ◫ Area ]` sub-mode toggle buttons in the `BUILD` mode control bar.
+  - Displays live area volume dimensions and provides a quick **`[ ✦ Fill ]`** modal trigger.
 
 - **On-Demand Block-to-Block Crafting (`MinionHarvestingHelper.tryCraftBlockFromInventory`)**:
   - Builder minions in survival mode can now craft architectural, masonry, utility, and decorative blocks on demand directly from base materials in their own 9-slot inventory (functioning like a player using a crafting table).

@@ -139,6 +139,14 @@
   "gui.modid-mmcli-agent-modding.mining_confirm_modal.blocks_label": "Blocks to Excavate:",
   "gui.modid-mmcli-agent-modding.mining_confirm_modal.dimensions_label": "Area Dimensions:",
 
+  "gui.modid-mmcli-agent-modding.build_area_confirm_modal.title": "Confirm Area Fill Construction",
+  "gui.modid-mmcli-agent-modding.build_area_confirm_modal.confirm_button": "Fill Area",
+  "gui.modid-mmcli-agent-modding.build_area_confirm_modal.cancel_button": "Cancel",
+  "gui.modid-mmcli-agent-modding.build_area_confirm_modal.clear_corners": "Reset Area",
+  "gui.modid-mmcli-agent-modding.build_area_confirm_modal.height_label": "Height Adjustment:",
+  "gui.modid-mmcli-agent-modding.build_area_confirm_modal.material_label": "Fill Material:",
+  "gui.modid-mmcli-agent-modding.build_area_confirm_modal.dimensions_label": "Area Dimensions:",
+
   "gui.modid-mmcli-agent-modding.patrol_route_modal.title_edit": "Edit Patrol Route",
   "gui.modid-mmcli-agent-modding.patrol_route_modal.title_create": "Create Patrol Route",
   "gui.modid-mmcli-agent-modding.patrol_route_modal.name_label": "Route Name:",

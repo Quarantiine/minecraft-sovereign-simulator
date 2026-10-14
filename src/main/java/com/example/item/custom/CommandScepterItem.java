@@ -3,6 +3,7 @@ package com.example.item.custom;
 import com.example.blueprint.BlueprintBlock;
 import com.example.blueprint.BlueprintRegistry;
 import com.example.blueprint.StructureBlueprint;
+import com.example.component.BuildingMode;
 import com.example.component.CommandMode;
 import com.example.component.MiningMode;
 import com.example.component.ModDataComponents;
@@ -114,6 +115,13 @@ public class CommandScepterItem extends Item {
 	public static MineModalOpener MINE_MODAL_OPENER = null;
 
 	@FunctionalInterface
+	public interface BuildModalOpener {
+		void openBuildModal(PlayerEntity player, Hand hand, ItemStack stack, BlockPos pos1, BlockPos pos2);
+	}
+
+	public static BuildModalOpener BUILD_MODAL_OPENER = null;
+
+	@FunctionalInterface
 	public interface DesignCornerStepper {
 		int stepCorner(BlockPos pos);
 	}
@@ -142,6 +150,21 @@ public class CommandScepterItem extends Item {
 
 	public static MineCornerResetter MINE_CORNER_RESETTER = null;
 	public static Runnable MINE_CLICK_CONSUMER = null;
+
+	@FunctionalInterface
+	public interface BuildCornerStepper {
+		int stepCorner(BlockPos pos);
+	}
+
+	public static BuildCornerStepper BUILD_CORNER_STEPPER = null;
+
+	@FunctionalInterface
+	public interface BuildCornerResetter {
+		void resetCorners();
+	}
+
+	public static BuildCornerResetter BUILD_CORNER_RESETTER = null;
+	public static Runnable BUILD_CLICK_CONSUMER = null;
 
 	@FunctionalInterface
 	public interface ClientTargetResolver {
@@ -289,6 +312,58 @@ public class CommandScepterItem extends Item {
 			);
 
 			player.sendMessage(Text.literal("§6✦ Mining Sub-Mode: §r" + nextMode.getFormattedName()), true);
+		}
+		return nextMode;
+	}
+
+	/**
+	 * Resolves the active {@link BuildingMode} stored in the item's data component.
+	 *
+	 * @param stack The scepter ItemStack.
+	 * @return The active BuildingMode, defaulting to {@link BuildingMode#BLUEPRINT}.
+	 */
+	public static BuildingMode getBuildingMode(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return BuildingMode.BLUEPRINT;
+		return stack.getOrDefault(ModDataComponents.BUILDING_MODE, BuildingMode.BLUEPRINT);
+	}
+
+	/**
+	 * Sets the active {@link BuildingMode} on the item stack.
+	 *
+	 * @param stack The scepter ItemStack.
+	 * @param mode  The BuildingMode to assign.
+	 */
+	public static void setBuildingMode(ItemStack stack, BuildingMode mode) {
+		if (stack == null || stack.isEmpty()) return;
+		stack.set(ModDataComponents.BUILDING_MODE, Objects.requireNonNull(mode, "building mode cannot be null"));
+	}
+
+	/**
+	 * Cycles to the next {@link BuildingMode} in sequence (BLUEPRINT -> AREA -> BLUEPRINT),
+	 * playing audio feedback and projecting an action-bar overlay notification.
+	 *
+	 * @param stack  The scepter ItemStack.
+	 * @param player The commanding player.
+	 * @param world  The world instance.
+	 * @return The newly assigned BuildingMode.
+	 */
+	public static BuildingMode cycleBuildingMode(ItemStack stack, PlayerEntity player, World world) {
+		BuildingMode nextMode = getBuildingMode(stack).next();
+		setBuildingMode(stack, nextMode);
+
+		if (world != null && player != null) {
+			world.playSound(
+				null,
+				player.getX(),
+				player.getY(),
+				player.getZ(),
+				SoundEvents.BLOCK_NOTE_BLOCK_HARP.value(),
+				SoundCategory.PLAYERS,
+				1.0F,
+				nextMode == BuildingMode.AREA ? 1.4F : 1.0F
+			);
+
+			player.sendMessage(Text.literal("§3✦ Building Sub-Mode: §r" + nextMode.getFormattedName()), true);
 		}
 		return nextMode;
 	}
@@ -1067,6 +1142,284 @@ public class CommandScepterItem extends Item {
 		if (player != null) {
 			player.sendMessage(
 				Text.literal("§6✦ Cleared MINE corner selections (Pos1 & Pos2) - Ready for Pos1!§r"),
+				true
+			);
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------
+	// BUILD AREA CORNER SELECTION & VOLUME MANAGEMENT
+	// -----------------------------------------------------------------------------------------
+
+	/**
+	 * Resolves the active BUILD mode corner 1 (Pos1) stored on the scepter stack.
+	 */
+	public static BlockPos getBuildPos1(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return null;
+		return stack.get(ModDataComponents.BUILD_POS1);
+	}
+
+	/**
+	 * Sets or clears the active BUILD mode corner 1 (Pos1) on the scepter stack.
+	 */
+	public static void setBuildPos1(ItemStack stack, BlockPos pos) {
+		if (stack == null || stack.isEmpty()) return;
+		if (pos == null) {
+			stack.remove(ModDataComponents.BUILD_POS1);
+		} else {
+			stack.set(ModDataComponents.BUILD_POS1, pos.toImmutable());
+		}
+	}
+
+	/**
+	 * Resolves the active BUILD mode corner 2 (Pos2) stored on the scepter stack.
+	 */
+	public static BlockPos getBuildPos2(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return null;
+		return stack.get(ModDataComponents.BUILD_POS2);
+	}
+
+	/**
+	 * Sets or clears the active BUILD mode corner 2 (Pos2) on the scepter stack.
+	 */
+	public static void setBuildPos2(ItemStack stack, BlockPos pos) {
+		if (stack == null || stack.isEmpty()) return;
+		if (pos == null) {
+			stack.remove(ModDataComponents.BUILD_POS2);
+		} else {
+			stack.set(ModDataComponents.BUILD_POS2, pos.toImmutable());
+		}
+	}
+
+	/**
+	 * Sets both BUILD mode corners on the scepter stack.
+	 */
+	public static void setBuildCorners(ItemStack stack, BlockPos p1, BlockPos p2) {
+		setBuildPos1(stack, p1);
+		setBuildPos2(stack, p2);
+	}
+
+	/**
+	 * Clears both BUILD mode corners on the scepter stack.
+	 */
+	public static void clearBuildCorners(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return;
+		stack.remove(ModDataComponents.BUILD_POS1);
+		stack.remove(ModDataComponents.BUILD_POS2);
+	}
+
+	/**
+	 * Checks if both Pos1 and Pos2 are selected for BUILD mode on the scepter.
+	 */
+	public static boolean hasCompleteBuildSelection(ItemStack stack) {
+		return getBuildPos1(stack) != null && getBuildPos2(stack) != null;
+	}
+
+	/**
+	 * Handles selecting Corner 1 (Pos1) in BUILD AREA mode.
+	 */
+	public static void handleBuildPos1(PlayerEntity player, World world, ItemStack stack, BlockPos pos) {
+		if (stack == null || stack.isEmpty() || pos == null) return;
+		setBuildPos1(stack, pos);
+
+		world.playSound(
+			null,
+			pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D,
+			SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME,
+			SoundCategory.PLAYERS,
+			1.2F,
+			1.2F
+		);
+		if (player != null) {
+			world.playSound(
+				null,
+				player.getX(), player.getY(), player.getZ(),
+				SoundEvents.BLOCK_NOTE_BLOCK_CHIME.value(),
+				SoundCategory.PLAYERS,
+				0.8F,
+				1.2F
+			);
+		}
+
+		if (world instanceof ServerWorld serverWorld) {
+			double cx = pos.getX() + 0.5D;
+			double cy = pos.getY() + 0.5D;
+			double cz = pos.getZ() + 0.5D;
+			serverWorld.spawnParticles(ParticleTypes.ENCHANT, cx, cy + 0.3D, cz, 8, 0.2D, 0.3D, 0.2D, 0.1D);
+			serverWorld.spawnParticles(ParticleTypes.GLOW, cx, cy + 0.5D, cz, 6, 0.2D, 0.2D, 0.2D, 0.02D);
+		} else if (world.isClient()) {
+			double cx = pos.getX() + 0.5D;
+			double cy = pos.getY() + 0.5D;
+			double cz = pos.getZ() + 0.5D;
+			for (int i = 0; i < 6; i++) {
+				world.addParticle(ParticleTypes.ENCHANT, cx, cy + 0.3D, cz, 0.0D, 0.05D, 0.0D);
+				world.addParticle(ParticleTypes.GLOW, cx, cy + 0.5D, cz, 0.0D, 0.02D, 0.0D);
+			}
+		}
+
+		if (player != null) {
+			BlockPos pos2 = getBuildPos2(stack);
+			if (pos2 != null) {
+				int sx = Math.abs(pos.getX() - pos2.getX()) + 1;
+				int sy = Math.abs(pos.getY() - pos2.getY()) + 1;
+				int sz = Math.abs(pos.getZ() - pos2.getZ()) + 1;
+				int volume = sx * sy * sz;
+				player.sendMessage(
+					Text.literal("§3✦ Build Pos1 (Corner 1) Set: §f[" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + "] §8(§e" + sx + "x" + sy + "x" + sz + " §7" + volume + "b§8) §a[Right-Click to Confirm Fill]§r"),
+					true
+				);
+			} else {
+				player.sendMessage(
+					Text.literal("§3✦ Build Pos1 (Corner 1) Set: §f[" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + "] §7(Left-click next block for Pos2)§r"),
+					true
+				);
+			}
+		}
+	}
+
+	/**
+	 * Handles selecting Corner 2 (Pos2) in BUILD AREA mode.
+	 */
+	public static void handleBuildPos2(PlayerEntity player, World world, ItemStack stack, BlockPos pos) {
+		if (stack == null || stack.isEmpty() || pos == null) return;
+		setBuildPos2(stack, pos);
+
+		world.playSound(
+			null,
+			pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D,
+			SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE,
+			SoundCategory.PLAYERS,
+			1.2F,
+			1.4F
+		);
+		if (player != null) {
+			world.playSound(
+				null,
+				player.getX(), player.getY(), player.getZ(),
+				SoundEvents.BLOCK_NOTE_BLOCK_BELL.value(),
+				SoundCategory.PLAYERS,
+				0.8F,
+				1.4F
+			);
+		}
+
+		if (world instanceof ServerWorld serverWorld) {
+			double cx = pos.getX() + 0.5D;
+			double cy = pos.getY() + 0.5D;
+			double cz = pos.getZ() + 0.5D;
+			serverWorld.spawnParticles(ParticleTypes.ENCHANT, cx, cy + 0.3D, cz, 10, 0.25D, 0.35D, 0.25D, 0.1D);
+			serverWorld.spawnParticles(ParticleTypes.GLOW, cx, cy + 0.5D, cz, 6, 0.2D, 0.2D, 0.2D, 0.02D);
+		} else if (world.isClient()) {
+			double cx = pos.getX() + 0.5D;
+			double cy = pos.getY() + 0.5D;
+			double cz = pos.getZ() + 0.5D;
+			for (int i = 0; i < 6; i++) {
+				world.addParticle(ParticleTypes.ENCHANT, cx, cy + 0.3D, cz, 0.0D, 0.05D, 0.0D);
+				world.addParticle(ParticleTypes.GLOW, cx, cy + 0.5D, cz, 0.0D, 0.02D, 0.0D);
+			}
+		}
+
+		if (player != null) {
+			BlockPos pos1 = getBuildPos1(stack);
+			if (pos1 != null) {
+				int sx = Math.abs(pos1.getX() - pos.getX()) + 1;
+				int sy = Math.abs(pos1.getY() - pos.getY()) + 1;
+				int sz = Math.abs(pos1.getZ() - pos.getZ()) + 1;
+				int volume = sx * sy * sz;
+				player.sendMessage(
+					Text.literal("§3✦ Build Pos2 (Corner 2) Set: §f[" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + "] §8(§e" + sx + "x" + sy + "x" + sz + " §7" + volume + "b§8) §a[Right-Click to Confirm Fill]§r"),
+					true
+				);
+			} else {
+				player.sendMessage(
+					Text.literal("§3✦ Build Pos2 (Corner 2) Set: §f[" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + "] §7(Left-click block for Pos1)§r"),
+					true
+				);
+			}
+		}
+	}
+
+	private static volatile long lastBuildClickTimestamp = 0L;
+	public static final long BUILD_CLICK_DEBOUNCE_MS = 350L;
+
+	public static boolean isBuildClickDebounced() {
+		return System.currentTimeMillis() - lastBuildClickTimestamp < BUILD_CLICK_DEBOUNCE_MS;
+	}
+
+	public static void recordBuildClick() {
+		lastBuildClickTimestamp = System.currentTimeMillis();
+	}
+
+	public static void resetBuildClickDebounce() {
+		lastBuildClickTimestamp = 0L;
+	}
+
+	public static int handleBuildClick(PlayerEntity player, World world, ItemStack stack, BlockPos pos, boolean isSneaking) {
+		if (stack == null || stack.isEmpty()) return 0;
+		if (isSneaking) {
+			handleBuildReset(player, world, stack);
+			return 0;
+		}
+		if (pos == null) return 0;
+
+		long now = System.currentTimeMillis();
+		if (now - lastBuildClickTimestamp < BUILD_CLICK_DEBOUNCE_MS) {
+			return 0;
+		}
+		lastBuildClickTimestamp = now;
+
+		int step;
+		if (BUILD_CORNER_STEPPER != null) {
+			step = BUILD_CORNER_STEPPER.stepCorner(pos);
+		} else {
+			BlockPos currentPos1 = getBuildPos1(stack);
+			BlockPos currentPos2 = getBuildPos2(stack);
+			if (currentPos1 == null) {
+				step = 1;
+			} else if (currentPos2 == null) {
+				step = 2;
+			} else if (pos.equals(currentPos2)) {
+				step = 2;
+			} else {
+				step = 1;
+			}
+		}
+
+		if (step == 1) {
+			setBuildPos2(stack, null);
+			handleBuildPos1(player, world, stack, pos);
+			return 1;
+		} else {
+			handleBuildPos2(player, world, stack, pos);
+			return 2;
+		}
+	}
+
+	public static int handleBuildClick(PlayerEntity player, World world, ItemStack stack, BlockPos pos) {
+		return handleBuildClick(player, world, stack, pos, player != null && player.isSneaking());
+	}
+
+	public static void handleBuildReset(PlayerEntity player, World world, ItemStack stack) {
+		if (BUILD_CORNER_RESETTER != null) {
+			try {
+				BUILD_CORNER_RESETTER.resetCorners();
+			} catch (Throwable ignored) {}
+		}
+		clearBuildCorners(stack);
+
+		if (world != null && player != null) {
+			world.playSound(
+				null,
+				player.getX(), player.getY(), player.getZ(),
+				SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(),
+				SoundCategory.PLAYERS,
+				1.0F,
+				0.8F
+			);
+		}
+		if (player != null) {
+			player.sendMessage(
+				Text.literal("§6✦ Cleared BUILD corner selections (Pos1 & Pos2) - Ready for Pos1!§r"),
 				true
 			);
 		}
@@ -2329,8 +2682,17 @@ public class CommandScepterItem extends Item {
 			}
 		}
 
-		// BUILD Mode: Anchor construction session at clicked block face (or deconstruction if sneaking)
+		// BUILD Mode: Anchor construction session at clicked block face or open confirm modal (AREA)
 		if (mode == CommandMode.BUILD) {
+			BuildingMode buildingMode = getBuildingMode(stack);
+			if (buildingMode == BuildingMode.AREA) {
+				if (world.isClient() && BUILD_MODAL_OPENER != null) {
+					BlockPos p1 = getBuildPos1(stack);
+					BlockPos p2 = getBuildPos2(stack);
+					BUILD_MODAL_OPENER.openBuildModal(player, context.getHand(), stack, p1, p2);
+				}
+				return ActionResult.success(world.isClient());
+			}
 			if (player.getItemCooldownManager().isCoolingDown(stack.getItem())) {
 				return ActionResult.success(world.isClient());
 			}
@@ -2573,6 +2935,15 @@ public class CommandScepterItem extends Item {
 				BlockPos p1 = getMinePos1(stack);
 				BlockPos p2 = getMinePos2(stack);
 				MINE_MODAL_OPENER.openMineModal(player, hand, stack, p1, p2);
+			}
+			return TypedActionResult.success(stack, world.isClient());
+		}
+
+		if (mode == CommandMode.BUILD && getBuildingMode(stack) == BuildingMode.AREA) {
+			if (world.isClient() && BUILD_MODAL_OPENER != null) {
+				BlockPos p1 = getBuildPos1(stack);
+				BlockPos p2 = getBuildPos2(stack);
+				BUILD_MODAL_OPENER.openBuildModal(player, hand, stack, p1, p2);
 			}
 			return TypedActionResult.success(stack, world.isClient());
 		}
@@ -3742,14 +4113,29 @@ public class CommandScepterItem extends Item {
 		}
 
 		if (mode == CommandMode.BUILD) {
-			String bpId = getBlueprintId(stack);
-			StructureBlueprint bp = BlueprintRegistry.get(bpId).orElse(null);
-			if (bp != null && bp.getBlockCount() > 0) {
-				int degrees = getRotationIndex(stack) * 90;
-				tooltip.add(Text.literal("§7Active Blueprint: §b" + bp.getName() + " §8(" + bp.getBlockCount() + " blocks)"));
-				tooltip.add(Text.literal("§7Rotation: §b" + degrees + "° §7(" + getRotation(stack).name() + ")"));
+			BuildingMode buildingMode = getBuildingMode(stack);
+			tooltip.add(Text.literal("§7Building Mode: §r" + buildingMode.getFormattedName()));
+			if (buildingMode == BuildingMode.AREA) {
+				BlockPos p1 = getBuildPos1(stack);
+				BlockPos p2 = getBuildPos2(stack);
+				tooltip.add(Text.literal("§7Build Pos1: §3" + (p1 != null ? "[" + p1.toShortString() + "]" : "Not Set")));
+				tooltip.add(Text.literal("§7Build Pos2: §3" + (p2 != null ? "[" + p2.toShortString() + "]" : "Not Set")));
+				if (p1 != null && p2 != null) {
+					int sx = Math.abs(p1.getX() - p2.getX()) + 1;
+					int sy = Math.abs(p1.getY() - p2.getY()) + 1;
+					int sz = Math.abs(p1.getZ() - p2.getZ()) + 1;
+					tooltip.add(Text.literal("§7Fill Volume: §e" + sx + "x" + sy + "x" + sz + " §8(" + (sx * sy * sz) + " blocks)"));
+				}
 			} else {
-				tooltip.add(Text.literal("§7Active Blueprint: §cNone (Use DESIGN mode)"));
+				String bpId = getBlueprintId(stack);
+				StructureBlueprint bp = BlueprintRegistry.get(bpId).orElse(null);
+				if (bp != null && bp.getBlockCount() > 0) {
+					int degrees = getRotationIndex(stack) * 90;
+					tooltip.add(Text.literal("§7Active Blueprint: §b" + bp.getName() + " §8(" + bp.getBlockCount() + " blocks)"));
+					tooltip.add(Text.literal("§7Rotation: §b" + degrees + "° §7(" + getRotation(stack).name() + ")"));
+				} else {
+					tooltip.add(Text.literal("§7Active Blueprint: §cNone (Use DESIGN mode)"));
+				}
 			}
 		}
 

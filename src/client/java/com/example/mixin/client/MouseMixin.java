@@ -1,7 +1,9 @@
 package com.example.mixin.client;
 
+import com.example.client.renderer.ClientBuildCaptureTracker;
 import com.example.client.renderer.ClientDesignCaptureTracker;
 import com.example.client.renderer.ClientMiningCaptureTracker;
+import com.example.component.BuildingMode;
 import com.example.component.CommandMode;
 import com.example.component.MiningMode;
 import com.example.item.custom.CommandScepterItem;
@@ -71,6 +73,24 @@ public class MouseMixin {
 							int maxY = Math.max(ClientMiningCaptureTracker.getPos1().getY(), ClientMiningCaptureTracker.getPos2().getY());
 							client.player.sendMessage(
 								Text.literal("§6✦ Mining Box Height: §f" + newHeight + " blocks §8(Y: " + minY + " → " + maxY + ") §8| §e" + ClientMiningCaptureTracker.getDimensionString()),
+								true
+							);
+							client.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);
+						}
+
+						ci.cancel(); // Prevent cycling hotbar slots!
+					} else if (mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == BuildingMode.AREA) {
+						int step = (vertical > 0.0D) ? 1 : -1;
+						if (Screen.hasShiftDown()) {
+							step *= 5;
+						}
+
+						int newHeight = ClientBuildCaptureTracker.adjustHeight(step);
+						if (newHeight > 0 && ClientBuildCaptureTracker.getPos1() != null && ClientBuildCaptureTracker.getPos2() != null) {
+							int minY = Math.min(ClientBuildCaptureTracker.getPos1().getY(), ClientBuildCaptureTracker.getPos2().getY());
+							int maxY = Math.max(ClientBuildCaptureTracker.getPos1().getY(), ClientBuildCaptureTracker.getPos2().getY());
+							client.player.sendMessage(
+								Text.literal("§3✦ Build Box Height: §f" + newHeight + " blocks §8(Y: " + minY + " → " + maxY + ") §8| §e" + ClientBuildCaptureTracker.getDimensionString()),
 								true
 							);
 							client.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);

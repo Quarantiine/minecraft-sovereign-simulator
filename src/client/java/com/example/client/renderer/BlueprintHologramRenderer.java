@@ -4,6 +4,7 @@ import com.example.blueprint.BlueprintBlock;
 import com.example.blueprint.BlueprintRegistry;
 import com.example.blueprint.StructureBlueprint;
 import com.example.client.camera.TacticalBuildCameraController;
+import com.example.component.BuildingMode;
 import com.example.component.CommandMode;
 import com.example.component.MiningMode;
 import com.example.item.ModItems;
@@ -100,8 +101,11 @@ public class BlueprintHologramRenderer {
 		MiningMode miningMode = scepterStack != null ? CommandScepterItem.getMiningMode(scepterStack) : MiningMode.AREA;
 		boolean isMineAreaMode = isMineMode && miningMode == MiningMode.AREA;
 		boolean isMineDirectMode = isMineMode && miningMode == MiningMode.DIRECT;
+		BuildingMode buildingMode = scepterStack != null ? CommandScepterItem.getBuildingMode(scepterStack) : BuildingMode.BLUEPRINT;
+		boolean isBuildBlueprintMode = isBuildMode && buildingMode == BuildingMode.BLUEPRINT;
+		boolean isBuildAreaMode = isBuildMode && buildingMode == BuildingMode.AREA;
 
-		if (isBuildMode || isMineDirectMode) {
+		if (isBuildBlueprintMode || isMineDirectMode) {
 			BlockHitResult hitResult = TacticalBuildCameraController.getCameraTargetedBlock(client, 96.0F);
 			if (hitResult == null || hitResult.getType() != HitResult.Type.BLOCK) {
 				if (client.crosshairTarget instanceof BlockHitResult bhr && bhr.getType() == HitResult.Type.BLOCK) {
@@ -162,7 +166,24 @@ public class BlueprintHologramRenderer {
 			}
 		}
 
-		if (activeSessions.isEmpty() && !showPreview && !hasDesignHologram && !hasMiningHologram) {
+		BlockPos buildP1 = ClientBuildCaptureTracker.getPos1();
+		BlockPos buildP2 = ClientBuildCaptureTracker.getPos2();
+		boolean hasBuildHologram = isBuildAreaMode && (buildP1 != null || buildP2 != null);
+
+		BlockHitResult buildTargetHit = null;
+		if (isBuildAreaMode && buildP1 != null && buildP2 == null) {
+			BlockHitResult hit = TacticalBuildCameraController.getCameraTargetedBlock(client, 96.0F);
+			if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
+				if (client.crosshairTarget instanceof BlockHitResult bhr && bhr.getType() == HitResult.Type.BLOCK) {
+					hit = bhr;
+				}
+			}
+			if (hit != null && hit.getType() == HitResult.Type.BLOCK) {
+				buildTargetHit = hit;
+			}
+		}
+
+		if (activeSessions.isEmpty() && !showPreview && !hasDesignHologram && !hasMiningHologram && !hasBuildHologram) {
 			return;
 		}
 
@@ -287,6 +308,43 @@ public class BlueprintHologramRenderer {
 			}
 		}
 
+		// 5. BUILD AREA Mode In-World Bounding Volume & Ghost Grid Hologram
+		if (isBuildAreaMode) {
+			if (ClientBuildCaptureTracker.hasCompleteSelection()) {
+				Box buildBox = ClientBuildCaptureTracker.getBox();
+				if (buildBox != null) {
+					renderBuildBoundingBox(matrices, buffer, buildBox, 0.0F, 0.85F, 1.0F, 0.85F, buildP1, buildP2);
+					int minX = Math.min(buildP1.getX(), buildP2.getX());
+					int minY = Math.min(buildP1.getY(), buildP2.getY());
+					int minZ = Math.min(buildP1.getZ(), buildP2.getZ());
+					int maxX = Math.max(buildP1.getX(), buildP2.getX());
+					int maxY = Math.max(buildP1.getY(), buildP2.getY());
+					int maxZ = Math.max(buildP1.getZ(), buildP2.getZ());
+					renderBuildGhostGrid(matrices, buffer, client.world, minX, minY, minZ, maxX, maxY, maxZ, 1.0F);
+				}
+			} else if (buildP1 != null) {
+				if (buildTargetHit != null) {
+					BlockPos hitPos = buildTargetHit.getBlockPos();
+					BlockPos targetPos = (client.world != null && client.world.getBlockState(hitPos).isReplaceable())
+						? hitPos
+						: (buildTargetHit.getSide() != null ? hitPos.offset(buildTargetHit.getSide()) : hitPos);
+					int minX = Math.min(buildP1.getX(), targetPos.getX());
+					int minY = Math.min(buildP1.getY(), targetPos.getY());
+					int minZ = Math.min(buildP1.getZ(), targetPos.getZ());
+					int maxX = Math.max(buildP1.getX(), targetPos.getX());
+					int maxY = Math.max(buildP1.getY(), targetPos.getY());
+					int maxZ = Math.max(buildP1.getZ(), targetPos.getZ());
+					Box candidateBox = new Box(minX, minY, minZ, maxX + 1.0D, maxY + 1.0D, maxZ + 1.0D);
+					renderBuildBoundingBox(matrices, buffer, candidateBox, 0.0F, 0.75F, 0.95F, 0.55F, buildP1, targetPos);
+					renderBuildGhostGrid(matrices, buffer, client.world, minX, minY, minZ, maxX, maxY, maxZ, 0.65F);
+				} else {
+					WorldRenderer.drawBox(matrices, buffer, new Box(buildP1), 0.0F, 0.90F, 1.0F, 0.95F);
+				}
+			} else if (buildP2 != null) {
+				WorldRenderer.drawBox(matrices, buffer, new Box(buildP2), 0.20F, 0.70F, 1.0F, 0.95F);
+			}
+		}
+
 		matrices.pop();
 
 		if (consumers instanceof VertexConsumerProvider.Immediate immediate) {
@@ -374,7 +432,84 @@ public class BlueprintHologramRenderer {
 
 		for (double[] c : corners) {
 			Box cornerBox = new Box(c[0] - 0.05D, c[1] - 0.05D, c[2] - 0.05D, c[0] + 0.05D, c[1] + 0.05D, c[2] + 0.05D);
-			WorldRenderer.drawBox(matrices, buffer, cornerBox, 1.0F, 0.70F, 0.05F, 0.85F);
+			WorldRenderer.drawBox(matrices, buffer, cornerBox, 1.0F, 0.60F, 0.10F, 0.80F);
+		}
+	}
+
+	private static void renderBuildBoundingBox(
+		MatrixStack matrices,
+		VertexConsumer buffer,
+		Box box,
+		float r,
+		float g,
+		float b,
+		float a,
+		BlockPos p1,
+		BlockPos p2
+	) {
+		WorldRenderer.drawBox(matrices, buffer, box, r, g, b, a);
+
+		if (p1 != null) {
+			WorldRenderer.drawBox(matrices, buffer, new Box(p1), 0.0F, 0.90F, 1.0F, 0.95F);
+		}
+
+		if (p2 != null) {
+			WorldRenderer.drawBox(matrices, buffer, new Box(p2), 0.20F, 0.70F, 1.0F, 0.95F);
+		}
+
+		double[][] corners = {
+			{ box.minX, box.minY, box.minZ },
+			{ box.maxX, box.minY, box.minZ },
+			{ box.minX, box.minY, box.maxZ },
+			{ box.maxX, box.minY, box.maxZ },
+			{ box.minX, box.maxY, box.minZ },
+			{ box.maxX, box.maxY, box.minZ },
+			{ box.minX, box.maxY, box.maxZ },
+			{ box.maxX, box.maxY, box.maxZ }
+		};
+
+		for (double[] c : corners) {
+			Box cornerBox = new Box(c[0] - 0.05D, c[1] - 0.05D, c[2] - 0.05D, c[0] + 0.05D, c[1] + 0.05D, c[2] + 0.05D);
+			WorldRenderer.drawBox(matrices, buffer, cornerBox, 0.0F, 0.85F, 1.0F, 0.80F);
+		}
+	}
+
+	private static void renderBuildGhostGrid(
+		MatrixStack matrices,
+		VertexConsumer buffer,
+		net.minecraft.world.World world,
+		int minX,
+		int minY,
+		int minZ,
+		int maxX,
+		int maxY,
+		int maxZ,
+		float alphaMultiplier
+	) {
+		if (world == null) return;
+		int sizeX = maxX - minX + 1;
+		int sizeY = maxY - minY + 1;
+		int sizeZ = maxZ - minZ + 1;
+		if (sizeX > ClientBuildCaptureTracker.MAX_DIMENSION
+			|| sizeY > ClientBuildCaptureTracker.MAX_HEIGHT
+			|| sizeZ > ClientBuildCaptureTracker.MAX_DIMENSION
+			|| (long) sizeX * sizeY * sizeZ > ClientBuildCaptureTracker.MAX_VOLUME) {
+			return;
+		}
+
+		BlockPos.Mutable mutPos = new BlockPos.Mutable();
+		for (int y = minY; y <= maxY; y++) {
+			for (int x = minX; x <= maxX; x++) {
+				for (int z = minZ; z <= maxZ; z++) {
+					mutPos.set(x, y, z);
+					BlockState state = world.getBlockState(mutPos);
+					if (state.isAir() || state.isReplaceable()) {
+						WorldRenderer.drawBox(matrices, buffer, new Box(x, y, z, x + 1.0D, y + 1.0D, z + 1.0D), 0.0F, 0.85F, 1.0F, 0.35F * alphaMultiplier);
+					} else {
+						WorldRenderer.drawBox(matrices, buffer, new Box(x, y, z, x + 1.0D, y + 1.0D, z + 1.0D), 0.2F, 0.6F, 0.8F, 0.15F * alphaMultiplier);
+					}
+				}
+			}
 		}
 	}
 

@@ -211,6 +211,49 @@ public class ConstructionManager {
 		return startSession(world, anchorPos, areaBlueprint, owner, ConstructionSession.SessionMode.DISMANTLE);
 	}
 
+	public ConstructionSession startAreaBuildSession(
+		ServerWorld world,
+		BlockPos pos1,
+		BlockPos pos2,
+		BlockState fillBlockState,
+		PlayerEntity owner
+	) {
+		Objects.requireNonNull(world, "world cannot be null");
+		Objects.requireNonNull(pos1, "pos1 cannot be null");
+		Objects.requireNonNull(pos2, "pos2 cannot be null");
+		Objects.requireNonNull(fillBlockState, "fillBlockState cannot be null");
+		Objects.requireNonNull(owner, "owner cannot be null");
+
+		int minX = Math.min(pos1.getX(), pos2.getX());
+		int maxX = Math.max(pos1.getX(), pos2.getX());
+		int minY = Math.min(pos1.getY(), pos2.getY());
+		int maxY = Math.max(pos1.getY(), pos2.getY());
+		int minZ = Math.min(pos1.getZ(), pos2.getZ());
+		int maxZ = Math.max(pos1.getZ(), pos2.getZ());
+
+		int sizeX = maxX - minX + 1;
+		int sizeY = maxY - minY + 1;
+		int sizeZ = maxZ - minZ + 1;
+
+		BlockPos anchorPos = new BlockPos(minX, minY, minZ);
+
+		String blockName = fillBlockState.getBlock().getName().getString();
+		String id = "build_area_" + System.currentTimeMillis();
+		String name = "Area Fill: " + blockName + " (" + sizeX + "x" + sizeY + "x" + sizeZ + ")";
+		String desc = "Volumetric Area Fill with " + blockName + " from [" + minX + "," + minY + "," + minZ + "] to [" + maxX + "," + maxY + "," + maxZ + "]";
+
+		StructureBlueprint areaBlueprint = StructureBlueprint.createAreaFillBlueprint(
+			pos1,
+			pos2,
+			fillBlockState,
+			id,
+			name,
+			desc
+		);
+
+		return startSession(world, anchorPos, areaBlueprint, owner, ConstructionSession.SessionMode.BUILD);
+	}
+
 	/**
 	 * Initiates a new construction or deconstruction session anchored at the specified world coordinate.
 	 *

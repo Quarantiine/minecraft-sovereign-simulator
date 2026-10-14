@@ -114,6 +114,18 @@ public class ExampleMod implements ModInitializer {
 						}
 					}
 					return ActionResult.SUCCESS;
+				} else if (mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA) {
+					if (world.isClient()) {
+						boolean sneaking = player.isSneaking();
+						BlockPos effectivePos = world.getBlockState(pos).isReplaceable()
+							? pos
+							: ((direction != null) ? pos.offset(direction) : pos.up());
+						CommandScepterItem.handleBuildClick(player, world, stack, effectivePos, sneaking);
+						if (CommandScepterItem.BUILD_CLICK_CONSUMER != null) {
+							CommandScepterItem.BUILD_CLICK_CONSUMER.run();
+						}
+					}
+					return ActionResult.SUCCESS;
 				} else if (mode == CommandMode.PATHWAY) {
 					if (!world.isClient() && world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
 						com.example.patrol.PatrolRouteManager.WaypointMatch match = com.example.patrol.PatrolRouteManager.getInstance().findWaypoint(
@@ -206,6 +218,16 @@ public class ExampleMod implements ModInitializer {
 						CommandScepterItem.handleMineClick(player, world, stack, entityPos, sneaking);
 						if (CommandScepterItem.MINE_CLICK_CONSUMER != null) {
 							CommandScepterItem.MINE_CLICK_CONSUMER.run();
+						}
+					}
+					return ActionResult.SUCCESS;
+				} else if (mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA) {
+					if (world.isClient()) {
+						BlockPos entityPos = entity.getBlockPos();
+						boolean sneaking = player.isSneaking();
+						CommandScepterItem.handleBuildClick(player, world, stack, entityPos, sneaking);
+						if (CommandScepterItem.BUILD_CLICK_CONSUMER != null) {
+							CommandScepterItem.BUILD_CLICK_CONSUMER.run();
 						}
 					}
 					return ActionResult.SUCCESS;

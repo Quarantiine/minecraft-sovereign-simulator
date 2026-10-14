@@ -56,6 +56,7 @@ public class ModNetworking {
 		PayloadTypeRegistry.playC2S().register(CaptureSpatialBlueprintPayload.ID, CaptureSpatialBlueprintPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(DeleteCustomBlueprintPayload.ID, DeleteCustomBlueprintPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(StartMiningAreaPayload.ID, StartMiningAreaPayload.PACKET_CODEC);
+		PayloadTypeRegistry.playC2S().register(StartBuildAreaPayload.ID, StartBuildAreaPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(RequestResourceEstimationPayload.ID, RequestResourceEstimationPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(UpdateTargetFilterPayload.ID, UpdateTargetFilterPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(UpdateMinionCombatPolicyPayload.ID, UpdateMinionCombatPolicyPayload.PACKET_CODEC);
@@ -133,6 +134,10 @@ public class ModNetworking {
 		ServerPlayNetworking.registerGlobalReceiver(StartMiningAreaPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> handleStartMiningArea(player, payload));
+		});
+		ServerPlayNetworking.registerGlobalReceiver(StartBuildAreaPayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> handleStartBuildArea(player, payload));
 		});
 		ServerPlayNetworking.registerGlobalReceiver(RequestResourceEstimationPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
@@ -1002,6 +1007,79 @@ public class ModNetworking {
 			}
 		} catch (Exception e) {
 			player.sendMessage(Text.literal("§c⚠ Failed to start area mining: " + e.getMessage()), true);
+		}
+	}
+
+	/**
+	 * Handles C2S request from the client to initiate an Area Fill / Volumetric Construction session
+	 * for the specified 3D bounding box (pos1, pos2) filled with the specified block.
+	 *
+	 * @param player  The commanding server player.
+	 * @param payload The start build area payload containing pos1, pos2, and blockId.
+	 */
+	private static void handleStartBuildArea(ServerPlayerEntity player, StartBuildAreaPayload payload) {
+		if (player == null || payload == null || payload.pos1() == null || payload.pos2() == null || payload.blockId() == null) {
+			return;
+		}
+
+		ServerWorld world = player.getServerWorld();
+		net.minecraft.util.math.BlockPos pos1 = payload.pos1();
+		net.minecraft.util.math.BlockPos pos2 = payload.pos2();
+		net.minecraft.util.Identifier blockId = payload.blockId();
+
+		// Security: verify player is reasonably close to the target bounds (within 128 blocks)
+		double distSq1 = player.squaredDistanceTo(pos1.toCenterPos());
+		double distSq2 = player.squaredDistanceTo(pos2.toCenterPos());
+		if (distSq1 > 128.0D * 128.0D && distSq2 > 128.0D * 128.0D) {
+			player.sendMessage(Text.literal("§c⚠ Cannot start building: Target area is too far away!§r"), true);
+			return;
+		}
+
+		int minX = Math.min(pos1.getX(), pos2.getX());
+		int maxX = Math.max(pos1.getX(), pos2.getX());
+		int minY = Math.min(pos1.getY(), pos2.getY());
+		int maxY = Math.max(pos1.getY(), pos2.getY());
+		int minZ = Math.min(pos1.getZ(), pos2.getZ());
+		int maxZ = Math.max(pos1.getZ(), pos2.getZ());
+
+		int sizeX = maxX - minX + 1;
+		int sizeY = maxY - minY + 1;
+		int sizeZ = maxZ - minZ + 1;
+
+		if (sizeX > com.example.blueprint.StructureBlueprint.MAX_SPATIAL_DIMENSION ||
+			sizeY > com.example.blueprint.StructureBlueprint.MAX_SPATIAL_HEIGHT ||
+			sizeZ > com.example.blueprint.StructureBlueprint.MAX_SPATIAL_DIMENSION) {
+			player.sendMessage(Text.literal("§c⚠ Build area exceeds maximum dimensions of " +
+				com.example.blueprint.StructureBlueprint.MAX_SPATIAL_DIMENSION + "x" +
+				com.example.blueprint.StructureBlueprint.MAX_SPATIAL_HEIGHT + "x" +
+				com.example.blueprint.StructureBlueprint.MAX_SPATIAL_DIMENSION + "§r"), true);
+			return;
+		}
+
+		long volume = (long) sizeX * sizeY * sizeZ;
+		if (volume > com.example.blueprint.StructureBlueprint.MAX_SPATIAL_VOLUME) {
+			player.sendMessage(Text.literal("§c⚠ Build area volume exceeds maximum limit of " +
+				com.example.blueprint.StructureBlueprint.MAX_SPATIAL_VOLUME + " blocks!§r"), true);
+			return;
+		}
+
+		net.minecraft.block.Block block = Registries.BLOCK.get(blockId);
+		if (block == null || block.getDefaultState().isAir()) {
+			block = net.minecraft.block.Blocks.STONE_BRICKS;
+		}
+		net.minecraft.block.BlockState fillState = block.getDefaultState();
+
+		try {
+			com.example.construction.ConstructionSession session = com.example.construction.ConstructionManager.getInstance()
+				.startAreaBuildSession(world, pos1, pos2, fillState, player);
+			if (session != null && session.isActive()) {
+				world.playSound(
+					null, player.getX(), player.getY(), player.getZ(),
+					SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 1.0F, 1.0F
+				);
+			}
+		} catch (Exception e) {
+			player.sendMessage(Text.literal("§c⚠ Failed to start area building: " + e.getMessage()), true);
 		}
 	}
 

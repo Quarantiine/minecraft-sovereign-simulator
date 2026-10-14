@@ -541,6 +541,90 @@ public class StructureBlueprint {
 	}
 
 	/**
+	 * Creates a volumetric fill blueprint spanning the rectangular 3D box between pos1 and pos2,
+	 * where all voxels are assigned the specified fillBlockState in bottom-to-top layer order.
+	 *
+	 * @param pos1           First corner position.
+	 * @param pos2           Second corner position.
+	 * @param fillBlockState Block state to fill the volume with.
+	 * @param id             Optional blueprint ID (generated if null/blank).
+	 * @param name           Optional display name (generated if null/blank).
+	 * @param description    Optional description text.
+	 * @return StructureBlueprint spanning the specified area box filled with the block state.
+	 */
+	public static StructureBlueprint createAreaFillBlueprint(
+		BlockPos pos1,
+		BlockPos pos2,
+		BlockState fillBlockState,
+		String id,
+		String name,
+		String description
+	) {
+		Objects.requireNonNull(pos1, "pos1 cannot be null");
+		Objects.requireNonNull(pos2, "pos2 cannot be null");
+		Objects.requireNonNull(fillBlockState, "fillBlockState cannot be null");
+
+		int minX = Math.min(pos1.getX(), pos2.getX());
+		int maxX = Math.max(pos1.getX(), pos2.getX());
+		int minY = Math.min(pos1.getY(), pos2.getY());
+		int maxY = Math.max(pos1.getY(), pos2.getY());
+		int minZ = Math.min(pos1.getZ(), pos2.getZ());
+		int maxZ = Math.max(pos1.getZ(), pos2.getZ());
+
+		int sizeX = maxX - minX + 1;
+		int sizeY = maxY - minY + 1;
+		int sizeZ = maxZ - minZ + 1;
+
+		String cleanId = id != null && !id.isBlank() ? id : "build_area_" + System.currentTimeMillis();
+		String cleanName = name != null && !name.isBlank() ? name : "Area Fill (" + sizeX + "x" + sizeY + "x" + sizeZ + ")";
+		String cleanDesc = (description != null && !description.isBlank()) ? description.trim() : "";
+
+		List<BlueprintBlock> blocks = new ArrayList<>(sizeX * sizeY * sizeZ);
+		Item requiredItem = null;
+		try {
+			if (fillBlockState != null && fillBlockState.getBlock() != null) {
+				Item candidate = fillBlockState.getBlock().asItem();
+				if (candidate != null && candidate != net.minecraft.item.Items.AIR) {
+					requiredItem = candidate;
+				}
+			}
+		} catch (Throwable ignored) {}
+		if (requiredItem == null) {
+			try {
+				requiredItem = net.minecraft.item.Items.COBBLESTONE;
+			} catch (Throwable ignored) {}
+		}
+
+		// Layer by layer (bottom to top) for natural construction order
+		for (int y = 0; y < sizeY; y++) {
+			for (int x = 0; x < sizeX; x++) {
+				for (int z = 0; z < sizeZ; z++) {
+					blocks.add(new BlueprintBlock(new BlockPos(x, y, z), fillBlockState));
+				}
+			}
+		}
+
+		Map<Item, Integer> req = new LinkedHashMap<>();
+		if (requiredItem != null) {
+			req.put(requiredItem, blocks.size());
+		}
+
+		BlockBox box = new BlockBox(0, 0, 0, sizeX - 1, sizeY - 1, sizeZ - 1);
+		return new StructureBlueprint(
+			cleanId,
+			cleanName,
+			cleanDesc,
+			sizeX,
+			sizeY,
+			sizeZ,
+			blocks,
+			req,
+			box,
+			BlockRotation.NONE
+		);
+	}
+
+	/**
 	 * Captures non-air blocks within the specified spatial volume and normalizes coordinates
 	 * relative to the minimum corner (minX, minY, minZ), sorting in bottom-up topological order.
 	 *
