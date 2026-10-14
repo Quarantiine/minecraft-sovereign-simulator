@@ -2878,6 +2878,13 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 				return false;
 			}
 		}
+		if (source.isOf(DamageTypes.DROWN)) {
+			if (this.isActivelyBuilding() || this.arcaneLevitating
+					|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(this)) {
+				this.setAir(this.getMaxAir());
+				return false;
+			}
+		}
 		if (this.arcaneLevitating && source.isOf(DamageTypes.IN_WALL)) {
 			return false;
 		}

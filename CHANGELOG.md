@@ -33,6 +33,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Architectural Material Contact Protection**: Water directly touching processed architectural materials (stone bricks, quartz, prismarine, purpur, copper, stairs, slabs, walls, polished/smooth stone) is classified as part of a structure and never harvested.
   - **Immediate Fluid Ticking & Fluid Splash SFX (`MinionBuildGoal`)**: Placing water or lava now schedules immediate fluid ticks via `scheduleFluidTick` and emits realistic fluid splash particles (`ParticleTypes.SPLASH` / `ParticleTypes.LAVA`).
   - **Precise Pre-Placed Fluid Verification (`ConstructionSession.claimNextTask`)**: Pre-completion checks now verify `isStill()` for fluids, preventing minions from walking over to re-place valid water sources already in the build.
+- **Topological Fluid Containment Ordering (`BlueprintBlock.compareTo`, `isFluid`)**:
+  - Enforced a strict containment ordering guard on identical vertical layers: **all solid blocks (basin floors, perimeter retaining walls, rims) are guaranteed to be placed BEFORE any fluid source blocks (water/lava)** on that layer.
+  - Prevents premature water pouring where liquid cascades into unbuilt open air or washes away neighboring redstone, torches, and scaffolding.
+- **Vertical Reach for Elevated Fluid Harvesting (`MinionHarvestingHelper.gatherWaterBucket`)**:
+  - Symmetrically expanded the vertical harvesting search radius from 6 to the full 16 blocks (`HARVEST_SEARCH_RADIUS`).
+  - Allows builder minions constructing high aqueducts, watchtowers, or rooftop fountains to safely reach ground-level rivers, ponds, and aquifers below without stalling water logistics.
 
 #### ⛏️ Mining & Dismantle Fluid Mechanics & Water Source Removal
 - **Liquid Block Tool Immunity (`ConstructionSession`, `MinionBuildGoal.executeDismantleWork`)**:
@@ -49,7 +55,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Water and lava above or around blocks are treated as cleared obstacles, preventing lower layers from stalling if water flows over them.
   - Natural seeping fluids or ocean aquifers no longer prevent dismantle sessions from reaching 100% completion.
 
-#### 🛡️ Safe Solid Ground Positioning Upon Completion
+#### 🛡️ Safe Solid Ground Positioning & Aquatic Builder Safeguards
+- **Aquatic Construction Drowning Safeguard (`MinionEntity.damage`)**:
+  - Builder minions actively engaged in construction tasks or arcane levitation are granted drowning damage immunity (`DamageTypes.DROWN`) and replenish air supply.
+  - Guarantees minions building deep fountains, harbor foundations, underwater tunnels, or flooded moats will never suffocate underwater during work.
 - **Autonomous Safe Solid Ground Recovery (`MinionEntity.tickGentleDescent`, `isSafeStandingPosition`)**:
   - When minions finish construction, dismantling, or mining tasks while airborne or surrounded by water, lava, or hazardous fluids, they no longer descend into liquids or sink to ocean/river bottoms.
   - `tickGentleDescent` automatically identifies the nearest verified dry, solid, non-liquid ground within 32 blocks (or near their commanding player/master) and smoothly glides horizontally across the liquid surface before touching down.

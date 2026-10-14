@@ -121,6 +121,25 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 		return Math.abs(this.offset.getX()) + Math.abs(this.offset.getZ());
 	}
 
+	/**
+	 * Determines whether this block represents a fluid (such as water or lava).
+	 * Uses safe inspection that functions in both live Minecraft and lightweight unit tests.
+	 *
+	 * @return True if this block state is liquid or a fluid block.
+	 */
+	public boolean isFluid() {
+		try {
+			if (this.state == null) {
+				return false;
+			}
+			return this.state.isLiquid()
+				|| (this.state.getBlock() instanceof net.minecraft.block.FluidBlock)
+				|| (this.state.getFluidState() != null && !this.state.getFluidState().isEmpty());
+		} catch (Throwable ignored) {
+			return false;
+		}
+	}
+
 	@Override
 	public int compareTo(BlueprintBlock other) {
 		// 1. Primary: Bottom-up layer ordering by effective Y
@@ -133,6 +152,15 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 		int hangingComp = Boolean.compare(this.isHanging(), other.isHanging());
 		if (hangingComp != 0) {
 			return hangingComp;
+		}
+
+		// 2.5 Fluid containment guard: solid blocks precede fluid sources on the same layer
+		// Ensures basins, rims, and walls are placed before pouring water or lava
+		boolean thisIsFluid = this.isFluid();
+		boolean otherIsFluid = other.isFluid();
+		int fluidComp = Boolean.compare(thisIsFluid, otherIsFluid);
+		if (fluidComp != 0) {
+			return fluidComp;
 		}
 
 		// 3. Secondary: Radial Manhattan distance from center outward

@@ -240,6 +240,24 @@ public class FluidHandlingAndWaterBucketTest {
 		// 7. ConstructionSession must handle fluid isStill check in alreadyInPlace
 		Assertions.assertTrue(sessionSource.contains("task.getBlueprintBlock().state().isOf(Blocks.WATER) && world.getBlockState(task.getWorldPos()).isOf(Blocks.WATER) && world.getFluidState(task.getWorldPos()).isStill()"),
 			"ConstructionSession.claimNextTask must check isStill() when evaluating pre-placed water");
+
+		// 8. BlueprintBlock.compareTo must enforce fluid containment guard (solid blocks precede fluids on the same layer)
+		String bpSource = Files.readString(Path.of("src/main/java/com/example/blueprint/BlueprintBlock.java"));
+		Assertions.assertTrue(bpSource.contains("boolean thisIsFluid = this.isFluid();"),
+			"BlueprintBlock.compareTo must identify fluid blocks for containment ordering");
+		Assertions.assertTrue(bpSource.contains("int fluidComp = Boolean.compare(thisIsFluid, otherIsFluid);"),
+			"BlueprintBlock.compareTo must place solid blocks before fluid blocks on the same effective layer");
+
+		// 9. gatherWaterBucket vertical search radius must match horizontal search radius (16 blocks)
+		Assertions.assertTrue(helperSource.contains("BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, HARVEST_SEARCH_RADIUS, HARVEST_SEARCH_RADIUS)"),
+			"gatherWaterBucket must search vertically by HARVEST_SEARCH_RADIUS so elevated minions reach rivers below");
+
+		// 10. MinionEntity must grant drowning immunity and air replenishment while actively building
+		String minionSource = Files.readString(Path.of("src/main/java/com/example/entity/custom/MinionEntity.java"));
+		Assertions.assertTrue(minionSource.contains("source.isOf(DamageTypes.DROWN)"),
+			"MinionEntity must check DamageTypes.DROWN in damage()");
+		Assertions.assertTrue(minionSource.contains("this.setAir(this.getMaxAir());"),
+			"MinionEntity must replenish air when drowning during active construction");
 	}
 }
 

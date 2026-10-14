@@ -852,7 +852,7 @@ public final class MinionHarvestingHelper {
 
 		if (hasItemInInventory(minion, Items.BUCKET)) {
 			BlockPos minionPos = minion.getBlockPos();
-			for (BlockPos pos : BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, 6, HARVEST_SEARCH_RADIUS)) {
+			for (BlockPos pos : BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, HARVEST_SEARCH_RADIUS, HARVEST_SEARCH_RADIUS)) {
 				// Strict Blueprint, Session, and Structure Protection:
 				// NEVER scoop water from active construction sessions, blueprints, or architectural structures!
 				if (isProtectedWaterSource(world, pos, session)) {
