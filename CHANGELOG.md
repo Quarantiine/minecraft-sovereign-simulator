@@ -149,8 +149,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - The in-world cyan/aqua wireframe and voxel ghost grid now persist dynamically in the world throughout the entire duration of active area build sessions until all blocks are placed, giving commanders full visual feedback on minion progress matching area mining quarries.
 - **Keyboard Height Adjustment Parity (`ExampleModClient`)**:
   - Full keyboard height stepping with **`[`** / **`]`** and **`PageUp`** / **`PageDown`** (plus **`Shift`** for $\pm 5$) is now supported in `BUILD (AREA)` mode alongside `Ctrl + Scroll`.
-- **Contextual Keybind Parity (`R` Key)**:
-  - In `BUILD (AREA)` mode, the `R` key triggers minion retreat and emergency citadel recall (matching `MINE (AREA)` and `DESIGN`), while 90° blueprint rotation is cleanly scoped to `BUILD (BLUEPRINT)` mode.
+- **Smart Player-Facing Defaults (`BlockOrientationHelper`, `BuildAreaConfirmModalScreen`)**:
+  - When placing directional blocks (stairs, chests, furnaces, glazed terracotta, observers, pistons, dispensers, trapdoors, slabs, logs), Area Fill automatically defaults the placement orientation to the player's horizontal gaze (`mc.player.getHorizontalFacing()`).
+  - Stairs immediately ascend directly toward the player upon placement, ensuring steps are instantly walkable from the front rather than appearing as turned-around solid walls.
+  - Non-directional blocks (dirt, stone bricks, cobblestone, glass) automatically hide orientation controls, keeping the modal interface clean and focused.
+- **Interactive Rotation & Half Modal Controls (`BuildAreaConfirmModalScreen`)**:
+  - Added interactive **`[ ⟳ Facing: North ⬆ / East ➡ / South ⬇ / West ⬅ ]`** button cycling block facing 90° clockwise with directional arrow indicators.
+  - Added vertical half button **`[ ⬍ Half: Bottom (Step) / Top (Roof) ]`** for stairs, **`[ ⬍ Half: Bottom Slab / Top Slab ]`** for slabs, and **`[ ⬍ Axis: Vertical / Horizontal ]`** for pillars and logs.
+  - Seamlessly updates and re-evaluates button visibility and labels whenever a new block is picked via the Block Picker.
+- **In-World Real-Time Rotation Hotkeys (`ExampleModClient`)**:
+  - While holding the Command Scepter in `BUILD (AREA)` mode:
+    - Pressing **`R`** rotates the block facing 90° clockwise with audio feedback and action bar confirmation (`§3✦ Area Fill Facing: East ➡`).
+    - Pressing **`Shift + R`** toggles vertical half / axis (`§3✦ Area Fill Half: Top / Inverted (Roof)` vs `§3✦ Area Fill Half: Bottom / Normal (Step)`).
+  - Outside of `BUILD` mode, `R` and `Shift + R` seamlessly fall through to minion retreat and emergency citadel recall.
+- **Authoritative Network Synchronization (`StartBuildAreaPayload`, `ModNetworking`)**:
+  - `StartBuildAreaPayload` streams `facing` (`Direction`) and `invertedHalf` (`boolean`) across the network using `PacketCodec.tuple`.
+  - Authoritative server session applies `BlockOrientationHelper.applyOrientation` to ensure every block placed in the volume matches the exact chosen orientation across all builder minions.
 - **World Height Limits & Boundary Safety (`ModNetworking`)**:
   - Authoritative server validation verifies that bounding volumes stay strictly within world height limits (`world.getBottomY()` to `world.getTopY() - 1`) for both area building and mining, preventing out-of-bounds tasks.
 - **Modal Corner State Safety (`BuildAreaConfirmModalScreen`)**:

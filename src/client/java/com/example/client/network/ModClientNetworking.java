@@ -444,13 +444,27 @@ public class ModClientNetworking {
 	/**
 	 * Dispatches a {@link com.example.network.StartBuildAreaPayload} to initiate an Area Fill / Volumetric Construction session on the server.
 	 *
-	 * @param pos1    First corner position.
-	 * @param pos2    Second corner position.
-	 * @param blockId Selected block identifier to fill the volume with.
+	 * @param pos1         First corner position.
+	 * @param pos2         Second corner position.
+	 * @param blockId      Selected block identifier to fill the volume with.
+	 * @param facing       Horizontal or general facing direction for directional blocks.
+	 * @param invertedHalf Inverted half state (Top for stairs/slabs, Bottom otherwise).
 	 */
-	public static void sendStartBuildArea(net.minecraft.util.math.BlockPos pos1, net.minecraft.util.math.BlockPos pos2, net.minecraft.util.Identifier blockId) {
-		com.example.network.StartBuildAreaPayload payload = new com.example.network.StartBuildAreaPayload(pos1, pos2, blockId);
+	public static void sendStartBuildArea(
+		net.minecraft.util.math.BlockPos pos1,
+		net.minecraft.util.math.BlockPos pos2,
+		net.minecraft.util.Identifier blockId,
+		net.minecraft.util.math.Direction facing,
+		boolean invertedHalf
+	) {
+		com.example.network.StartBuildAreaPayload payload = new com.example.network.StartBuildAreaPayload(
+			pos1, pos2, blockId, facing, invertedHalf
+		);
 		ClientPlayNetworking.send(payload);
+	}
+
+	public static void sendStartBuildArea(net.minecraft.util.math.BlockPos pos1, net.minecraft.util.math.BlockPos pos2, net.minecraft.util.Identifier blockId) {
+		sendStartBuildArea(pos1, pos2, blockId, net.minecraft.util.math.Direction.NORTH, false);
 	}
 
 	/**

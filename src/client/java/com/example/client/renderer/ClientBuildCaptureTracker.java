@@ -20,6 +20,34 @@ public class ClientBuildCaptureTracker {
 
 	private static BlockPos pos1 = null;
 	private static BlockPos pos2 = null;
+	private static net.minecraft.util.math.Direction facing = net.minecraft.util.math.Direction.NORTH;
+	private static boolean invertedHalf = false;
+
+	public static synchronized net.minecraft.util.math.Direction getFacing() {
+		return facing;
+	}
+
+	public static synchronized void setFacing(net.minecraft.util.math.Direction dir) {
+		if (dir != null && dir.getAxis().isHorizontal()) {
+			facing = dir;
+		}
+	}
+
+	public static synchronized void cycleFacing() {
+		facing = facing.rotateYClockwise();
+	}
+
+	public static synchronized boolean isInvertedHalf() {
+		return invertedHalf;
+	}
+
+	public static synchronized void setInvertedHalf(boolean inverted) {
+		invertedHalf = inverted;
+	}
+
+	public static synchronized void toggleInvertedHalf() {
+		invertedHalf = !invertedHalf;
+	}
 
 	public static synchronized void setPos1(BlockPos pos) {
 		pos1 = pos != null ? pos.toImmutable() : null;

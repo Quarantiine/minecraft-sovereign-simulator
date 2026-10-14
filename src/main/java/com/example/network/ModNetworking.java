@@ -1091,7 +1091,11 @@ public class ModNetworking {
 		if (block == null || block.getDefaultState().isAir()) {
 			block = net.minecraft.block.Blocks.STONE_BRICKS;
 		}
-		net.minecraft.block.BlockState fillState = block.getDefaultState();
+		net.minecraft.block.BlockState fillState = com.example.blueprint.BlockOrientationHelper.applyOrientation(
+			block.getDefaultState(),
+			payload.facing(),
+			payload.invertedHalf()
+		);
 
 		try {
 			com.example.construction.ConstructionSession session = com.example.construction.ConstructionManager.getInstance()

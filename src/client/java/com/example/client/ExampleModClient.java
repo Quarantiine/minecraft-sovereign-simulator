@@ -357,6 +357,29 @@ public class ExampleModClient implements ClientModInitializer {
 							CommandScepterItem.getRotationIndex(heldScepter),
 							false
 						);
+					} else if (!heldScepter.isEmpty() && CommandScepterItem.getMode(heldScepter) == CommandMode.BUILD && CommandScepterItem.getBuildingMode(heldScepter) == com.example.component.BuildingMode.AREA) {
+						// In BUILD (AREA) mode: pressing R cycles block facing 90° clockwise; Shift+R toggles Half/Axis!
+						boolean isSneaking = net.minecraft.client.gui.screen.Screen.hasShiftDown()
+							|| client.options.sneakKey.isPressed()
+							|| client.player.isSneaking();
+						if (isSneaking) {
+							com.example.client.renderer.ClientBuildCaptureTracker.toggleInvertedHalf();
+							boolean inverted = com.example.client.renderer.ClientBuildCaptureTracker.isInvertedHalf();
+							client.player.sendMessage(
+								Text.literal("§3⬍ Area Fill Half: " + (inverted ? "§eTop / Inverted (Roof)" : "§aBottom / Normal (Step)")),
+								true
+							);
+						} else {
+							com.example.client.renderer.ClientBuildCaptureTracker.cycleFacing();
+							net.minecraft.util.math.Direction facing = com.example.client.renderer.ClientBuildCaptureTracker.getFacing();
+							String dirName = facing.asString().substring(0, 1).toUpperCase() + facing.asString().substring(1);
+							String arrow = com.example.blueprint.BlockOrientationHelper.getDirectionArrow(facing);
+							client.player.sendMessage(
+								Text.literal("§3⟳ Area Fill Facing: §e" + dirName + " " + arrow),
+								true
+							);
+						}
+						client.player.playSound(net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);
 					} else {
 						boolean isEmergency = net.minecraft.client.gui.screen.Screen.hasShiftDown()
 							|| client.options.sneakKey.isPressed()

@@ -1,8 +1,10 @@
 package com.example.client.gui;
 
+import com.example.blueprint.BlockOrientationHelper;
 import com.example.client.network.ModClientNetworking;
 import com.example.client.renderer.ClientBuildCaptureTracker;
 import com.example.item.custom.CommandScepterItem;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -16,6 +18,7 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -28,7 +31,7 @@ import org.lwjgl.glfw.GLFW;
 public class BuildAreaConfirmModalScreen extends Screen {
 
 	public static final int WINDOW_WIDTH = 300;
-	public static final int WINDOW_HEIGHT = 196;
+	public static final int WINDOW_HEIGHT = 222;
 
 	private BlockPos pos1;
 	private BlockPos pos2;
@@ -36,9 +39,13 @@ public class BuildAreaConfirmModalScreen extends Screen {
 	private final Screen parentScreen;
 
 	private Identifier selectedBlockId = Identifier.of("minecraft", "stone_bricks");
+	private net.minecraft.util.math.Direction facing = net.minecraft.util.math.Direction.NORTH;
+	private boolean invertedHalf = false;
 
 	private ButtonWidget startButton;
 	private ButtonWidget changeBlockButton;
+	private ButtonWidget facingButton;
+	private ButtonWidget halfButton;
 	private ButtonWidget resetButton;
 	private ButtonWidget cancelButton;
 
@@ -50,6 +57,15 @@ public class BuildAreaConfirmModalScreen extends Screen {
 		this.pos2 = pos2 != null ? pos2.toImmutable() : ClientBuildCaptureTracker.getPos2();
 		this.scepterStack = scepterStack;
 		this.parentScreen = parentScreen;
+
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (mc != null && mc.player != null) {
+			this.facing = mc.player.getHorizontalFacing();
+			ClientBuildCaptureTracker.setFacing(this.facing);
+		} else {
+			this.facing = ClientBuildCaptureTracker.getFacing();
+		}
+		this.invertedHalf = ClientBuildCaptureTracker.isInvertedHalf();
 	}
 
 	public BuildAreaConfirmModalScreen(ItemStack scepterStack, Screen parentScreen) {
@@ -154,7 +170,19 @@ public class BuildAreaConfirmModalScreen extends Screen {
 			.build();
 		this.addDrawableChild(this.changeBlockButton);
 
-		// 3. Action buttons at bottom tray
+		// 3. Orientation buttons
+		int orientY = startY + 106;
+		this.facingButton = ButtonWidget.builder(Text.literal(""), b -> cycleFacing())
+			.dimensions(startX + 80, orientY, 96, 20)
+			.build();
+		this.addDrawableChild(this.facingButton);
+
+		this.halfButton = ButtonWidget.builder(Text.literal(""), b -> toggleHalf())
+			.dimensions(startX + 180, orientY, 104, 20)
+			.build();
+		this.addDrawableChild(this.halfButton);
+
+		// 4. Action buttons at bottom tray
 		int bottomY = startY + WINDOW_HEIGHT - 30;
 		int btnWidth = 84;
 
@@ -177,6 +205,76 @@ public class BuildAreaConfirmModalScreen extends Screen {
 		this.addDrawableChild(this.cancelButton);
 
 		updateStartButtonState();
+	}
+
+	public BlockState getSelectedBlockState() {
+		if (this.selectedBlockId == null) return null;
+		net.minecraft.block.Block block = Registries.BLOCK.get(this.selectedBlockId);
+		return block != null ? block.getDefaultState() : null;
+	}
+
+	public void cycleFacing() {
+		this.facing = this.facing.rotateYClockwise();
+		ClientBuildCaptureTracker.setFacing(this.facing);
+		updateOrientationButtons();
+	}
+
+	public void toggleHalf() {
+		this.invertedHalf = !this.invertedHalf;
+		ClientBuildCaptureTracker.setInvertedHalf(this.invertedHalf);
+		updateOrientationButtons();
+	}
+
+	private void updateOrientationButtons() {
+		BlockState state = getSelectedBlockState();
+		boolean hasFacing = BlockOrientationHelper.hasFacing(state);
+		boolean hasHalf = BlockOrientationHelper.hasHalf(state);
+
+		int startX = (this.width - WINDOW_WIDTH) / 2;
+
+		if (this.facingButton != null) {
+			this.facingButton.visible = (this.pos1 != null && this.pos2 != null && hasFacing);
+			if (hasFacing) {
+				String dirName = this.facing.asString().substring(0, 1).toUpperCase() + this.facing.asString().substring(1);
+				String arrow = BlockOrientationHelper.getDirectionArrow(this.facing);
+				this.facingButton.setMessage(Text.literal("§e⟳ " + dirName + " " + arrow));
+				this.facingButton.setTooltip(Tooltip.of(Text.literal("Cycle block facing: §f" + dirName + " " + arrow + "\n§7(Hotkey: [R] in-world)")));
+
+				if (hasHalf) {
+					this.facingButton.setX(startX + 80);
+					this.facingButton.setWidth(96);
+				} else {
+					this.facingButton.setX(startX + 80);
+					this.facingButton.setWidth(120);
+				}
+			}
+		}
+
+		if (this.halfButton != null) {
+			this.halfButton.visible = (this.pos1 != null && this.pos2 != null && hasHalf);
+			if (hasHalf) {
+				String halfLabel;
+				if (BlockOrientationHelper.isSlab(state)) {
+					halfLabel = this.invertedHalf ? "Top Slab" : "Bottom Slab";
+				} else if (BlockOrientationHelper.isStairs(state)) {
+					halfLabel = this.invertedHalf ? "Top (Roof)" : "Bottom (Step)";
+				} else if (BlockOrientationHelper.isPillar(state)) {
+					halfLabel = this.invertedHalf ? "Horizontal" : "Vertical";
+				} else {
+					halfLabel = this.invertedHalf ? "Top" : "Bottom";
+				}
+				this.halfButton.setMessage(Text.literal("§b⬍ " + halfLabel));
+				this.halfButton.setTooltip(Tooltip.of(Text.literal("Toggle vertical half: §f" + halfLabel + "\n§7(Hotkey: [Shift+R] in-world)")));
+
+				if (hasFacing) {
+					this.halfButton.setX(startX + 180);
+					this.halfButton.setWidth(104);
+				} else {
+					this.halfButton.setX(startX + 80);
+					this.halfButton.setWidth(120);
+				}
+			}
+		}
 	}
 
 	private void openBlockPicker() {
@@ -203,6 +301,7 @@ public class BuildAreaConfirmModalScreen extends Screen {
 		if (this.changeBlockButton != null) {
 			this.changeBlockButton.visible = (this.pos1 != null && this.pos2 != null);
 		}
+		updateOrientationButtons();
 	}
 
 	public void clearSelection() {
@@ -229,13 +328,22 @@ public class BuildAreaConfirmModalScreen extends Screen {
 		BlockPos p2 = this.pos2;
 		Identifier blockId = this.selectedBlockId;
 
-		// Dispatch C2S StartBuildAreaPayload
-		ModClientNetworking.sendStartBuildArea(p1, p2, blockId);
+		// Dispatch C2S StartBuildAreaPayload with facing and invertedHalf
+		ModClientNetworking.sendStartBuildArea(p1, p2, blockId, this.facing, this.invertedHalf);
 
 		// Audio and chat feedback
 		if (this.client != null && this.client.world != null && this.client.player != null) {
 			Item blockItem = Registries.ITEM.get(blockId);
 			String blockName = blockItem != null ? blockItem.getName().getString() : blockId.toString();
+
+			BlockState state = getSelectedBlockState();
+			String orientSuffix = "";
+			if (BlockOrientationHelper.hasFacing(state)) {
+				orientSuffix += " §8[§e" + this.facing.asString().toUpperCase() + " " + BlockOrientationHelper.getDirectionArrow(this.facing) + "§8]";
+			}
+			if (BlockOrientationHelper.hasHalf(state)) {
+				orientSuffix += " §8[§b" + (this.invertedHalf ? "Top" : "Bottom") + "§8]";
+			}
 
 			this.client.world.playSound(
 				null,
@@ -248,7 +356,7 @@ public class BuildAreaConfirmModalScreen extends Screen {
 				1.2F
 			);
 			this.client.player.sendMessage(
-				Text.literal("§3✦ Initiating Area Fill with §f" + blockName + "§3: §e" + getDimensionX() + "x" + getDimensionY() + "x" + getDimensionZ() + " §8(§f" + getVolume() + " blocks§8)§r"),
+				Text.literal("§3✦ Initiating Area Fill with §f" + blockName + orientSuffix + "§3: §e" + getDimensionX() + "x" + getDimensionY() + "x" + getDimensionZ() + " §8(§f" + getVolume() + " blocks§8)§r"),
 				true
 			);
 		}
@@ -330,10 +438,16 @@ public class BuildAreaConfirmModalScreen extends Screen {
 				context.drawTextWithShadow(this.textRenderer, Text.literal("§f" + blockName), slotX + 24, matY + 4, 0xFFFFFF);
 			}
 
+			// Orientation Section
+			BlockState state = getSelectedBlockState();
+			if (BlockOrientationHelper.hasOrientation(state)) {
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§eOrientation:"), startX + 16, startY + 112, 0xFFD700);
+			}
+
 			// Instruction / Description lines
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§eMethod: §fBottom-to-Top Layer Construction"), startX + 16, startY + 114, 0x00E5FF);
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Minions will quarry, craft, and place blocks."), startX + 16, startY + 128, 0xAAAAAA);
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§8Identical pre-existing blocks are preserved."), startX + 16, startY + 142, 0x888888);
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§eMethod: §fBottom-to-Top Layer Construction"), startX + 16, startY + 134, 0x00E5FF);
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Minions will quarry, craft, and place blocks."), startX + 16, startY + 148, 0xAAAAAA);
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§8Identical pre-existing blocks are preserved."), startX + 16, startY + 162, 0x888888);
 		} else {
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§c⚠ Incomplete corner selection (Set Pos1 & Pos2)"), startX + 16, startY + 34, 0xFF5555);
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Left-click blocks in AREA mode to set Pos1 and Pos2."), startX + 16, startY + 54, 0xAAAAAA);
@@ -373,6 +487,36 @@ public class BuildAreaConfirmModalScreen extends Screen {
 
 	public boolean isClosed() {
 		return this.closed;
+	}
+
+	public Direction getFacing() {
+		return this.facing;
+	}
+
+	public void setFacing(Direction dir) {
+		if (dir != null && dir.getAxis().isHorizontal()) {
+			this.facing = dir;
+			ClientBuildCaptureTracker.setFacing(dir);
+			updateOrientationButtons();
+		}
+	}
+
+	public boolean isInvertedHalf() {
+		return this.invertedHalf;
+	}
+
+	public void setInvertedHalf(boolean inverted) {
+		this.invertedHalf = inverted;
+		ClientBuildCaptureTracker.setInvertedHalf(inverted);
+		updateOrientationButtons();
+	}
+
+	public ButtonWidget getFacingButton() {
+		return this.facingButton;
+	}
+
+	public ButtonWidget getHalfButton() {
+		return this.halfButton;
 	}
 
 	public ButtonWidget getStartButton() {

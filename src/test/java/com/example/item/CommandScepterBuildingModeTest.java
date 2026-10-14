@@ -1,5 +1,6 @@
 package com.example.item;
 
+import com.example.blueprint.BlockOrientationHelper;
 import com.example.blueprint.BlueprintBlock;
 import com.example.blueprint.StructureBlueprint;
 import com.example.client.renderer.ClientBuildCaptureTracker;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.util.List;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -301,6 +303,138 @@ public class CommandScepterBuildingModeTest {
 			screenContent.contains("Optional.ofNullable(this.selectedBuildingMode)") &&
 			screenContent.contains("Optional.ofNullable(this.selectedMiningMode)"),
 			"CommandScepterScreen must synchronize selectedBuildingMode and selectedMiningMode to server"
+		);
+	}
+
+	@Test
+	@DisplayName("BlockOrientationHelper correctly returns directional symbols, detects null states, and preserves contracts")
+	void testBlockOrientationHelperContracts() {
+		Assertions.assertEquals("⬆", BlockOrientationHelper.getDirectionArrow(Direction.NORTH));
+		Assertions.assertEquals("➡", BlockOrientationHelper.getDirectionArrow(Direction.EAST));
+		Assertions.assertEquals("⬇", BlockOrientationHelper.getDirectionArrow(Direction.SOUTH));
+		Assertions.assertEquals("⬅", BlockOrientationHelper.getDirectionArrow(Direction.WEST));
+		Assertions.assertEquals("▲", BlockOrientationHelper.getDirectionArrow(Direction.UP));
+		Assertions.assertEquals("▼", BlockOrientationHelper.getDirectionArrow(Direction.DOWN));
+		Assertions.assertEquals("⬆", BlockOrientationHelper.getDirectionArrow(null));
+
+		// Null safety checks
+		Assertions.assertFalse(BlockOrientationHelper.hasOrientation(null));
+		Assertions.assertFalse(BlockOrientationHelper.hasFacing(null));
+		Assertions.assertFalse(BlockOrientationHelper.hasHalf(null));
+		Assertions.assertFalse(BlockOrientationHelper.isStairs(null));
+		Assertions.assertFalse(BlockOrientationHelper.isSlab(null));
+		Assertions.assertFalse(BlockOrientationHelper.isPillar(null));
+		Assertions.assertNull(BlockOrientationHelper.applyOrientation(null, Direction.NORTH, false));
+	}
+
+	@Test
+	@DisplayName("StartBuildAreaPayload preserves facing and invertedHalf fields across constructors")
+	void testStartBuildAreaPayloadWithOrientation() {
+		BlockPos p1 = new BlockPos(10, 64, 10);
+		BlockPos p2 = new BlockPos(20, 70, 20);
+		Identifier blockId = Identifier.of("minecraft", "oak_stairs");
+
+		// 5-arg constructor
+		StartBuildAreaPayload payload = new StartBuildAreaPayload(p1, p2, blockId, Direction.SOUTH, true);
+		Assertions.assertEquals(p1, payload.pos1());
+		Assertions.assertEquals(p2, payload.pos2());
+		Assertions.assertEquals(blockId, payload.blockId());
+		Assertions.assertEquals(Direction.SOUTH, payload.facing());
+		Assertions.assertTrue(payload.invertedHalf());
+
+		// 3-arg backwards compatible constructor
+		StartBuildAreaPayload defaultPayload = new StartBuildAreaPayload(p1, p2, blockId);
+		Assertions.assertEquals(p1, defaultPayload.pos1());
+		Assertions.assertEquals(p2, defaultPayload.pos2());
+		Assertions.assertEquals(blockId, defaultPayload.blockId());
+		Assertions.assertEquals(Direction.NORTH, defaultPayload.facing());
+		Assertions.assertFalse(defaultPayload.invertedHalf());
+	}
+
+	@Test
+	@DisplayName("ClientBuildCaptureTracker tracks, cycles, and toggles facing direction and vertical half state")
+	void testClientBuildCaptureTrackerOrientation() {
+		// Test facing
+		ClientBuildCaptureTracker.setFacing(Direction.NORTH);
+		Assertions.assertEquals(Direction.NORTH, ClientBuildCaptureTracker.getFacing());
+
+		ClientBuildCaptureTracker.cycleFacing();
+		Assertions.assertEquals(Direction.EAST, ClientBuildCaptureTracker.getFacing());
+
+		ClientBuildCaptureTracker.cycleFacing();
+		Assertions.assertEquals(Direction.SOUTH, ClientBuildCaptureTracker.getFacing());
+
+		ClientBuildCaptureTracker.cycleFacing();
+		Assertions.assertEquals(Direction.WEST, ClientBuildCaptureTracker.getFacing());
+
+		ClientBuildCaptureTracker.cycleFacing();
+		Assertions.assertEquals(Direction.NORTH, ClientBuildCaptureTracker.getFacing());
+
+		// Test invalid / null facing ignore
+		ClientBuildCaptureTracker.setFacing(null);
+		Assertions.assertEquals(Direction.NORTH, ClientBuildCaptureTracker.getFacing());
+		ClientBuildCaptureTracker.setFacing(Direction.UP);
+		Assertions.assertEquals(Direction.NORTH, ClientBuildCaptureTracker.getFacing());
+
+		// Test half state
+		ClientBuildCaptureTracker.setInvertedHalf(false);
+		Assertions.assertFalse(ClientBuildCaptureTracker.isInvertedHalf());
+
+		ClientBuildCaptureTracker.toggleInvertedHalf();
+		Assertions.assertTrue(ClientBuildCaptureTracker.isInvertedHalf());
+
+		ClientBuildCaptureTracker.toggleInvertedHalf();
+		Assertions.assertFalse(ClientBuildCaptureTracker.isInvertedHalf());
+
+		ClientBuildCaptureTracker.setInvertedHalf(true);
+		Assertions.assertTrue(ClientBuildCaptureTracker.isInvertedHalf());
+	}
+
+	@Test
+	@DisplayName("Edge Case Contract: BuildAreaConfirmModalScreen wires up smart player-facing defaults and rotation controls")
+	void testBuildAreaConfirmModalScreenOrientationContracts() throws Exception {
+		File modalFile = new File("src/client/java/com/example/client/gui/BuildAreaConfirmModalScreen.java");
+		Assertions.assertTrue(modalFile.exists());
+		String content = Files.readString(modalFile.toPath());
+
+		Assertions.assertTrue(
+			content.contains("mc.player.getHorizontalFacing()"),
+			"BuildAreaConfirmModalScreen must default facing to player's horizontal gaze"
+		);
+		Assertions.assertTrue(
+			content.contains("this.facingButton = ButtonWidget.builder") &&
+			content.contains("this.halfButton = ButtonWidget.builder"),
+			"BuildAreaConfirmModalScreen must instantiate facingButton and halfButton"
+		);
+		Assertions.assertTrue(
+			content.contains("ModClientNetworking.sendStartBuildArea(p1, p2, blockId, this.facing, this.invertedHalf)"),
+			"BuildAreaConfirmModalScreen must transmit facing and invertedHalf to ModClientNetworking"
+		);
+	}
+
+	@Test
+	@DisplayName("Edge Case Contract: ModNetworking and ExampleModClient wire authoritative orientation execution and hotkeys")
+	void testAuthoritativeOrientationExecutionAndHotkeys() throws Exception {
+		File netFile = new File("src/main/java/com/example/network/ModNetworking.java");
+		Assertions.assertTrue(netFile.exists());
+		String netContent = Files.readString(netFile.toPath());
+
+		Assertions.assertTrue(
+			netContent.contains("BlockOrientationHelper.applyOrientation") &&
+			netContent.contains("payload.facing()") &&
+			netContent.contains("payload.invertedHalf()"),
+			"ModNetworking must authoritatively apply BlockOrientationHelper orientation with payload values"
+		);
+
+		File clientFile = new File("src/client/java/com/example/client/ExampleModClient.java");
+		Assertions.assertTrue(clientFile.exists());
+		String clientContent = Files.readString(clientFile.toPath());
+
+		Assertions.assertTrue(
+			clientContent.contains("BuildingMode.AREA") &&
+			clientContent.contains("ClientBuildCaptureTracker.cycleFacing()") &&
+			clientContent.contains("ClientBuildCaptureTracker.toggleInvertedHalf()"),
+			"ExampleModClient must support in-world R and Shift+R keys for Area Fill orientation cycling"
 		);
 	}
 }
