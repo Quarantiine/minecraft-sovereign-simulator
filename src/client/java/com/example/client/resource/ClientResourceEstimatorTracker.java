@@ -120,7 +120,7 @@ public final class ClientResourceEstimatorTracker {
 			boolean harvestable = MinionHarvestingHelper.isHarvestable(item);
 
 			String itemId = Registries.ITEM.getId(item).toString();
-			entries.add(new ResourceEstimateEntry(itemId, req, playerCount, 0, harvestable));
+			entries.add(new ResourceEstimateEntry(itemId, req, playerCount, 0, 0, harvestable));
 
 			totalAvailableBlocks += Math.min(req, playerCount);
 		}
@@ -130,6 +130,7 @@ public final class ClientResourceEstimatorTracker {
 			totalReqBlocks,
 			totalAvailableBlocks,
 			nearbyMinionsCount,
+			0,
 			entries
 		);
 		ESTIMATION_CACHE.put(blueprintId, localPayload);

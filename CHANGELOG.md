@@ -40,6 +40,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Symmetrically expanded the vertical harvesting search radius from 6 to the full 16 blocks (`HARVEST_SEARCH_RADIUS`).
   - Allows builder minions constructing high aqueducts, watchtowers, or rooftop fountains to safely reach ground-level rivers, ponds, and aquifers below without stalling water logistics.
 
+#### 📦 Nearby Chest & Container-Inclusive Readiness Percentage & BOM Logistics
+- **Nearby Container Inventory Aggregation (`MinionHarvestingHelper.countItemsInNearbyContainers`)**:
+  - Construction readiness calculations now fully evaluate items stored in nearby container block entities (chests, barrels, trapped chests, shulker boxes, dispensers, droppers) within 32 blocks of the player or session anchor.
+  - Recognizes that while the player's personal bag and minion thralls may be temporarily empty, builder minions autonomously scavenge required materials from nearby base chests/depots to complete construction tasks without player intervention.
+  - Double chests, single chests, barrels, and shulkers are queried directly through loaded chunk block entities with zero redundant slot iteration.
+- **Resource Estimator S2C Networking & Payload (`ResourceEstimateEntry`, `SyncResourceEstimationPayload`, `ModNetworking`)**:
+  - `ResourceEstimateEntry` now tracks `chestCount` alongside `playerCount` and `minionCount`.
+  - `totalAvailable()` sums `playerCount + minionCount + chestCount`, enabling blueprints to reach 100% readiness when materials are located entirely within nearby chests.
+  - `SyncResourceEstimationPayload` streams `nearbyContainersCount` to the client so commanders know exactly how many chests are contributing to the readiness score.
+- **Material Bill of Materials (BOM) GUI Enhancements (`BlueprintResourceEstimatorModalScreen`)**:
+  - Added dedicated **`Chests`** quantity column between `Minions` and `Status / Delta`.
+  - Summary progress bar now displays both nearby contributing minions and container counts: `§fReadiness: §lX% §7(A/Bb) §8| §eN Minions §8| §6M Chests`.
+  - Item row hover tooltips provide detailed breakdowns: personal inventory, minion backpacks, and nearby containers across $M$ containers within 32m.
+- **Command Scepter & Placement Action Bar Delta (`CommandScepterItem.executeBuildPlacement`, `CommandScepterScreen`)**:
+  - When anchoring blueprints in Survival mode, the action bar BOM notification factors in container stockpiles: `§6📋 BOM Delta: 100% Ready (All materials in bags or nearby chests)`.
+  - Blueprint catalog tooltips in Command Hub GUI display `Nearby Chests Contributing: M`.
+
 #### ⛏️ Mining & Dismantle Fluid Mechanics & Water Source Removal
 - **Liquid Block Tool Immunity (`ConstructionSession`, `MinionBuildGoal.executeDismantleWork`)**:
   - In both Survival and Creative modes, minions mining or dismantling structures strictly ignore water, lava, and any fluids (`isLiquid()` / `FluidBlock`).

@@ -2811,6 +2811,9 @@ public class CommandScepterItem extends Item {
 			);
 			int totalReq = blueprint.getBlockCount();
 			int totalAvail = 0;
+			java.util.Map<net.minecraft.item.Item, Integer> containerCounts = com.example.entity.ai.logistics.MinionHarvestingHelper.countItemsInNearbyContainers(
+				serverWorld, anchorPos, 32, 16
+			);
 			for (java.util.Map.Entry<net.minecraft.item.Item, Integer> entry : blueprint.getRequiredItems().entrySet()) {
 				net.minecraft.item.Item item = entry.getKey();
 				int req = entry.getValue();
@@ -2826,12 +2829,13 @@ public class CommandScepterItem extends Item {
 						if (!st.isEmpty() && st.isOf(item)) count += st.getCount();
 					}
 				}
+				count += containerCounts.getOrDefault(item, 0);
 				totalAvail += Math.min(req, count);
 			}
 			int pct = totalReq > 0 ? (int) Math.round((double) totalAvail / (double) totalReq * 100.0D) : 100;
 			String readinessText = (pct >= 100)
-				? "§a✔ 100% Ready (All materials in bags)"
-				: "§e" + pct + "% Ready §7(" + totalAvail + "/" + totalReq + "b in bags & " + nearbyMinions.size() + " minions)";
+				? "§a✔ 100% Ready (All materials in bags or nearby chests)"
+				: "§e" + pct + "% Ready §7(" + totalAvail + "/" + totalReq + "b in bags/chests & " + nearbyMinions.size() + " minions)";
 			player.sendMessage(Text.literal("§6📋 BOM Delta: " + readinessText), true);
 		}
 

@@ -122,4 +122,50 @@ public class BlueprintResourceEstimatorTest {
 		Assertions.assertNotNull(RequestResourceEstimationPayload.PACKET_CODEC);
 		Assertions.assertEquals(RequestResourceEstimationPayload.ID, req.getId());
 	}
+
+	@Test
+	@DisplayName("ResourceEstimateEntry incorporates chest/container inventory into availability and delta")
+	void testResourceEstimateEntryWithChestStorage() {
+		// Player has 0, minions have 0, but nearby chests have 64 stone bricks
+		ResourceEstimateEntry chestOnly = new ResourceEstimateEntry("minecraft:stone_bricks", 64, 0, 0, 64, true);
+		Assertions.assertEquals(64, chestOnly.totalAvailable(), "Total available must include chest count");
+		Assertions.assertEquals(0, chestOnly.delta());
+		Assertions.assertTrue(chestOnly.isSatisfied(), "Item must be satisfied when available in nearby chests");
+		Assertions.assertEquals(64, chestOnly.chestCount());
+
+		// Joint availability: Player (10) + Minions (15) + Chests (25) = 50 vs req 50
+		ResourceEstimateEntry joint = new ResourceEstimateEntry("minecraft:oak_planks", 50, 10, 15, 25, true);
+		Assertions.assertEquals(50, joint.totalAvailable());
+		Assertions.assertEquals(0, joint.delta());
+		Assertions.assertTrue(joint.isSatisfied());
+
+		// Partial chest contribution: Player (0) + Minions (0) + Chests (20) vs req 40
+		ResourceEstimateEntry partial = new ResourceEstimateEntry("minecraft:glass", 40, 0, 0, 20, true);
+		Assertions.assertEquals(20, partial.totalAvailable());
+		Assertions.assertEquals(-20, partial.delta());
+		Assertions.assertFalse(partial.isSatisfied());
+	}
+
+	@Test
+	@DisplayName("Readiness percentage reaches 100% when required materials exist solely in nearby chests")
+	void testNearbyContainersReadinessContribution() {
+		// Blueprint requires 100 blocks total. Player has 0, minions have 0.
+		// Chests contain all 100 blocks.
+		ResourceEstimateEntry stoneEntry = new ResourceEstimateEntry("minecraft:stone_bricks", 60, 0, 0, 60, true);
+		ResourceEstimateEntry woodEntry = new ResourceEstimateEntry("minecraft:spruce_planks", 40, 0, 0, 40, true);
+
+		SyncResourceEstimationPayload payload = new SyncResourceEstimationPayload(
+			"manor",
+			100,
+			100,
+			2,
+			5, // 5 nearby chests/containers found
+			List.of(stoneEntry, woodEntry)
+		);
+
+		Assertions.assertEquals(100, payload.getReadinessPercentage(), "Readiness must be 100% when chests contain all items");
+		Assertions.assertTrue(payload.isFullySatisfied(), "Session must be fully satisfied from chest inventories");
+		Assertions.assertEquals(2, payload.nearbyMinionsCount());
+		Assertions.assertEquals(5, payload.nearbyContainersCount());
+	}
 }

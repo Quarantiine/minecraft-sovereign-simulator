@@ -74,8 +74,13 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import net.minecraft.world.chunk.WorldChunk;
 
 /**
  * Provides autonomous material harvesting, agro-forestry tree cultivation, tool self-crafting,
@@ -87,6 +92,70 @@ public final class MinionHarvestingHelper {
 	private static final int BASE_BUFFER_RADIUS = 12;
 
 	private MinionHarvestingHelper() {}
+
+	/**
+	 * Scans nearby loaded chunks for container block entities (chests, barrels, trapped chests, shulker boxes, etc.)
+	 * within the specified horizontal and vertical radius of the center position, and counts available items.
+	 *
+	 * @param world The server world.
+	 * @param center The center search position (player or build anchor).
+	 * @param horizontalRadius The horizontal search radius in blocks.
+	 * @param verticalRadius The vertical search radius in blocks.
+	 * @param outContainersFound An optional collection/set to collect distinct container positions found.
+	 * @return A map of Item to total quantity found inside nearby containers.
+	 */
+	public static Map<Item, Integer> countItemsInNearbyContainers(
+		ServerWorld world,
+		BlockPos center,
+		int horizontalRadius,
+		int verticalRadius,
+		Set<BlockPos> outContainersFound
+	) {
+		Map<Item, Integer> counts = new HashMap<>();
+		if (world == null || center == null) return counts;
+
+		int minChunkX = (center.getX() - horizontalRadius) >> 4;
+		int maxChunkX = (center.getX() + horizontalRadius) >> 4;
+		int minChunkZ = (center.getZ() - horizontalRadius) >> 4;
+		int maxChunkZ = (center.getZ() + horizontalRadius) >> 4;
+
+		for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+			for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+				if (!world.isChunkLoaded(cx, cz)) continue;
+				WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, center.getY(), cz << 4));
+				if (chunk == null) continue;
+
+				for (BlockEntity be : chunk.getBlockEntities().values()) {
+					if (be instanceof Inventory containerInv) {
+						BlockPos pos = be.getPos();
+						if (Math.abs(pos.getX() - center.getX()) <= horizontalRadius
+							&& Math.abs(pos.getY() - center.getY()) <= verticalRadius
+							&& Math.abs(pos.getZ() - center.getZ()) <= horizontalRadius) {
+							if (outContainersFound != null) {
+								outContainersFound.add(pos);
+							}
+							for (int i = 0; i < containerInv.size(); i++) {
+								ItemStack stack = containerInv.getStack(i);
+								if (!stack.isEmpty()) {
+									counts.merge(stack.getItem(), stack.getCount(), Integer::sum);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return counts;
+	}
+
+	public static Map<Item, Integer> countItemsInNearbyContainers(
+		ServerWorld world,
+		BlockPos center,
+		int horizontalRadius,
+		int verticalRadius
+	) {
+		return countItemsInNearbyContainers(world, center, horizontalRadius, verticalRadius, null);
+	}
 
 	/**
 	 * Attempts to autonomously harvest or craft the required material for an active blueprint task.

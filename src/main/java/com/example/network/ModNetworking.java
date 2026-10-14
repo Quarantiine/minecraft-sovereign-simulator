@@ -1124,7 +1124,7 @@ public class ModNetworking {
 		com.example.blueprint.StructureBlueprint blueprint = BlueprintRegistry.getOrDefault(blueprintId);
 		if (blueprint == null || blueprint.getBlockCount() == 0) {
 			SyncResourceEstimationPayload emptySync = new SyncResourceEstimationPayload(
-				blueprintId, 0, 0, 0, List.of()
+				blueprintId, 0, 0, 0, 0, List.of()
 			);
 			ServerPlayNetworking.send(player, emptySync);
 			return;
@@ -1136,6 +1136,16 @@ public class ModNetworking {
 			MinionEntity.class,
 			searchBox,
 			m -> m.isAlive() && m.isOwner(player)
+		);
+
+		// Scan nearby containers (chests, barrels, trapped chests, shulker boxes, etc.) within 32m
+		java.util.Set<net.minecraft.util.math.BlockPos> nearbyContainers = new java.util.HashSet<>();
+		java.util.Map<net.minecraft.item.Item, Integer> containerCounts = com.example.entity.ai.logistics.MinionHarvestingHelper.countItemsInNearbyContainers(
+			world,
+			player.getBlockPos(),
+			32,
+			16,
+			nearbyContainers
 		);
 
 		java.util.Map<net.minecraft.item.Item, Integer> requiredItems = blueprint.getRequiredItems();
@@ -1169,14 +1179,17 @@ public class ModNetworking {
 				}
 			}
 
+			// Nearby containers count (chests, barrels, etc.) within 48m
+			int chestCount = containerCounts.getOrDefault(item, 0);
+
 			// Builder autonomous harvestability
 			boolean harvestable = com.example.entity.ai.logistics.MinionHarvestingHelper.isHarvestable(item);
 
 			String itemId = net.minecraft.registry.Registries.ITEM.getId(item).toString();
-			entries.add(new ResourceEstimateEntry(itemId, req, playerCount, minionCount, harvestable));
+			entries.add(new ResourceEstimateEntry(itemId, req, playerCount, minionCount, chestCount, harvestable));
 
 			// Clamped contribution for overall percentage so surplus of 1 item doesn't mask shortages
-			int availableForItem = playerCount + minionCount;
+			int availableForItem = playerCount + minionCount + chestCount;
 			totalAvailableBlocks += Math.min(req, availableForItem);
 		}
 
@@ -1185,6 +1198,7 @@ public class ModNetworking {
 			totalReqBlocks,
 			totalAvailableBlocks,
 			nearbyMinions.size(),
+			nearbyContainers.size(),
 			entries
 		);
 		ServerPlayNetworking.send(player, syncPayload);

@@ -12,19 +12,31 @@ import net.minecraft.util.Identifier;
  * Server-to-client (S2C) networking payload delivering the live Bill of Materials (BOM)
  * calculation and inventory delta for an architectural blueprint.
  *
- * @param blueprintId        Blueprint identifier.
- * @param totalBlocks        Total blocks required by the blueprint.
- * @param totalAvailable     Total matching blocks available (clamped to required per item).
- * @param nearbyMinionsCount Count of nearby allied minions contributing to the backpack tally.
- * @param entries            List of individual resource breakdown entries.
+ * @param blueprintId          Blueprint identifier.
+ * @param totalBlocks          Total blocks required by the blueprint.
+ * @param totalAvailable       Total matching blocks available (clamped to required per item).
+ * @param nearbyMinionsCount   Count of nearby allied minions contributing to the backpack tally.
+ * @param nearbyContainersCount Count of nearby containers (chests, barrels, etc.) contributing items.
+ * @param entries              List of individual resource breakdown entries.
  */
 public record SyncResourceEstimationPayload(
 	String blueprintId,
 	int totalBlocks,
 	int totalAvailable,
 	int nearbyMinionsCount,
+	int nearbyContainersCount,
 	List<ResourceEstimateEntry> entries
 ) implements CustomPayload {
+
+	public SyncResourceEstimationPayload(
+		String blueprintId,
+		int totalBlocks,
+		int totalAvailable,
+		int nearbyMinionsCount,
+		List<ResourceEstimateEntry> entries
+	) {
+		this(blueprintId, totalBlocks, totalAvailable, nearbyMinionsCount, 0, entries);
+	}
 
 	public static final CustomPayload.Id<SyncResourceEstimationPayload> ID = new CustomPayload.Id<>(
 		Identifier.of(ExampleMod.MOD_ID, "sync_resource_estimation")
@@ -35,6 +47,7 @@ public record SyncResourceEstimationPayload(
 		PacketCodecs.INTEGER, SyncResourceEstimationPayload::totalBlocks,
 		PacketCodecs.INTEGER, SyncResourceEstimationPayload::totalAvailable,
 		PacketCodecs.INTEGER, SyncResourceEstimationPayload::nearbyMinionsCount,
+		PacketCodecs.INTEGER, SyncResourceEstimationPayload::nearbyContainersCount,
 		ResourceEstimateEntry.PACKET_CODEC.collect(PacketCodecs.toList()), SyncResourceEstimationPayload::entries,
 		SyncResourceEstimationPayload::new
 	);
@@ -53,7 +66,7 @@ public record SyncResourceEstimationPayload(
 	}
 
 	/**
-	 * Returns true if all required materials are fully satisfied across player and minion inventories.
+	 * Returns true if all required materials are fully satisfied across player, minion, and container inventories.
 	 */
 	public boolean isFullySatisfied() {
 		return this.totalAvailable >= this.totalBlocks && this.totalBlocks > 0;

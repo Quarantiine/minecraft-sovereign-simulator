@@ -737,6 +737,7 @@ public class CommandScepterScreen extends Screen {
 			String color = pct >= 100 ? "§a" : (pct >= 50 ? "§6" : "§c");
 			sb.append(color).append("Readiness: ").append(pct).append("% (").append(est.totalAvailable()).append("/").append(est.totalBlocks()).append(" blocks)\n");
 			sb.append("§8Nearby Minions Contributing: §e").append(est.nearbyMinionsCount()).append("\n");
+			sb.append("§8Nearby Chests Contributing: §6").append(est.nearbyContainersCount()).append("\n");
 		}
 		sb.append("§7Click to select blueprint.\n§e[ 📋 Material BOM ] to inspect item delta.");
 		return Text.literal(sb.toString());

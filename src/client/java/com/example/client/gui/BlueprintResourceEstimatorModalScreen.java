@@ -33,7 +33,7 @@ import org.lwjgl.glfw.GLFW;
  */
 public class BlueprintResourceEstimatorModalScreen extends Screen {
 
-	public static final int WINDOW_WIDTH = 340;
+	public static final int WINDOW_WIDTH = 370;
 	public static final int WINDOW_HEIGHT = 246;
 	public static final int PAGE_SIZE = 5;
 
@@ -78,7 +78,7 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 				updatePaginationButtons();
 			}
 		})
-		.dimensions(startX + 120, pageControlsY, 20, 18)
+		.dimensions(startX + 130, pageControlsY, 20, 18)
 		.tooltip(Tooltip.of(Text.literal("Previous Page")))
 		.build();
 		this.addDrawableChild(this.prevPageBtn);
@@ -90,7 +90,7 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 				updatePaginationButtons();
 			}
 		})
-		.dimensions(startX + 200, pageControlsY, 20, 18)
+		.dimensions(startX + 220, pageControlsY, 20, 18)
 		.tooltip(Tooltip.of(Text.literal("Next Page")))
 		.build();
 		this.addDrawableChild(this.nextPageBtn);
@@ -112,7 +112,7 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 			}
 			this.close();
 		})
-		.dimensions(startX + 16, actionY, 115, 22)
+		.dimensions(startX + 16, actionY, 125, 22)
 		.tooltip(Tooltip.of(Text.literal("§a🏗 Ready Blueprint for Construction\n§7Sets this blueprint on your Command Scepter and returns to the battlefield.")))
 		.build();
 		this.addDrawableChild(this.anchorBtn);
@@ -121,16 +121,16 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 			playClickSound();
 			ModClientNetworking.sendRequestResourceEstimation(this.blueprintId);
 			if (this.client != null && this.client.player != null) {
-				this.client.player.sendMessage(Text.literal("§e↻ Rescanning inventory and minion backpacks..."), true);
+				this.client.player.sendMessage(Text.literal("§e↻ Rescanning inventory, minion backpacks, and nearby chests..."), true);
 			}
 		})
-		.dimensions(startX + 137, actionY, 105, 22)
-		.tooltip(Tooltip.of(Text.literal("§e↻ Rescan Live Inventory\n§7Requests a refreshed server-side material scan across your bag and minion thralls.")))
+		.dimensions(startX + 147, actionY, 115, 22)
+		.tooltip(Tooltip.of(Text.literal("§e↻ Rescan Live Inventory\n§7Requests a refreshed server-side material scan across your bag, minion thralls, and nearby chests within 32m.")))
 		.build();
 		this.addDrawableChild(this.rescanBtn);
 
 		this.closeBtn = ButtonWidget.builder(Text.literal("§c✕ Close"), b -> this.close())
-		.dimensions(startX + 248, actionY, 76, 22)
+		.dimensions(startX + 268, actionY, 86, 22)
 		.tooltip(Tooltip.of(Text.literal("§c✕ Close Modal\n§7Return to previous screen.")))
 		.build();
 		this.addDrawableChild(this.closeBtn);
@@ -243,17 +243,19 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 			context.fill(barX + 1, barY + 1, barX + 1 + progressWidth, barY + barHeight - 1, fillColor);
 		}
 
-		String readinessSummary = "§fReadiness: §l" + readinessPct + "%§r §7(" + totalAvail + "/" + totalReq + "b) §8| §e" + minionCount + " Minions in 64m";
+		int containerCount = this.estimation != null ? this.estimation.nearbyContainersCount() : 0;
+		String readinessSummary = "§fReadiness: §l" + readinessPct + "%§r §7(" + totalAvail + "/" + totalReq + "b) §8| §e" + minionCount + " Minions §8| §6" + containerCount + " Chests";
 		context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(readinessSummary), this.width / 2, barY + 3, 0xFFFFFF);
 
 		// 4. Material Breakdown Table Header
 		int tableHeaderY = startY + 49;
 		context.fill(startX + 16, tableHeaderY, startX + WINDOW_WIDTH - 16, tableHeaderY + 12, 0xDD182230);
 		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Material"), startX + 22, tableHeaderY + 2, 0xAAAAAA);
-		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Req"), startX + 128, tableHeaderY + 2, 0xAAAAAA);
-		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Player"), startX + 160, tableHeaderY + 2, 0xAAAAAA);
-		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Minions"), startX + 205, tableHeaderY + 2, 0xAAAAAA);
-		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Status / Delta"), startX + 252, tableHeaderY + 2, 0xAAAAAA);
+		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Req"), startX + 114, tableHeaderY + 2, 0xAAAAAA);
+		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Player"), startX + 144, tableHeaderY + 2, 0xAAAAAA);
+		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Minions"), startX + 184, tableHeaderY + 2, 0xAAAAAA);
+		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Chests"), startX + 226, tableHeaderY + 2, 0xAAAAAA);
+		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Status / Delta"), startX + 268, tableHeaderY + 2, 0xAAAAAA);
 
 		// 5. Paginated Material Rows
 		List<ResourceEstimateEntry> entries = getEntries();
@@ -285,25 +287,26 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 
 				// Item name
 				String itemName = !displayStack.isEmpty() ? displayStack.getName().getString() : entry.itemId();
-				if (itemName.length() > 14) {
-					itemName = itemName.substring(0, 13) + "…";
+				if (itemName.length() > 13) {
+					itemName = itemName.substring(0, 12) + "…";
 				}
 				context.drawTextWithShadow(this.textRenderer, Text.literal("§f" + itemName), startX + 38, currentRowY + 6, 0xFFFFFF);
 
 				// Quantities
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§e" + entry.requiredCount()), startX + 130, currentRowY + 6, 0xFFFF55);
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§a" + entry.playerCount()), startX + 164, currentRowY + 6, 0x55FF55);
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§b" + entry.minionCount()), startX + 210, currentRowY + 6, 0x55FFFF);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§e" + entry.requiredCount()), startX + 116, currentRowY + 6, 0xFFFF55);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§a" + entry.playerCount()), startX + 146, currentRowY + 6, 0x55FF55);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§b" + entry.minionCount()), startX + 186, currentRowY + 6, 0x55FFFF);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§6" + entry.chestCount()), startX + 228, currentRowY + 6, 0xFFAA00);
 
 				// Status & Delta Badge
 				int itemDelta = entry.delta();
 				if (entry.isSatisfied()) {
 					String surplus = itemDelta > 0 ? " (+" + itemDelta + ")" : "";
-					context.drawTextWithShadow(this.textRenderer, Text.literal("§a✔ Ready" + surplus), startX + 252, currentRowY + 6, 0x55FF55);
+					context.drawTextWithShadow(this.textRenderer, Text.literal("§a✔ Ready" + surplus), startX + 268, currentRowY + 6, 0x55FF55);
 				} else if (entry.harvestable()) {
-					context.drawTextWithShadow(this.textRenderer, Text.literal("§6⚒ Auto (" + itemDelta + ")"), startX + 252, currentRowY + 6, 0xFFA500);
+					context.drawTextWithShadow(this.textRenderer, Text.literal("§6⚒ Auto (" + itemDelta + ")"), startX + 268, currentRowY + 6, 0xFFA500);
 				} else {
-					context.drawTextWithShadow(this.textRenderer, Text.literal("§c✕ Need (" + itemDelta + ")"), startX + 252, currentRowY + 6, 0xFF5555);
+					context.drawTextWithShadow(this.textRenderer, Text.literal("§c✕ Need (" + itemDelta + ")"), startX + 268, currentRowY + 6, 0xFF5555);
 				}
 
 				// Tooltip on row hover
@@ -313,6 +316,8 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 					tooltipLines.add(Text.literal("§eRequired: §f" + entry.requiredCount() + " blocks"));
 					tooltipLines.add(Text.literal("§aPlayer Inventory: §f" + entry.playerCount()));
 					tooltipLines.add(Text.literal("§bNearby Minion Backpacks: §f" + entry.minionCount() + " (across " + minionCount + " minions)"));
+					tooltipLines.add(Text.literal("§6Nearby Chests & Containers: §f" + entry.chestCount() + " (across " + containerCount + " containers in 32m)"));
+					tooltipLines.add(Text.literal("§7Total Available: " + (entry.isSatisfied() ? "§a" : "§c") + entry.totalAvailable() + " / " + entry.requiredCount()));
 					tooltipLines.add(Text.literal("§7Net Inventory Delta: " + (itemDelta >= 0 ? "§a+" + itemDelta + " (Surplus)" : "§c" + itemDelta + " (Deficit)")));
 					if (entry.harvestable()) {
 						tooltipLines.add(Text.literal("§6⚒ Harvestable: Builder minions will autonomously quarry/cultivate this."));
