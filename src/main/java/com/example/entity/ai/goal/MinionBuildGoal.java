@@ -268,13 +268,7 @@ public class MinionBuildGoal extends Goal {
 				sw, this.minion.getBlockPos(), this.minion.getOwnerUuid(), 128.0D, this.minion.getEffectiveRole()
 			).filter(ConstructionSession::isActive).isPresent();
 		}
-		if (!this.minion.matchesRole(MinionRole.BUILDER)) {
-			this.minion.clearBuildingEgress();
-			if (this.minion.isArcaneLevitating()) {
-				this.minion.setArcaneLevitating(false);
-			}
-			this.minion.setNoGravity(false);
-		} else if (this.minion.isSitting()) {
+		if (this.minion.isSitting()) {
 			if (this.minion.isArcaneLevitating()) {
 				this.minion.setArcaneLevitating(false);
 			}
@@ -282,11 +276,16 @@ public class MinionBuildGoal extends Goal {
 		} else if (!hasChainedSession && isBuilder && sessionBox != null && sessionAnchor != null && this.minion.isInsideStructure(sessionBox)) {
 			this.minion.startEgressFromStructure(sessionBox, sessionAnchor, null);
 		} else if (!this.minion.isExitingBuilding()) {
-			// Miner or already outside: keep levitation active if airborne so tickGentleDescent glides them down.
-			if (!this.minion.isArcaneLevitating()) {
+			BlockPos footPos = this.minion.getBlockPos();
+			boolean overFluid = this.minion.isTouchingWater() || this.minion.isInLava()
+					|| (this.minion.getWorld() instanceof ServerWorld sw && (!sw.getFluidState(footPos).isEmpty() || !sw.getFluidState(footPos.down()).isEmpty()));
+			if (!this.minion.isArcaneLevitating() && !overFluid && this.minion.isOnGround()) {
 				this.minion.setNoGravity(false);
+			} else {
+				// Keep levitation active if airborne or over fluid so tickGentleDescent glides them to safe solid ground
+				this.minion.setArcaneLevitating(true);
+				this.minion.setNoGravity(true);
 			}
-			// else: leave levitation on; tickGentleDescent in tick() will handle landing
 		}
 	}
 

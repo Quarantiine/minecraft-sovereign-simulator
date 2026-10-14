@@ -533,11 +533,17 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		BlockPos feet = this.getBlockPos();
 		BlockPos below = feet.down();
 		BlockState belowState = serverWorld.getBlockState(below);
-		boolean overSolid = this.isOnGround()
-				|| belowState.isSolidBlock(serverWorld, below)
-				|| this.hasSolidGroundBeneath(serverWorld);
+		boolean inOrOverFluid = this.isTouchingWater() || this.isInLava()
+				|| !serverWorld.getFluidState(feet).isEmpty()
+				|| !belowState.getFluidState().isEmpty()
+				|| belowState.isOf(Blocks.WATER) || belowState.isOf(Blocks.LAVA);
+
+		boolean isSafeGround = !inOrOverFluid && isSafeStandingPosition(serverWorld, feet);
+		boolean overSolid = (this.isOnGround() || belowState.isSolidBlock(serverWorld, below) || this.hasSolidGroundBeneath(serverWorld))
+				&& isSafeGround;
+
 		if (overSolid) {
-			// Landed — disable levitation cleanly
+			// Landed cleanly on verified safe dry solid ground!
 			this.arcaneLevitating = false;
 			this.setNoGravity(false);
 			this.arcaneLevitationTicks = 0;
@@ -546,7 +552,40 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			serverWorld.spawnParticles(ParticleTypes.PORTAL, this.getX(), this.getY() + 0.1D, this.getZ(), 4, 0.15D, 0.05D, 0.15D, 0.02D);
 			return true;
 		}
-		// Still airborne — glide straight down
+
+		// If airborne over water, lava, or hazardous fluid: steer toward the nearest safe, dry solid ground
+		if (inOrOverFluid || !isSafeGround) {
+			BlockPos safeGroundPos = findNearestSafeStandingPosition(serverWorld, feet, 32);
+			if (safeGroundPos == null && this.getOwnerUuid() != null) {
+				net.minecraft.entity.LivingEntity owner = this.getOwner();
+				if (owner != null && owner.getWorld() == serverWorld) {
+					safeGroundPos = findNearestSafeStandingPosition(serverWorld, owner.getBlockPos(), 16);
+				}
+			}
+
+			if (safeGroundPos != null) {
+				Vec3d target = Vec3d.ofBottomCenter(safeGroundPos);
+				Vec3d toTarget = target.subtract(this.getPos());
+				double horizontalDistSq = toTarget.x * toTarget.x + toTarget.z * toTarget.z;
+
+				if (horizontalDistSq > 0.35D) {
+					// Steer horizontally toward safe ground while maintaining safe hover altitude above the fluid
+					double speed = Math.min(0.35D, Math.max(0.18D, Math.sqrt(horizontalDistSq) * 0.4D));
+					Vec3d horizontalDir = new Vec3d(toTarget.x, 0.0D, toTarget.z).normalize().multiply(speed);
+					double desiredY = Math.max(target.y + 0.5D, this.getY());
+					double yVel = (desiredY > this.getY() + 0.1D) ? 0.18D : -0.08D;
+					this.setVelocity(horizontalDir.x, yVel, horizontalDir.z);
+					this.velocityModified = true;
+
+					if (this.age % 4 == 0) {
+						serverWorld.spawnParticles(ParticleTypes.END_ROD, this.getX(), this.getY() + 0.1D, this.getZ(), 2, 0.1D, 0.1D, 0.1D, 0.02D);
+					}
+					return false;
+				}
+			}
+		}
+
+		// Over confirmed safe solid ground: glide straight down to land
 		this.setVelocity(this.getVelocity().x * 0.5D, -0.22D, this.getVelocity().z * 0.5D);
 		this.velocityModified = true;
 		return false;
@@ -752,21 +791,28 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			}
 		}
 
-		// If still airborne, keep levitation on and let tickGentleDescent() guide them smoothly down.
+		// If still airborne or over fluid, keep levitation on and let tickGentleDescent() guide them smoothly to safe ground.
 		// Do NOT restore gravity here — that causes a free-fall and fall damage.
-		// tickGentleDescent is called from MinionBuildGoal.tick() every tick until landed.
-		boolean overSolid = this.isOnGround() || this.hasSolidGroundBeneath(serverWorld);
+		// tickGentleDescent is called from MinionBuildGoal.tick() every tick until safely landed on dry solid ground.
+		BlockPos feetPos = this.getBlockPos();
+		boolean inOrOverFluid = this.isTouchingWater() || this.isInLava()
+				|| !serverWorld.getFluidState(feetPos).isEmpty()
+				|| !serverWorld.getFluidState(feetPos.down()).isEmpty();
+		boolean overSolid = (this.isOnGround() || this.hasSolidGroundBeneath(serverWorld))
+				&& !inOrOverFluid && isSafeStandingPosition(serverWorld, feetPos);
 		if (overSolid) {
-			// Already on ground — clean stop
+			// Already on safe dry solid ground — clean stop
 			this.setArcaneLevitating(false);
 			this.setNoGravity(false);
 			this.setVelocity(0.0D, 0.0D, 0.0D);
 			this.velocityModified = true;
 		} else {
-			// Still airborne — keep levitation active, MinionBuildGoal.tick() calls tickGentleDescent() each tick
+			// Still airborne or over fluid — keep levitation active, MinionBuildGoal.tick() calls tickGentleDescent() each tick
+			this.setArcaneLevitating(true);
+			this.setNoGravity(true);
 			this.fallDistance = 0.0F;
-			// Bleed off any lateral egress velocity so we descend cleanly
-			this.setVelocity(this.getVelocity().x * 0.2D, -0.22D, this.getVelocity().z * 0.2D);
+			// Bleed off any lateral egress velocity so tickGentleDescent steers cleanly
+			this.setVelocity(this.getVelocity().x * 0.2D, 0.0D, this.getVelocity().z * 0.2D);
 			this.velocityModified = true;
 		}
 		this.structureExitVec = null;
@@ -918,7 +964,8 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 				|| groundState.isOf(Blocks.CACTUS)
 				|| groundState.isOf(Blocks.SWEET_BERRY_BUSH)
 				|| groundState.isIn(BlockTags.FIRE)
-				|| groundState.isIn(BlockTags.CAMPFIRES)) {
+				|| groundState.isIn(BlockTags.CAMPFIRES)
+				|| !groundState.getFluidState().isEmpty()) {
 			return false;
 		}
 
@@ -936,13 +983,13 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			}
 		}
 
-		// 4. Fluid checks: no lava or hazardous fluids
+		// 4. Fluid checks: no water, lava or hazardous fluids in foot or head space
 		FluidState feetFluid = world.getFluidState(pos);
 		FluidState headFluid = world.getFluidState(pos.up());
-		if (feetFluid != null && !feetFluid.isEmpty() && feetFluid.isIn(FluidTags.LAVA)) {
+		if (feetFluid != null && !feetFluid.isEmpty()) {
 			return false;
 		}
-		if (headFluid != null && !headFluid.isEmpty() && headFluid.isIn(FluidTags.LAVA)) {
+		if (headFluid != null && !headFluid.isEmpty()) {
 			return false;
 		}
 

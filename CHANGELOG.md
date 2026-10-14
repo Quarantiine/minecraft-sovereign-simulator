@@ -43,6 +43,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Water and lava above or around blocks are treated as cleared obstacles, preventing lower layers from stalling if water flows over them.
   - Natural seeping fluids or ocean aquifers no longer prevent dismantle sessions from reaching 100% completion.
 
+#### 🛡️ Safe Solid Ground Positioning Upon Completion
+- **Autonomous Safe Solid Ground Recovery (`MinionEntity.tickGentleDescent`, `isSafeStandingPosition`)**:
+  - When minions finish construction, dismantling, or mining tasks while airborne or surrounded by water, lava, or hazardous fluids, they no longer descend into liquids or sink to ocean/river bottoms.
+  - `tickGentleDescent` automatically identifies the nearest verified dry, solid, non-liquid ground within 32 blocks (or near their commanding player/master) and smoothly glides horizontally across the liquid surface before touching down.
+  - `isSafeStandingPosition` strictly validates that neither the ground beneath nor the minion's foot/head space contains fluids (water, lava) or hazard blocks (cacti, fire, sweet berries, magma), guaranteeing minions always disengage onto firm dry terrain.
+  - Structure egress (`finishBuildingEgress`) and task goal termination (`MinionBuildGoal.stop`) preserve active arcane levitation if over fluids until the minion is safely centered above solid ground.
+
 #### ✨ Area Fill Mode Particle Cleanup
 - **Blueprint Perimeter Particle Suppression (`CommandScepterItem.inventoryTick`)**:
   - Suppressed idle ground perimeter bounding particles when holding the scepter in `BUILD (AREA)` mode, preventing blueprint outlines from cluttering the screen while using Area Fill.

@@ -166,5 +166,33 @@ public class FluidHandlingAndWaterBucketTest {
 		Assertions.assertTrue(helperSource.contains("world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL)"),
 			"MinionHarvestingHelper.gatherWaterBucket must remove scooped water source block from the world");
 	}
+
+	@Test
+	@DisplayName("Minions steer to safe dry solid ground when surrounded by water or lava upon completion")
+	void testMinionSafeSolidGroundLandingContract() throws IOException {
+		String minionSource = Files.readString(Path.of("src/main/java/com/example/entity/custom/MinionEntity.java"));
+		String goalSource = Files.readString(Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java"));
+
+		// tickGentleDescent must detect fluids and steer to safe solid ground
+		Assertions.assertTrue(minionSource.contains("boolean inOrOverFluid = this.isTouchingWater() || this.isInLava()"),
+			"MinionEntity.tickGentleDescent must detect if minion is in or over water/lava");
+		Assertions.assertTrue(minionSource.contains("findNearestSafeStandingPosition(serverWorld, feet, 32)"),
+			"MinionEntity.tickGentleDescent must locate nearest safe solid ground within 32 blocks when over fluid");
+
+		// isSafeStandingPosition must require dry non-fluid ground
+		Assertions.assertTrue(minionSource.contains("!groundState.getFluidState().isEmpty()"),
+			"MinionEntity.isSafeStandingPosition must reject fluid ground beneath");
+		Assertions.assertTrue(minionSource.contains("feetFluid != null && !feetFluid.isEmpty()"),
+			"MinionEntity.isSafeStandingPosition must reject fluids at foot level");
+
+		// finishBuildingEgress must not drop minion into fluid
+		Assertions.assertTrue(minionSource.contains("boolean inOrOverFluid = this.isTouchingWater() || this.isInLava()"),
+			"MinionEntity.finishBuildingEgress must check for fluids before clearing levitation");
+
+		// MinionBuildGoal.stop must preserve levitation if over fluid
+		Assertions.assertTrue(goalSource.contains("boolean overFluid = this.minion.isTouchingWater() || this.minion.isInLava()"),
+			"MinionBuildGoal.stop must check if minion is over fluid to keep levitation active for gentle descent");
+	}
 }
+
 
