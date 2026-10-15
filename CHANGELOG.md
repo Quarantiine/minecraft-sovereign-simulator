@@ -12,6 +12,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+#### 📦 Strict Resource Origin Contract & Village-Wide Storage Radius (128m)
+- **Strict Resource Origin Contract (`MinionHarvestingHelper.STRICT_RESOURCE_ORIGIN_CHEST_OR_INVENTORY_ONLY`, `MinionBuildGoal`)**:
+  - Resolved an issue where builder minions would break, quarry, or fell blocks and timber from adjacent player builds or nearby structures in the world when constructing a blueprint.
+  - Enforced a strict resource origin invariant: **builder minions are strictly barred from breaking, mining, felling, quarrying, or harvesting any blocks in the world for blueprint or area fill construction**.
+  - Minions are **only allowed to use blocks or non-blocks that are in chests/containers or in their inventory only** (including in-inventory crafting/conversion from items withdrawn from containers or inventory).
+  - Removed autonomous world harvesting routines from `MinionBuildGoal.executePlacementWork`.
+  - Missing resources cleanly trigger `handleResourceDeficiency` (alerting the player via action bar and releasing the task) rather than destroying the world.
+- **Village-Scale Storage Radius (`MinionHarvestingHelper.VILLAGE_CONTAINER_SEARCH_RADIUS = 128`, `VILLAGE_CONTAINER_VERTICAL_RADIUS = 64`)**:
+  - Expanded container detection radius from 32m to **128 blocks horizontally and 64 blocks vertically**, allowing minions to construct entire villages from a single central chest or storage hub.
+  - **Dual-Center Search**: Scans loaded chunks around both the minion's current position and the construction session's anchor position, ensuring supply chests remain accessible anywhere in the village.
+  - **High-Performance Chunk-Based Lookup**: Queries loaded chunk block entities directly for sub-millisecond container discovery across vast village volumes.
+  - **Batch Restocking**: When scavenging a required block from a container, minions withdraw the placement block and restock up to 15 additional blocks into their 9-slot backpack if space permits, eliminating repeated chunk scans on subsequent placements.
+  - **BOM & Modal Alignment**: Updated Bill of Materials calculations in `ModNetworking`, `CommandScepterItem`, and `BlueprintResourceEstimatorModalScreen` to scan across the full 128m village range.
+
 #### 💀 Minion Skull & Mob Head Interaction, Inventory Access & 3D Rendering
 - **Client Prediction & Direct UUID Ownership Validation (`MinionEntity.isOwner`)**:
   - Fixed an issue where players were unable to check a minion's inventory or interact with tamed minions wearing a wither skeleton skull, helmet, or armor in singleplayer or offline sessions.

@@ -1142,13 +1142,13 @@ public class ModNetworking {
 			m -> m.isAlive() && m.isOwner(player)
 		);
 
-		// Scan nearby containers (chests, barrels, trapped chests, shulker boxes, etc.) within 32m
+		// Scan nearby containers (chests, barrels, trapped chests, shulker boxes, etc.) within village storage range (128m)
 		java.util.Set<net.minecraft.util.math.BlockPos> nearbyContainers = new java.util.HashSet<>();
 		java.util.Map<net.minecraft.item.Item, Integer> containerCounts = com.example.entity.ai.logistics.MinionHarvestingHelper.countItemsInNearbyContainers(
 			world,
 			player.getBlockPos(),
-			32,
-			16,
+			com.example.entity.ai.logistics.MinionHarvestingHelper.VILLAGE_CONTAINER_SEARCH_RADIUS,
+			com.example.entity.ai.logistics.MinionHarvestingHelper.VILLAGE_CONTAINER_VERTICAL_RADIUS,
 			nearbyContainers
 		);
 

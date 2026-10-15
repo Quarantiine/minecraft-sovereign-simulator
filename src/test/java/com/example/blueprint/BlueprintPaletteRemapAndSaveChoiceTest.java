@@ -155,20 +155,37 @@ public class BlueprintPaletteRemapAndSaveChoiceTest {
 	}
 
 	@Test
-	@DisplayName("Source Invariant: MinionBuildGoal and MinionHarvestingHelper search containers within 32 blocks")
+	@DisplayName("Source Invariant: MinionBuildGoal and MinionHarvestingHelper search containers within 128 blocks village radius")
 	void testContainerSearchRadiusExpansion() throws IOException {
 		Path buildGoalPath = Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java");
 		Assertions.assertTrue(Files.exists(buildGoalPath));
 		String buildGoalContent = Files.readString(buildGoalPath);
-		Assertions.assertTrue(buildGoalContent.contains("int radius = 32;"),
-			"MinionBuildGoal scavenge radius must be expanded to 32 blocks");
+		Assertions.assertTrue(buildGoalContent.contains("VILLAGE_CONTAINER_SEARCH_RADIUS"),
+			"MinionBuildGoal scavenge radius must use VILLAGE_CONTAINER_SEARCH_RADIUS (128 blocks)");
 
 		Path harvestHelperPath = Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java");
 		Assertions.assertTrue(Files.exists(harvestHelperPath));
 		String harvestContent = Files.readString(harvestHelperPath);
-		Assertions.assertTrue(harvestContent.contains("findNearbyChestWithSpace(world, minionPos, 32)")
-			&& harvestContent.contains("findNearbyChestWithSpace(world, searchCenter, 32)"),
-			"MinionHarvestingHelper container search radius must be 32 blocks");
+		Assertions.assertTrue(harvestContent.contains("VILLAGE_CONTAINER_SEARCH_RADIUS = 128;")
+			&& harvestContent.contains("VILLAGE_CONTAINER_VERTICAL_RADIUS = 64;"),
+			"MinionHarvestingHelper must define VILLAGE_CONTAINER_SEARCH_RADIUS = 128 and VILLAGE_CONTAINER_VERTICAL_RADIUS = 64");
+	}
+
+	@Test
+	@DisplayName("Source Invariant: Strict Resource Origin Contract - Minions strictly barred from world harvesting")
+	void testStrictResourceOriginContract() throws IOException {
+		Path buildGoalPath = Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java");
+		Assertions.assertTrue(Files.exists(buildGoalPath));
+		String buildGoalContent = Files.readString(buildGoalPath);
+		Assertions.assertFalse(buildGoalContent.contains("tryAutonomousHarvest"),
+			"MinionBuildGoal must not call tryAutonomousHarvest during block placement work");
+
+		Path harvestHelperPath = Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java");
+		Assertions.assertTrue(Files.exists(harvestHelperPath));
+		String harvestContent = Files.readString(harvestHelperPath);
+		Assertions.assertTrue(harvestContent.contains("public static boolean isHarvestable(Item item) {\n\t\t// Strict Resource Origin Contract")
+			|| harvestContent.contains("return false;\n\t}"),
+			"MinionHarvestingHelper must define isHarvestable returning false");
 	}
 
 	@Test

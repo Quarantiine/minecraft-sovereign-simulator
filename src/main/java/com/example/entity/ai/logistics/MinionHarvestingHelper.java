@@ -88,6 +88,10 @@ import net.minecraft.world.chunk.WorldChunk;
  */
 public final class MinionHarvestingHelper {
 
+	public static final int VILLAGE_CONTAINER_SEARCH_RADIUS = 128;
+	public static final int VILLAGE_CONTAINER_VERTICAL_RADIUS = 64;
+	public static final boolean STRICT_RESOURCE_ORIGIN_CHEST_OR_INVENTORY_ONLY = true;
+
 	private static final int HARVEST_SEARCH_RADIUS = 16;
 	private static final int BASE_BUFFER_RADIUS = 12;
 
@@ -157,6 +161,13 @@ public final class MinionHarvestingHelper {
 		return countItemsInNearbyContainers(world, center, horizontalRadius, verticalRadius, null);
 	}
 
+	public static Map<Item, Integer> countItemsInNearbyContainers(
+		ServerWorld world,
+		BlockPos center
+	) {
+		return countItemsInNearbyContainers(world, center, VILLAGE_CONTAINER_SEARCH_RADIUS, VILLAGE_CONTAINER_VERTICAL_RADIUS, null);
+	}
+
 	/**
 	 * Attempts to autonomously harvest or craft the required material for an active blueprint task.
 	 *
@@ -172,75 +183,8 @@ public final class MinionHarvestingHelper {
 		Item requiredItem,
 		ConstructionSession session
 	) {
-		if (minion == null || world == null || requiredItem == null) {
-			return false;
-		}
-
-		// 1. Tool check & self-crafting: ensure appropriate tool is equipped or crafted
-		ensureAppropriateTool(minion, world, requiredItem);
-
-		// 2. Wood / Timber / Planks Harvesting & Agro-Forestry
-		if (isWoodResource(requiredItem)) {
-			// First attempt in-inventory conversion or crafting if logs/planks are already held
-			if (isPlanksItem(requiredItem)) {
-				convertLogsToPlanks(minion, requiredItem);
-			} else if (isWoodenDerivative(requiredItem)) {
-				craftWoodenDerivative(minion, world, requiredItem, session);
-			}
-			if (hasItemInInventory(minion, requiredItem)) {
-				return true;
-			}
-			// Second attempt: harvest timber from natural trees or agro-forestry
-			if (harvestWoodOrAgroForestry(minion, world, session)) {
-				if (isPlanksItem(requiredItem)) {
-					convertLogsToPlanks(minion, requiredItem);
-				} else if (isWoodenDerivative(requiredItem)) {
-					craftWoodenDerivative(minion, world, requiredItem, session);
-				}
-				return hasItemInInventory(minion, requiredItem);
-			}
-		}
-
-		// 3. Smart Block Transformation & Tool Block Utilization (Smelting, Crafting, Stonecutting)
-		if (isTransformableResource(requiredItem)) {
-			if (trySmartTransformation(minion, world, requiredItem, session)) {
-				return hasItemInInventory(minion, requiredItem);
-			}
-		}
-
-		// 4. Natural Stone / Cobblestone / Deepslate / Earth Quarrying
-		if (isQuarryResource(requiredItem)) {
-			if (quarryNaturalStone(minion, world, requiredItem, 1, session)) {
-				return hasItemInInventory(minion, requiredItem);
-			}
-		}
-
-		// 5. Mob Material Procurement & In-Inventory Synthesis
-		if (isMobProcurementResource(requiredItem)) {
-			// First attempt in-inventory synthesis (e.g. bones -> bone meal, string -> wool)
-			if (synthesizeMaterial(minion.getInventory(), requiredItem)) {
-				return hasItemInInventory(minion, requiredItem);
-			}
-			// Attempt mob hunting or warrior contract commissioning
-			if (tryAutonomousMobHunting(minion, world, requiredItem)) {
-				return true;
-			}
-		}
-
-		// 6. Workstations, Utilities & Furniture Autonomous Synthesis
-		if (isWorkstationResource(requiredItem)) {
-			if (synthesizeWorkstation(minion, world, requiredItem, session)) {
-				return hasItemInInventory(minion, requiredItem);
-			}
-		}
-
-		// 7. Water Gathering: Scoop water source with bucket or craft bucket from iron ingots
-		if (requiredItem == Items.WATER_BUCKET) {
-			if (gatherWaterBucket(minion, world, session)) {
-				return hasItemInInventory(minion, requiredItem);
-			}
-		}
-
+		// Strict Resource Origin Contract: Builder minions are strictly barred from quarrying or felling
+		// blocks in the world. Minions are only allowed to use blocks or nonblocks that are in chests or in their inventory.
 		return false;
 	}
 
@@ -353,9 +297,9 @@ public final class MinionHarvestingHelper {
 			return;
 		}
 
-		// 1. Look for existing container within 32 blocks
+		// 1. Look for existing container within village storage radius (128 blocks)
 		BlockPos minionPos = minion.getBlockPos();
-		BlockPos targetChestPos = findNearbyChestWithSpace(world, minionPos, 32);
+		BlockPos targetChestPos = findNearbyChestWithSpace(world, minionPos, VILLAGE_CONTAINER_SEARCH_RADIUS);
 
 		// 2. If no container with space found, attempt autonomous chest crafting and deployment
 		if (targetChestPos == null) {
@@ -556,21 +500,47 @@ public final class MinionHarvestingHelper {
 	}
 
 	public static BlockPos findNearbyChestWithSpace(ServerWorld world, BlockPos center, int radius) {
-		for (BlockPos pos : BlockPos.iterateOutwards(center, radius, 8, radius)) {
-			BlockState state = world.getBlockState(pos);
-			if (state.isOf(Blocks.CHEST) || state.isOf(Blocks.BARREL) || state.isOf(Blocks.TRAPPED_CHEST)) {
-				BlockEntity be = world.getBlockEntity(pos);
-				if (be instanceof Inventory inv) {
-					for (int i = 0; i < inv.size(); i++) {
-						ItemStack s = inv.getStack(i);
-						if (s.isEmpty() || s.getCount() < s.getMaxCount()) {
-							return pos.toImmutable();
+		return findNearbyChestWithSpace(world, center, radius, VILLAGE_CONTAINER_VERTICAL_RADIUS);
+	}
+
+	public static BlockPos findNearbyChestWithSpace(ServerWorld world, BlockPos center, int horizontalRadius, int verticalRadius) {
+		if (world == null || center == null) return null;
+		int minChunkX = (center.getX() - horizontalRadius) >> 4;
+		int maxChunkX = (center.getX() + horizontalRadius) >> 4;
+		int minChunkZ = (center.getZ() - horizontalRadius) >> 4;
+		int maxChunkZ = (center.getZ() + horizontalRadius) >> 4;
+
+		BlockPos closestPos = null;
+		double closestDistSq = Double.MAX_VALUE;
+
+		for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+			for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+				if (!world.isChunkLoaded(cx, cz)) continue;
+				WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, center.getY(), cz << 4));
+				if (chunk == null) continue;
+				for (BlockEntity be : chunk.getBlockEntities().values()) {
+					if (be instanceof Inventory inv) {
+						BlockPos pos = be.getPos();
+						if (Math.abs(pos.getX() - center.getX()) <= horizontalRadius
+							&& Math.abs(pos.getY() - center.getY()) <= verticalRadius
+							&& Math.abs(pos.getZ() - center.getZ()) <= horizontalRadius) {
+							for (int i = 0; i < inv.size(); i++) {
+								ItemStack s = inv.getStack(i);
+								if (s.isEmpty() || s.getCount() < s.getMaxCount()) {
+									double distSq = pos.getSquaredDistance(center);
+									if (distSq < closestDistSq) {
+										closestDistSq = distSq;
+										closestPos = pos.toImmutable();
+									}
+									break;
+								}
+							}
 						}
 					}
 				}
 			}
 		}
-		return null;
+		return closestPos;
 	}
 
 	private static boolean isExcessItem(Item item, ConstructionSession session) {
@@ -619,7 +589,7 @@ public final class MinionHarvestingHelper {
 			return stack;
 		}
 
-		BlockPos targetChestPos = findNearbyChestWithSpace(world, searchCenter, 32);
+		BlockPos targetChestPos = findNearbyChestWithSpace(world, searchCenter, VILLAGE_CONTAINER_SEARCH_RADIUS);
 		if (targetChestPos != null) {
 			BlockEntity be = world.getBlockEntity(targetChestPos);
 			if (be instanceof Inventory containerInv) {
@@ -652,6 +622,11 @@ public final class MinionHarvestingHelper {
 		ServerWorld world,
 		ConstructionSession session
 	) {
+		// Strict Resource Origin Contract: Builder minions are strictly barred from felling trees or harvesting blocks in the world.
+		if (STRICT_RESOURCE_ORIGIN_CHEST_OR_INVENTORY_ONLY) {
+			return false;
+		}
+
 		BlockPos minionPos = minion.getBlockPos();
 
 		// 1. Scan for existing natural logs within 16 blocks (strictly natural trees with leaves and earth roots; never building logs!)
@@ -819,6 +794,11 @@ public final class MinionHarvestingHelper {
 		int maxCount,
 		ConstructionSession session
 	) {
+		// Strict Resource Origin Contract: Builder minions are strictly barred from quarrying or breaking blocks in the world.
+		if (STRICT_RESOURCE_ORIGIN_CHEST_OR_INVENTORY_ONLY) {
+			return false;
+		}
+
 		BlockPos minionPos = minion.getBlockPos();
 		int harvested = 0;
 
@@ -1644,14 +1624,9 @@ public final class MinionHarvestingHelper {
 	 * @return True if builder minions have autonomous procurement routines for this resource.
 	 */
 	public static boolean isHarvestable(Item item) {
-		if (item == null) return false;
-		return isWoodResource(item)
-			|| isQuarryResource(item)
-			|| isTransformableResource(item)
-			|| isMobProcurementResource(item)
-			|| isWorkstationResource(item)
-			|| isShovelResource(item)
-			|| isPickaxeResource(item);
+		// Strict Resource Origin Contract: Minions are only allowed to use blocks or nonblocks
+		// that are in chests or in their inventory only. Autonomous world harvesting is permanently disabled.
+		return false;
 	}
 
 	private static boolean isPlanksItem(Item item) {

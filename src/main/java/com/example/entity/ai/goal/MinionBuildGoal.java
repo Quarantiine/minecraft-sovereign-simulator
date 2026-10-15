@@ -713,7 +713,7 @@ public class MinionBuildGoal extends Goal {
 			}
 
 			if (!hasResources) {
-				// 2. Scavenge nearby containers (chests, barrels, shulkers) within 32 blocks
+				// 2. Scavenge nearby containers (chests, barrels, shulkers) within village storage range (128 blocks)
 				hasResources = scavengeNearbyContainers(serverWorld, requiredItem);
 			}
 
@@ -724,22 +724,6 @@ public class MinionBuildGoal extends Goal {
 					int slot = findItemSlot(minionInv, requiredItem);
 					if (slot != -1) {
 						consumeResourceFromInventory(minionInv, slot, requiredItem);
-					}
-				}
-			}
-
-			// 4. Autonomous Material Harvesting, Agro-Forestry & Mob Procurement
-			if (!hasResources) {
-				boolean harvestOrContract = com.example.entity.ai.logistics.MinionHarvestingHelper.tryAutonomousHarvest(this.minion, serverWorld, requiredItem, this.currentSession);
-				if (harvestOrContract) {
-					int slot = findItemSlot(minionInv, requiredItem);
-					if (slot != -1) {
-						consumeResourceFromInventory(minionInv, slot, requiredItem);
-						hasResources = true;
-					} else {
-						// Procurement hunt contract commissioned or in progress: wait patiently for delivery
-						this.ticksNavigating = 0;
-						return;
 					}
 				}
 			}
@@ -952,57 +936,75 @@ public class MinionBuildGoal extends Goal {
 	}
 
 	/**
-	 * Scavenges nearby container block entities within 32 blocks of the minion or session anchor.
-	 * Uses chunk block-entity querying for sub-millisecond lookup across large volumes.
+	 * Scavenges nearby container block entities within village storage range (128 blocks) of the minion or session anchor.
+	 * Uses chunk block-entity querying for sub-millisecond lookup across village-scale volumes.
+	 * Automatically batch-restocks up to 15 additional blocks into minion inventory when available to minimize repeated chunk scans.
 	 */
 	private boolean scavengeNearbyContainers(ServerWorld world, Item requiredItem) {
-		BlockPos center = this.minion.getBlockPos();
-		int radius = 32;
-		int verticalRadius = 16;
+		BlockPos minionPos = this.minion.getBlockPos();
+		BlockPos anchorPos = this.currentSession != null ? this.currentSession.getAnchorPos() : null;
+		int radius = com.example.entity.ai.logistics.MinionHarvestingHelper.VILLAGE_CONTAINER_SEARCH_RADIUS;
+		int verticalRadius = com.example.entity.ai.logistics.MinionHarvestingHelper.VILLAGE_CONTAINER_VERTICAL_RADIUS;
 
-		int minChunkX = (center.getX() - radius) >> 4;
-		int maxChunkX = (center.getX() + radius) >> 4;
-		int minChunkZ = (center.getZ() - radius) >> 4;
-		int maxChunkZ = (center.getZ() + radius) >> 4;
+		// Collect unique chunks within village radius of minion or blueprint anchor
+		java.util.Set<Long> chunkCoords = new java.util.HashSet<>();
+		addChunkCoordsAround(minionPos, radius, chunkCoords);
+		if (anchorPos != null) {
+			addChunkCoordsAround(anchorPos, radius, chunkCoords);
+		}
 
-		for (int cx = minChunkX; cx <= maxChunkX; cx++) {
-			for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-				if (!world.isChunkLoaded(cx, cz)) continue;
-				net.minecraft.world.chunk.WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, center.getY(), cz << 4));
-				if (chunk == null) continue;
-				for (BlockEntity be : chunk.getBlockEntities().values()) {
-					if (be instanceof Inventory containerInv) {
-						BlockPos pos = be.getPos();
-						if (Math.abs(pos.getX() - center.getX()) <= radius
-							&& Math.abs(pos.getY() - center.getY()) <= verticalRadius
-							&& Math.abs(pos.getZ() - center.getZ()) <= radius) {
-							int slot = findItemSlot(containerInv, requiredItem);
-							if (slot != -1) {
-								containerInv.removeStack(slot, 1);
-								be.markDirty();
+		for (long coord : chunkCoords) {
+			int cx = net.minecraft.util.math.ChunkPos.getPackedX(coord);
+			int cz = net.minecraft.util.math.ChunkPos.getPackedZ(coord);
+			if (!world.isChunkLoaded(cx, cz)) continue;
+			net.minecraft.world.chunk.WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, minionPos.getY(), cz << 4));
+			if (chunk == null) continue;
+			for (BlockEntity be : chunk.getBlockEntities().values()) {
+				if (be instanceof Inventory containerInv) {
+					BlockPos pos = be.getPos();
+					if (isWithinVillageRange(pos, minionPos, anchorPos, radius, verticalRadius)) {
+						int slot = findItemSlot(containerInv, requiredItem);
+						if (slot != -1) {
+							ItemStack stackInSlot = containerInv.getStack(slot);
+							int totalCount = stackInSlot.getCount();
+							// 1 block used directly for this placement
+							containerInv.removeStack(slot, 1);
+							be.markDirty();
 
-								// Arcane scavenging particle trail and chest creak sound
-								world.spawnParticles(
-									ParticleTypes.CLOUD,
-									pos.getX() + 0.5,
-									pos.getY() + 0.8,
-									pos.getZ() + 0.5,
-									4,
-									0.1,
-									0.1,
-									0.1,
-									0.02
-								);
-								world.playSound(
-									null,
-									pos,
-									SoundEvents.BLOCK_CHEST_OPEN,
-									SoundCategory.BLOCKS,
-									0.4F,
-									1.3F
-								);
-								return true;
+							// Batch restock up to 15 additional blocks into minion backpack if space permits
+							if (totalCount > 1) {
+								SimpleInventory minionInv = this.minion.getInventory();
+								int room = getAvailableInventoryRoom(minionInv, requiredItem);
+								int toRestock = Math.min(room, Math.min(15, totalCount - 1));
+								if (toRestock > 0) {
+									ItemStack restockStack = containerInv.removeStack(slot, toRestock);
+									be.markDirty();
+									minionInv.addStack(restockStack);
+									minionInv.markDirty();
+								}
 							}
+
+							// Arcane scavenging particle trail and chest creak sound
+							world.spawnParticles(
+								ParticleTypes.CLOUD,
+								pos.getX() + 0.5,
+								pos.getY() + 0.8,
+								pos.getZ() + 0.5,
+								4,
+								0.1,
+								0.1,
+								0.1,
+								0.02
+							);
+							world.playSound(
+								null,
+								pos,
+								SoundEvents.BLOCK_CHEST_OPEN,
+								SoundCategory.BLOCKS,
+								0.4F,
+								1.3F
+							);
+							return true;
 						}
 					}
 				}
@@ -1013,55 +1015,53 @@ public class MinionBuildGoal extends Goal {
 		List<Item> ingredients = com.example.entity.ai.logistics.MinionHarvestingHelper.getCraftingIngredients(requiredItem);
 		if (!ingredients.isEmpty()) {
 			for (Item ing : ingredients) {
-				for (int cx = minChunkX; cx <= maxChunkX; cx++) {
-					for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-						if (!world.isChunkLoaded(cx, cz)) continue;
-						net.minecraft.world.chunk.WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, center.getY(), cz << 4));
-						if (chunk == null) continue;
-						for (BlockEntity be : chunk.getBlockEntities().values()) {
-							if (be instanceof Inventory containerInv) {
-								BlockPos pos = be.getPos();
-								if (Math.abs(pos.getX() - center.getX()) <= radius
-									&& Math.abs(pos.getY() - center.getY()) <= verticalRadius
-									&& Math.abs(pos.getZ() - center.getZ()) <= radius) {
-									int ingSlot = findItemSlot(containerInv, ing);
-									if (ingSlot != -1) {
-										ItemStack stack = containerInv.getStack(ingSlot);
-										int withdrawCount = Math.min(6, stack.getCount());
-										ItemStack withdrawn = containerInv.removeStack(ingSlot, withdrawCount);
-										be.markDirty();
+				for (long coord : chunkCoords) {
+					int cx = net.minecraft.util.math.ChunkPos.getPackedX(coord);
+					int cz = net.minecraft.util.math.ChunkPos.getPackedZ(coord);
+					if (!world.isChunkLoaded(cx, cz)) continue;
+					net.minecraft.world.chunk.WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, minionPos.getY(), cz << 4));
+					if (chunk == null) continue;
+					for (BlockEntity be : chunk.getBlockEntities().values()) {
+						if (be instanceof Inventory containerInv) {
+							BlockPos pos = be.getPos();
+							if (isWithinVillageRange(pos, minionPos, anchorPos, radius, verticalRadius)) {
+								int ingSlot = findItemSlot(containerInv, ing);
+								if (ingSlot != -1) {
+									ItemStack stack = containerInv.getStack(ingSlot);
+									int withdrawCount = Math.min(6, stack.getCount());
+									ItemStack withdrawn = containerInv.removeStack(ingSlot, withdrawCount);
+									be.markDirty();
 
-										this.minion.getInventory().addStack(withdrawn);
-										this.minion.getInventory().markDirty();
+									this.minion.getInventory().addStack(withdrawn);
+									this.minion.getInventory().markDirty();
 
-										// Attempt craft with acquired ingredients
-										if (com.example.entity.ai.logistics.MinionHarvestingHelper.tryCraftBlockFromInventory(this.minion, world, requiredItem, this.currentSession)) {
-											int slot = findItemSlot(this.minion.getInventory(), requiredItem);
-											if (slot != -1) {
-												this.minion.getInventory().removeStack(slot, 1);
-												this.minion.getInventory().markDirty();
+									// Attempt craft with acquired ingredients
+									if (com.example.entity.ai.logistics.MinionHarvestingHelper.tryCraftBlockFromInventory(this.minion, world, requiredItem, this.currentSession)) {
+										int slot = findItemSlot(this.minion.getInventory(), requiredItem);
+										if (slot != -1) {
+											this.minion.getInventory().removeStack(slot, 1);
+											this.minion.getInventory().markDirty();
 
-												world.spawnParticles(
-													ParticleTypes.CLOUD,
-													pos.getX() + 0.5,
-													pos.getY() + 0.8,
-													pos.getZ() + 0.5,
-													4,
-													0.1,
-													0.1,
-													0.1,
-													0.02
-												);
-												world.playSound(
-													null,
-													pos,
-													SoundEvents.BLOCK_CHEST_OPEN,
-													SoundCategory.BLOCKS,
-													0.4F,
-													1.3F
-												);
-												return true;
-											}
+											world.spawnParticles(
+												ParticleTypes.CLOUD,
+												pos.getX() + 0.5,
+												pos.getY() + 0.8,
+												pos.getZ() + 0.5,
+												4,
+												0.1,
+												0.1,
+												0.1,
+												0.02
+											);
+											world.playSound(
+												null,
+												pos,
+												SoundEvents.BLOCK_CHEST_OPEN,
+												SoundCategory.BLOCKS,
+												0.4F,
+												1.3F
+											);
+											return true;
 										}
 									}
 								}
@@ -1073,6 +1073,46 @@ public class MinionBuildGoal extends Goal {
 		}
 
 		return false;
+	}
+
+	private static void addChunkCoordsAround(BlockPos center, int radius, java.util.Set<Long> out) {
+		if (center == null) return;
+		int minChunkX = (center.getX() - radius) >> 4;
+		int maxChunkX = (center.getX() + radius) >> 4;
+		int minChunkZ = (center.getZ() - radius) >> 4;
+		int maxChunkZ = (center.getZ() + radius) >> 4;
+		for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+			for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+				out.add(net.minecraft.util.math.ChunkPos.toLong(cx, cz));
+			}
+		}
+	}
+
+	private static boolean isWithinVillageRange(BlockPos pos, BlockPos minionPos, BlockPos anchorPos, int radius, int verticalRadius) {
+		if (isWithinBox(pos, minionPos, radius, verticalRadius)) {
+			return true;
+		}
+		return anchorPos != null && isWithinBox(pos, anchorPos, radius, verticalRadius);
+	}
+
+	private static boolean isWithinBox(BlockPos pos, BlockPos center, int radius, int verticalRadius) {
+		return Math.abs(pos.getX() - center.getX()) <= radius
+			&& Math.abs(pos.getY() - center.getY()) <= verticalRadius
+			&& Math.abs(pos.getZ() - center.getZ()) <= radius;
+	}
+
+	private static int getAvailableInventoryRoom(SimpleInventory inv, Item item) {
+		int room = 0;
+		int maxCount = new ItemStack(item).getMaxCount();
+		for (int i = 0; i < inv.size(); i++) {
+			ItemStack s = inv.getStack(i);
+			if (s.isEmpty()) {
+				room += maxCount;
+			} else if (s.isOf(item) && s.getCount() < s.getMaxCount()) {
+				room += (s.getMaxCount() - s.getCount());
+			}
+		}
+		return room;
 	}
 
 	/**

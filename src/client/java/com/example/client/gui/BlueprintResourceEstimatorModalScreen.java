@@ -125,7 +125,7 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 			}
 		})
 		.dimensions(startX + 147, actionY, 115, 22)
-		.tooltip(Tooltip.of(Text.literal("§e↻ Rescan Live Inventory\n§7Requests a refreshed server-side material scan across your bag, minion thralls, and nearby chests within 32m.")))
+		.tooltip(Tooltip.of(Text.literal("§e↻ Rescan Live Inventory\n§7Requests a refreshed server-side material scan across your bag, minion thralls, and nearby chests within 128m (Village Range).")))
 		.build();
 		this.addDrawableChild(this.rescanBtn);
 
@@ -316,7 +316,7 @@ public class BlueprintResourceEstimatorModalScreen extends Screen {
 					tooltipLines.add(Text.literal("§eRequired: §f" + entry.requiredCount() + " blocks"));
 					tooltipLines.add(Text.literal("§aPlayer Inventory: §f" + entry.playerCount()));
 					tooltipLines.add(Text.literal("§bNearby Minion Backpacks: §f" + entry.minionCount() + " (across " + minionCount + " minions)"));
-					tooltipLines.add(Text.literal("§6Nearby Chests & Containers: §f" + entry.chestCount() + " (across " + containerCount + " containers in 32m)"));
+					tooltipLines.add(Text.literal("§6Nearby Chests & Containers: §f" + entry.chestCount() + " (across " + containerCount + " containers in 128m village range)"));
 					tooltipLines.add(Text.literal("§7Total Available: " + (entry.isSatisfied() ? "§a" : "§c") + entry.totalAvailable() + " / " + entry.requiredCount()));
 					tooltipLines.add(Text.literal("§7Net Inventory Delta: " + (itemDelta >= 0 ? "§a+" + itemDelta + " (Surplus)" : "§c" + itemDelta + " (Deficit)")));
 					if (entry.harvestable()) {

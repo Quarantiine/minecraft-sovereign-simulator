@@ -2812,7 +2812,7 @@ public class CommandScepterItem extends Item {
 			int totalReq = blueprint.getBlockCount();
 			int totalAvail = 0;
 			java.util.Map<net.minecraft.item.Item, Integer> containerCounts = com.example.entity.ai.logistics.MinionHarvestingHelper.countItemsInNearbyContainers(
-				serverWorld, anchorPos, 32, 16
+				serverWorld, anchorPos, com.example.entity.ai.logistics.MinionHarvestingHelper.VILLAGE_CONTAINER_SEARCH_RADIUS, com.example.entity.ai.logistics.MinionHarvestingHelper.VILLAGE_CONTAINER_VERTICAL_RADIUS
 			);
 			for (java.util.Map.Entry<net.minecraft.item.Item, Integer> entry : blueprint.getRequiredItems().entrySet()) {
 				net.minecraft.item.Item item = entry.getKey();
