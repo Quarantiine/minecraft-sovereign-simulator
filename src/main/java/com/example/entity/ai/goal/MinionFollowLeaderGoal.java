@@ -112,12 +112,20 @@ public class MinionFollowLeaderGoal extends Goal {
 			return false;
 		}
 
+		if (!this.minion.getWorld().isChunkLoaded(this.minion.getBlockX() >> 4, this.minion.getBlockZ() >> 4)) {
+			return false;
+		}
+
 		if (!this.minion.hasLeader()) {
 			return false;
 		}
 
 		MinionEntity resolvedLeader = resolveLeader();
 		if (resolvedLeader == null || !resolvedLeader.isAlive()) {
+			return false;
+		}
+
+		if (!resolvedLeader.getWorld().isChunkLoaded(resolvedLeader.getBlockX() >> 4, resolvedLeader.getBlockZ() >> 4)) {
 			return false;
 		}
 
@@ -160,8 +168,16 @@ public class MinionFollowLeaderGoal extends Goal {
 			return false;
 		}
 
+		if (!this.minion.getWorld().isChunkLoaded(this.minion.getBlockX() >> 4, this.minion.getBlockZ() >> 4)) {
+			return false;
+		}
+
 		MinionEntity resolvedLeader = resolveLeader();
 		if (resolvedLeader == null || !resolvedLeader.isAlive()) {
+			return false;
+		}
+
+		if (!resolvedLeader.getWorld().isChunkLoaded(resolvedLeader.getBlockX() >> 4, resolvedLeader.getBlockZ() >> 4)) {
 			return false;
 		}
 

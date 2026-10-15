@@ -72,8 +72,9 @@ public class MouseMixin {
 						if (newHeight > 0 && ClientMiningCaptureTracker.getPos1() != null && ClientMiningCaptureTracker.getPos2() != null) {
 							int minY = Math.min(ClientMiningCaptureTracker.getPos1().getY(), ClientMiningCaptureTracker.getPos2().getY());
 							int maxY = Math.max(ClientMiningCaptureTracker.getPos1().getY(), ClientMiningCaptureTracker.getPos2().getY());
+							String depthStr = ClientMiningCaptureTracker.isUnderground() ? " §c[↓ " + ClientMiningCaptureTracker.getUndergroundDepth() + "b deep]" : "";
 							client.player.sendMessage(
-								Text.literal("§6✦ Mining Box Height: §f" + newHeight + " blocks §8(Y: " + minY + " → " + maxY + ") §8| §e" + ClientMiningCaptureTracker.getDimensionString()),
+								Text.literal("§6✦ Mining Box Height: §f" + newHeight + " blocks §8(Y: " + minY + " → " + maxY + ")" + depthStr + " §8| §e" + ClientMiningCaptureTracker.getDimensionString()),
 								true
 							);
 							client.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);
@@ -90,8 +91,9 @@ public class MouseMixin {
 						if (newHeight > 0 && ClientBuildCaptureTracker.getPos1() != null && ClientBuildCaptureTracker.getPos2() != null) {
 							int minY = Math.min(ClientBuildCaptureTracker.getPos1().getY(), ClientBuildCaptureTracker.getPos2().getY());
 							int maxY = Math.max(ClientBuildCaptureTracker.getPos1().getY(), ClientBuildCaptureTracker.getPos2().getY());
+							String depthStr = ClientBuildCaptureTracker.isUnderground() ? " §c[↓ " + ClientBuildCaptureTracker.getUndergroundDepth() + "b deep]" : "";
 							client.player.sendMessage(
-								Text.literal("§3✦ Build Box Height: §f" + newHeight + " blocks §8(Y: " + minY + " → " + maxY + ") §8| §e" + ClientBuildCaptureTracker.getDimensionString()),
+								Text.literal("§3✦ Build Box Height: §f" + newHeight + " blocks §8(Y: " + minY + " → " + maxY + ")" + depthStr + " §8| §e" + ClientBuildCaptureTracker.getDimensionString()),
 								true
 							);
 							client.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);

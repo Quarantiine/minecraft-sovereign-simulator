@@ -467,37 +467,36 @@ public class CommandScepterScreen extends Screen {
 		this.clearCornersBtn.visible = this.selectedMode == CommandMode.DESIGN;
 		this.addDrawableChild(this.clearCornersBtn);
 
-		// Mining Mode Toggle Button (visible in MINE mode)
+		// Mining Mode Toggle Button (hidden as mining is strictly custom area)
 		this.miningModeBtn = ButtonWidget.builder(
-			getMiningModeButtonText(),
-			b -> toggleMiningModeGui()
+			Text.literal("§eCustom Area"),
+			b -> {}
 		)
-		.dimensions(startX + 16, pageControlsY, this.selectedMiningMode == MiningMode.AREA ? 44 : 142, 19)
-		.tooltip(getMiningModeTooltip())
+		.dimensions(startX + 16, pageControlsY, 44, 19)
 		.build();
-		this.miningModeBtn.visible = this.selectedMode == CommandMode.MINE;
+		this.miningModeBtn.visible = false;
 		this.addDrawableChild(this.miningModeBtn);
 
-		// Mining Confirm Modal Button (visible in MINE mode with AREA sub-mode)
+		// Mining Confirm Modal Button (visible in MINE mode)
 		this.miningConfirmModalBtn = ButtonWidget.builder(
-			Text.literal("§e⛏ Confirm"),
+			Text.literal("§e⛏ Confirm Area"),
 			b -> openMiningConfirmModal()
 		)
-		.dimensions(startX + 62, pageControlsY, 52, 19)
+		.dimensions(startX + 16, pageControlsY, 92, 19)
 		.tooltip(Tooltip.of(Text.literal("§e✦ Confirm Mining Area\n§7Open modal to inspect area volume and start 3D quarry excavation.")))
 		.build();
-		this.miningConfirmModalBtn.visible = this.selectedMode == CommandMode.MINE && this.selectedMiningMode == MiningMode.AREA;
+		this.miningConfirmModalBtn.visible = this.selectedMode == CommandMode.MINE;
 		this.addDrawableChild(this.miningConfirmModalBtn);
 
-		// Clear Mining Corners Button (visible in MINE mode with AREA sub-mode)
+		// Clear Mining Corners Button (visible in MINE mode)
 		this.clearMineCornersBtn = ButtonWidget.builder(
 			Text.literal("§6⌫ Reset"),
 			b -> clearMineCornersGui()
 		)
-		.dimensions(startX + 116, pageControlsY, 42, 19)
+		.dimensions(startX + 112, pageControlsY, 46, 19)
 		.tooltip(Tooltip.of(Text.literal("§6⌫ Reset Mining Corners\n§7Clears Pos1 and Pos2 mining selection.")))
 		.build();
-		this.clearMineCornersBtn.visible = this.selectedMode == CommandMode.MINE && this.selectedMiningMode == MiningMode.AREA;
+		this.clearMineCornersBtn.visible = this.selectedMode == CommandMode.MINE;
 		this.addDrawableChild(this.clearMineCornersBtn);
 
 		// Pathway Route Dashboard Controls (Paginated 4 Channel Rows per page: Select, Mode, Edit, Clear, Delete)
@@ -944,13 +943,13 @@ public class CommandScepterScreen extends Screen {
 			this.clearCornersBtn.visible = isDesign;
 		}
 		if (this.miningModeBtn != null) {
-			this.miningModeBtn.visible = isMine;
+			this.miningModeBtn.visible = false;
 		}
 		if (this.miningConfirmModalBtn != null) {
-			this.miningConfirmModalBtn.visible = isMine && (this.selectedMiningMode == MiningMode.AREA);
+			this.miningConfirmModalBtn.visible = isMine;
 		}
 		if (this.clearMineCornersBtn != null) {
-			this.clearMineCornersBtn.visible = isMine && (this.selectedMiningMode == MiningMode.AREA);
+			this.clearMineCornersBtn.visible = isMine;
 		}
 
 		boolean hideBlueprints = isPathway || (isBuild && (this.selectedBuildingMode == BuildingMode.AREA || this.selectedBuildingMode == BuildingMode.BARRIER));
@@ -1290,7 +1289,7 @@ public class CommandScepterScreen extends Screen {
 	}
 
 	public void setSelectedMiningMode(MiningMode mode) {
-		this.selectedMiningMode = mode != null ? mode : MiningMode.AREA;
+		this.selectedMiningMode = MiningMode.AREA;
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.setMiningMode(this.scepterStack, this.selectedMiningMode);
 		}
@@ -1305,7 +1304,7 @@ public class CommandScepterScreen extends Screen {
 	}
 
 	public void toggleMiningModeGui() {
-		this.selectedMiningMode = this.selectedMiningMode == MiningMode.AREA ? MiningMode.DIRECT : MiningMode.AREA;
+		this.selectedMiningMode = MiningMode.AREA;
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.setMiningMode(this.scepterStack, this.selectedMiningMode);
 		}
@@ -2005,17 +2004,12 @@ public class CommandScepterScreen extends Screen {
 			String p2Str = p2 != null ? ("[" + p2.getX() + "," + p2.getY() + "," + p2.getZ() + "]") : "Not Set";
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Pos1: §f" + p1Str + "  §7Pos2: §f" + p2Str + " §8(L-Click Step, R-Click Save)"), startX + 16, startY + 84, 0xAAAAAA);
 		} else if (this.selectedMode == CommandMode.MINE) {
-			if (this.selectedMiningMode == MiningMode.DIRECT) {
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§6✦ Direct / Structure Mining Mode"), startX + 16, startY + 69, 0xFFA500);
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§7Point & right-click to dismantle targeted structures."), startX + 16, startY + 84, 0xAAAAAA);
-			} else {
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§e✦ Custom Area Boundary Quarry"), startX + 16, startY + 69, 0xFFFF55);
-				BlockPos p1 = ClientMiningCaptureTracker.getPos1();
-				BlockPos p2 = ClientMiningCaptureTracker.getPos2();
-				String p1Str = p1 != null ? ("[" + p1.getX() + "," + p1.getY() + "," + p1.getZ() + "]") : "Not Set";
-				String p2Str = p2 != null ? ("[" + p2.getX() + "," + p2.getY() + "," + p2.getZ() + "]") : "Not Set";
-				context.drawTextWithShadow(this.textRenderer, Text.literal("§7Pos1: §f" + p1Str + "  §7Pos2: §f" + p2Str + " §8(L-Click Step, R-Click Confirm)"), startX + 16, startY + 84, 0xAAAAAA);
-			}
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§e✦ Custom Area Boundary Quarry"), startX + 16, startY + 69, 0xFFFF55);
+			BlockPos p1 = ClientMiningCaptureTracker.getPos1();
+			BlockPos p2 = ClientMiningCaptureTracker.getPos2();
+			String p1Str = p1 != null ? ("[" + p1.getX() + "," + p1.getY() + "," + p1.getZ() + "]") : "Not Set";
+			String p2Str = p2 != null ? ("[" + p2.getX() + "," + p2.getY() + "," + p2.getZ() + "]") : "Not Set";
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Pos1: §f" + p1Str + "  §7Pos2: §f" + p2Str + " §8(L-Click Step, R-Click Confirm)"), startX + 16, startY + 84, 0xAAAAAA);
 		} else {
 			String roleLabelSuffix = this.selectedRole != null
 				? " " + this.selectedRole.getFormattedName() + " §8(Rally Transform)"

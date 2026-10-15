@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests validating Command Hub GUI MINE mode controls,
- * mining sub-mode toggles (DIRECT vs AREA), modal hooks, and mining corner reset.
+ * strict Custom Area boundary mode, modal hooks, and mining corner reset.
  */
 public class CommandScepterScreenMiningControlsTest {
 
@@ -21,19 +21,17 @@ public class CommandScepterScreenMiningControlsTest {
 	}
 
 	@Test
-	@DisplayName("Mining mode defaults to AREA and toggles cleanly between AREA and DIRECT")
-	void testMiningModeToggling() {
+	@DisplayName("Mining mode is strictly AREA (Custom Area Selection)")
+	void testMiningModeStrictlyArea() {
 		CommandScepterScreen screen = new CommandScepterScreen();
 		Assertions.assertEquals(MiningMode.AREA, screen.getSelectedMiningMode());
 
-		screen.toggleMiningModeGui();
-		Assertions.assertEquals(MiningMode.DIRECT, screen.getSelectedMiningMode());
-
+		// Toggling or setting maintains AREA
 		screen.toggleMiningModeGui();
 		Assertions.assertEquals(MiningMode.AREA, screen.getSelectedMiningMode());
 
-		screen.setSelectedMiningMode(MiningMode.DIRECT);
-		Assertions.assertEquals(MiningMode.DIRECT, screen.getSelectedMiningMode());
+		screen.setSelectedMiningMode(MiningMode.AREA);
+		Assertions.assertEquals(MiningMode.AREA, screen.getSelectedMiningMode());
 	}
 
 	@Test
@@ -52,18 +50,18 @@ public class CommandScepterScreenMiningControlsTest {
 	}
 
 	@Test
-	@DisplayName("Source contract: CommandScepterScreen renders distinct sub-headers for DIRECT vs AREA mining")
+	@DisplayName("Source contract: CommandScepterScreen renders Custom Area Quarry header and controls")
 	void testMiningSubHeaderRenderingSourceContract() throws java.io.IOException {
 		java.nio.file.Path screenPath = java.nio.file.Path.of("src/client/java/com/example/client/gui/CommandScepterScreen.java");
 		String screenContent = java.nio.file.Files.readString(screenPath);
 
 		Assertions.assertTrue(
-			screenContent.contains("Direct / Structure Mining Mode"),
-			"CommandScepterScreen must render Direct / Structure subheader in DIRECT mining mode"
+			screenContent.contains("Custom Area Boundary Quarry"),
+			"CommandScepterScreen must render Custom Area subheader in MINE mode"
 		);
 		Assertions.assertTrue(
-			screenContent.contains("Custom Area Boundary Quarry"),
-			"CommandScepterScreen must render Custom Area subheader in AREA mining mode"
+			screenContent.contains("⛏ Confirm Area"),
+			"CommandScepterScreen must render Confirm Area button"
 		);
 	}
 }

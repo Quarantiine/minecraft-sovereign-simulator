@@ -6,11 +6,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
-## [1.1.1] - 2026-10-15
+## [1.2.0] - 2026-10-15
 
-### 🛡️ Sovereign Barrier Defense, Area Fill Volumetric Construction & Protective Autonomous Logistics
+### 🛡️ Sovereign Barrier Defense, Volumetric Area Fill, Unified Depth Excavation & Autonomous Threat Triage
 
 ### Added
+
+#### ⚔️ AUTO Mode Danger-First Priority & Villager Medical Triage
+
+- **Danger Elimination First (`WARRIOR`)**:
+  - In `AUTO` mode, minions strictly prioritize eliminating danger above all else. If an auto minion is actively building or mining and a threat is detected (hostile mobs within 16m, minion/owner attacked, active target acquired, or scepter assault targets queued), the minion immediately shifts its adaptive role to **`WARRIOR`**.
+  - `MinionBuildGoal` checks `evaluateAutoRole()` periodically every 5 ticks; when adapting away from `BUILDER`, it immediately stops execution, safely releases its claimed task back to the `ConstructionSession` (preventing lost work or skipped blocks), restores held weapons, and lands safely from Arcane Levitation to combat the threat.
+  - Removed `isActivelyBuilding()` blocks from targeting goals (`TrackOwnerAttackerGoal`, `AttackWithOwnerGoal`, `RevengeGoal`) for `AUTO` minions, guaranteeing instantaneous retaliation and target tracking.
+- **Comprehensive Medical Triage & Villager Healing (`SENTINEL`)**:
+  - Once all threats and hostile entities are eliminated (or in peaceful conditions), the minion evaluates health for nearby allies within 16m (< 70% max health).
+  - Explicitly integrated **Villagers (`VillagerEntity`)** into medical triage: minions now treat villagers as allied teammates (`isAlliedTeammate()`), detect wounded villagers within 16m (`hasNearbyAlliesNeedingHealing()`), adapt to `SENTINEL`, and channel _Aegis of Restoration_ (`SentinelHealAllyGoal`) with healing, Regeneration II, and heart particles.
+  - Also covers player commanders, multiplayer allies, fellow squad minions, non-hostile Iron Golems, and self-healing for the minion itself when under 70% max health.
+- **Seamless Return to Building / Mining (`BUILDER`)**:
+  - Once all nearby allies and villagers are healed to 70% max health or higher AND no threats exist, the auto minion automatically adapts back to **`BUILDER`**.
+  - Scans for the nearest active construction or mining session within 128 blocks via `ConstructionManager`, claims the next task in strict FIFO order, takes flight with Arcane Levitation, and resumes work.
+
+#### ⛏️ Unified In-World Height & Underground Depth Controls (Mining & Area Fill Modes)
+
+- **Unified Bi-Directional Vertical Controls (`ClientMiningCaptureTracker`, `ClientBuildCaptureTracker`)**:
+  - Eliminates the need to dig down underground to set the bottom corner of an excavation or area fill selection.
+  - Decreasing the selection height past 1 block at the baseline surface layer (`initialBaseY`) automatically expands the volume **downward into the ground**.
+  - Increasing height shrinks underground depth back toward the surface and seamlessly crosses over into upward above-ground expansion.
+  - Strictly limited to **Mining Area** (`MINE` mode `AREA` sub-mode) and **Build Area Fill** (`BUILD` mode `AREA` sub-mode); custom blueprint capture (`DESIGN` mode) remains strictly upward-oriented.
+- **Underground Actionbar Feedback & HUD Depth Indicators**:
+  - Live HUD actionbar and modal labels display clear depth tracking (`[↓ Xb deep]`) when expanded underground while preserving dimension strings.
+  - Updated `MiningConfirmModalScreen` and `BuildAreaConfirmModalScreen` button tooltips and labels (`[-5]`, `[-1]`, `[+1]`, `[+5]`) to reflect underground expansion and reduction.
+- **Bedrock & Height Limits Safety Safeguards**:
+  - Safely clamps underground expansion to `world.getBottomY()` (down to $Y = -64$) and `MAX_HEIGHT = 96` blocks.
+  - Hologram rendering (`BlueprintHologramRenderer`) projects seamlessly below terrain surface with zero visual clipping.
+
+#### ⛏️ Exclusive Custom Area Selection & Modal Stepper Layout Fix
+
+- **Strict Custom Area Selection for Mining**:
+  - Removed the legacy experimental `DIRECT` point-and-click dismantle sub-mode from `MINE` mode.
+  - Mining operates exclusively via **Custom Area Selection** (`MiningMode.AREA`), guaranteeing that all excavation commands have explicit 3D boundary previews, real-time block counts, bedrock safety verification, and confirmation modals.
+  - Command Hub GUI (`CommandScepterScreen`) removes the sub-mode toggle button and displays `✦ Custom Area Boundary Quarry` header with clean `[ ⛏ Confirm Area ]` and `[ ⌫ Reset ]` actions.
+  - Scepter item (`CommandScepterItem`) and client interaction logic consistently route right-clicks and attacks in `MINE` mode to 3D area confirmation and corner stepping.
+- **Modal Stepper Layout Fix (Overlap Elimination)**:
+  - In both `MiningConfirmModalScreen` and `BuildAreaConfirmModalScreen`, the `[-5]`, `[-1]`, `[+1]`, and `[+5]` stepper buttons were right-aligned against the dialog window edge (`startX + 184` through `startX + 284`).
+  - Formatted the left label to `§eHeight / Depth:` when expanded underground, leaving over 40px of clear space and completely eliminating text overlap between the depth indicator (`[↓ Xb deep]`) and stepper buttons.
+
+#### ⛏️ Strict FIFO Multi-Site Job Queueing (100% Finish-Before-Start)
+
+- **100% Finish-Before-Start Guarantee**:
+  - When commanders place down multiple jobs across the world (whether building blueprints, volumetric area fills, or mining quarries), minions strictly commit 100% of their labor to the earliest placed active job (`session.getCreatedTick()`).
+  - Minions will **never** abandon an older blueprint or mining area to start a newer job, even if the newer job is physically closer.
+  - Only when the earliest job reaches 100% completion do minions mobilize and transition to subsequently placed jobs.
+  - When sessions share the exact same creation tick, minions break ties deterministically by proximity to the closest site.
+- **Thread-Safe Session Queueing**:
+  - Enhanced `ConstructionManager.sessionsByOwner` with `CopyOnWriteArrayList` to ensure atomic, concurrency-safe session registration and iteration during multi-site commands.
+
+#### 🛡️ Unloaded Chunk AI & Construction Safeguards
+
+- **Synthetic Inner Class Elimination (`MinionFormationFollowGoal`)**:
+  - Refactored `calculateFormationOffset` from an enum switch to `if-else`, eliminating the anonymous synthetic inner class `MinionFormationFollowGoal$1.class` from bytecode to prevent classloader linkage mismatches and `NoClassDefFoundError`.
+- **Chunk Loading Bounds Checks in Entity AI**:
+  - Added `world.isChunkLoaded` checks to `MinionFormationFollowGoal.canStart()`, `shouldContinue()`, and `resolveWalkableY()`, preventing minions from attempting to read block states or navigate across unloaded chunk sections.
+  - Added `world.isChunkLoaded` checks to `MinionFollowLeaderGoal.canStart()` and `shouldContinue()` for both minion and leader coordinates.
+  - Protected `MinionEntity.isSafeStandingPosition()` and `findNearestSafeStandingPosition()` against querying blocks in unloaded chunks.
+- **Unloaded Chunk Session Preservation (`ConstructionSession`)**:
+  - In `ConstructionSession.hasRemainingBlocksInWorld()`, verified that all chunks intersecting the session's bounding box are loaded before inspecting block states. If any chunk is unloaded, the method returns `true` (preserving remaining blocks), preventing active mining sessions from falsely concluding they are finished when chunks unload.
+  - In `claimNextTask()` and `isDismantleTaskReady()`, added chunk loading checks to ensure tasks in unloaded chunks are not auto-completed based on Minecraft's virtual air fallback.
 
 #### 🛡️ Sovereign Barrier Mode (`BuildingMode.BARRIER`, `BarrierZone`, `BarrierManager`)
 

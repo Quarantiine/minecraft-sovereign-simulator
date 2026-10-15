@@ -218,10 +218,18 @@ public class ClientMiningCaptureTrackerTest {
 		Assertions.assertEquals(ClientMiningCaptureTracker.MAX_HEIGHT, maxClamped);
 		Assertions.assertEquals(ClientMiningCaptureTracker.MAX_HEIGHT, ClientMiningCaptureTracker.getSizeY());
 
-		// Clamping to minimum (height < 1 clamped to 1)
-		int minClamped = ClientMiningCaptureTracker.adjustHeight(-500);
-		Assertions.assertEquals(1, minClamped);
-		Assertions.assertEquals(1, ClientMiningCaptureTracker.getSizeY());
+		// Unified bi-directional adjustment: decreasing past 1 expands downward underground
+		int deepClamped = ClientMiningCaptureTracker.adjustHeight(-500);
+		Assertions.assertEquals(ClientMiningCaptureTracker.MAX_HEIGHT, deepClamped);
+		Assertions.assertEquals(ClientMiningCaptureTracker.MAX_HEIGHT, ClientMiningCaptureTracker.getSizeY());
+		Assertions.assertTrue(ClientMiningCaptureTracker.isUnderground());
+		Assertions.assertEquals(95, ClientMiningCaptureTracker.getUndergroundDepth());
+
+		// Increasing height pulls back up out of the ground and crosses over above ground
+		int pullUp = ClientMiningCaptureTracker.adjustHeight(100);
+		Assertions.assertEquals(6, pullUp);
+		Assertions.assertEquals(6, ClientMiningCaptureTracker.getSizeY());
+		Assertions.assertFalse(ClientMiningCaptureTracker.isUnderground());
 
 		int explicitMin = ClientMiningCaptureTracker.setHeight(0);
 		Assertions.assertEquals(1, explicitMin);

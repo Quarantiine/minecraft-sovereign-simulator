@@ -288,7 +288,7 @@ public class ExampleModClient implements ClientModInitializer {
 				}
 			}
 
-			if (mode == CommandMode.MINE && CommandScepterItem.getMiningMode(stack) == com.example.component.MiningMode.AREA) {
+			if (mode == CommandMode.MINE) {
 				BlockPos p1 = CommandScepterItem.getMinePos1(stack);
 				if (p1 == null) p1 = ClientMiningCaptureTracker.getPos1();
 				BlockPos p2 = CommandScepterItem.getMinePos2(stack);
@@ -345,20 +345,6 @@ public class ExampleModClient implements ClientModInitializer {
 					}
 					return TypedActionResult.pass(stack);
 				}
-			}
-
-			if (mode == CommandMode.MINE && CommandScepterItem.getMiningMode(stack) == com.example.component.MiningMode.DIRECT) {
-				MinecraftClient client = MinecraftClient.getInstance();
-				BlockHitResult hit = TacticalBuildCameraController.getCameraTargetedBlock(client, 96.0F);
-				if (hit != null && hit.getType() == HitResult.Type.BLOCK) {
-					ModClientNetworking.sendAnchorConstruction(hit.getBlockPos(), hit.getSide(), true);
-					player.getItemCooldownManager().set(stack.getItem(), 10);
-					player.swingHand(hand);
-					if (client.world != null) {
-						client.world.playSound(player, hit.getBlockPos(), SoundEvents.BLOCK_STONE_PLACE, SoundCategory.BLOCKS, 1.0F, 1.0F);
-					}
-				}
-				return TypedActionResult.pass(stack);
 			}
 
 			return TypedActionResult.pass(stack);
@@ -523,8 +509,9 @@ public class ExampleModClient implements ClientModInitializer {
 								if (newH > 0 && ClientMiningCaptureTracker.getPos1() != null && ClientMiningCaptureTracker.getPos2() != null) {
 									int minY = Math.min(ClientMiningCaptureTracker.getPos1().getY(), ClientMiningCaptureTracker.getPos2().getY());
 									int maxY = Math.max(ClientMiningCaptureTracker.getPos1().getY(), ClientMiningCaptureTracker.getPos2().getY());
+									String depthStr = ClientMiningCaptureTracker.isUnderground() ? " §c[↓ " + ClientMiningCaptureTracker.getUndergroundDepth() + "b deep]" : "";
 									client.player.sendMessage(
-										Text.literal("§6✦ Mining Box Height: §f" + newH + " blocks §8(Y: " + minY + " → " + maxY + ") §8| §e" + ClientMiningCaptureTracker.getDimensionString()),
+										Text.literal("§6✦ Mining Box Height: §f" + newH + " blocks §8(Y: " + minY + " → " + maxY + ")" + depthStr + " §8| §e" + ClientMiningCaptureTracker.getDimensionString()),
 										true
 									);
 									client.player.playSound(net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);
@@ -547,8 +534,9 @@ public class ExampleModClient implements ClientModInitializer {
 								if (newH > 0 && ClientBuildCaptureTracker.getPos1() != null && ClientBuildCaptureTracker.getPos2() != null) {
 									int minY = Math.min(ClientBuildCaptureTracker.getPos1().getY(), ClientBuildCaptureTracker.getPos2().getY());
 									int maxY = Math.max(ClientBuildCaptureTracker.getPos1().getY(), ClientBuildCaptureTracker.getPos2().getY());
+									String depthStr = ClientBuildCaptureTracker.isUnderground() ? " §c[↓ " + ClientBuildCaptureTracker.getUndergroundDepth() + "b deep]" : "";
 									client.player.sendMessage(
-										Text.literal("§b✦ Build Box Height: §f" + newH + " blocks §8(Y: " + minY + " → " + maxY + ") §8| §e" + ClientBuildCaptureTracker.getDimensionString()),
+										Text.literal("§b✦ Build Box Height: §f" + newH + " blocks §8(Y: " + minY + " → " + maxY + ")" + depthStr + " §8| §e" + ClientBuildCaptureTracker.getDimensionString()),
 										true
 									);
 									client.player.playSound(net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), 0.7F, 1.4F);

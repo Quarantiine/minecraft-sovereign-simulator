@@ -341,6 +341,18 @@ public class ConstructionSession {
 		if (world == null) {
 			return this.completedCount < this.tasks.size();
 		}
+		int minChunkX = this.worldBoundingBox.getMinX() >> 4;
+		int maxChunkX = this.worldBoundingBox.getMaxX() >> 4;
+		int minChunkZ = this.worldBoundingBox.getMinZ() >> 4;
+		int maxChunkZ = this.worldBoundingBox.getMaxZ() >> 4;
+		for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+			for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+				if (!world.isChunkLoaded(cx, cz)) {
+					// Chunk is unloaded; assume remaining blocks exist so session is not falsely completed
+					return true;
+				}
+			}
+		}
 		for (int y = this.worldBoundingBox.getMinY(); y <= this.worldBoundingBox.getMaxY(); y++) {
 			for (int x = this.worldBoundingBox.getMinX(); x <= this.worldBoundingBox.getMaxX(); x++) {
 				for (int z = this.worldBoundingBox.getMinZ(); z <= this.worldBoundingBox.getMaxZ(); z++) {
@@ -392,6 +404,10 @@ public class ConstructionSession {
 					BlueprintBlock bpBlock = task.getBlueprintBlock();
 					BlockPos targetPos = task.getWorldPos();
 					if (world != null) {
+						if (!world.isChunkLoaded(targetPos.getX() >> 4, targetPos.getZ() >> 4)) {
+							// Chunk is unloaded; do not inspect or auto-complete based on virtual air
+							continue;
+						}
 						BlockState worldState = world.getBlockState(targetPos);
 						boolean isFlowing = isFluid(worldState) && !worldState.getFluidState().isStill();
 						if (worldState.isAir() || isFlowing || isIndestructible(worldState, world, targetPos)) {
@@ -419,15 +435,16 @@ public class ConstructionSession {
 
 				// BUILD mode: if the block is already in place (placed by a peer minion, the player, or a
 				// stolen task finished elsewhere), mark it done so nobody walks over to re-place it.
-				boolean isMatchingBlock = world != null && (
+				boolean isChunkLoaded = world != null && world.isChunkLoaded(task.getWorldPos().getX() >> 4, task.getWorldPos().getZ() >> 4);
+				boolean isMatchingBlock = isChunkLoaded && (
 					world.getBlockState(task.getWorldPos()).equals(task.getBlueprintBlock().state())
 					|| (isConnectableBlock(task.getBlueprintBlock().state()) && isConnectableMatching(world.getBlockState(task.getWorldPos()), task.getBlueprintBlock().state()))
 				);
-				boolean isMatchingFluid = world != null && (
+				boolean isMatchingFluid = isChunkLoaded && (
 					(task.getBlueprintBlock().state().isOf(Blocks.WATER) && world.getBlockState(task.getWorldPos()).isOf(Blocks.WATER) && world.getFluidState(task.getWorldPos()).isStill())
 					|| (task.getBlueprintBlock().state().isOf(Blocks.LAVA) && world.getBlockState(task.getWorldPos()).isOf(Blocks.LAVA) && world.getFluidState(task.getWorldPos()).isStill())
 				);
-				if (this.mode == SessionMode.BUILD && world != null && (isMatchingBlock || isMatchingFluid)) {
+				if (this.mode == SessionMode.BUILD && isChunkLoaded && (isMatchingBlock || isMatchingFluid)) {
 					task.complete();
 					this.completedCount++;
 					if (this.completedCount >= this.tasks.size()) {
@@ -538,8 +555,11 @@ public class ConstructionSession {
 		if (world == null) {
 			return true;
 		}
-		BlueprintBlock bpBlock = task.getBlueprintBlock();
 		BlockPos targetPos = task.getWorldPos();
+		if (!world.isChunkLoaded(targetPos.getX() >> 4, targetPos.getZ() >> 4)) {
+			return false;
+		}
+		BlueprintBlock bpBlock = task.getBlueprintBlock();
 
 		// 1. Hanging blocks MUST have overhead solid support already in the world
 		if (bpBlock.isHanging()) {
@@ -661,6 +681,9 @@ public class ConstructionSession {
 			return false;
 		}
 		if (world != null) {
+			if (!world.isChunkLoaded(targetPos.getX() >> 4, targetPos.getZ() >> 4)) {
+				return false;
+			}
 			BlockState worldState = world.getBlockState(targetPos);
 			boolean isFlowingWorld = isFluid(worldState) && !worldState.getFluidState().isStill();
 			if (isIndestructible(worldState, world, targetPos) || isFlowingWorld) {

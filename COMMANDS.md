@@ -42,8 +42,8 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
   - [3. Granular Palette Remapping ([ 🎨 Remap ])](#3-granular-palette-remapping--remap-)
   - [4. Saving & Auto-Selection](#4-saving--auto-selection)
 - [⛏️ 9. Mining & Area Clearance (MINE Mode)](#️-9-mining--area-clearance-mine-mode)
-  - [A. DIRECT Mining Mode (Point & Structure Dismantle)](#a-direct-mining-mode-point--structure-dismantle)
-  - [B. AREA Mining Mode (Configurable 3D Boundary & Box Quarry Mining)](#b-area-mining-mode-configurable-3d-boundary--box-quarry-mining)
+  - [A. Custom Area Boundary Quarry Mining (AREA Mode)](#a-custom-area-boundary-quarry-mining-area-mode)
+  - [B. Minion Excavation, Strict FIFO Queueing & Safety Systems](#b-minion-excavation-strict-fifo-queueing--safety-systems)
   - [C. Minion Excavation & Safety Systems (Both Modes)](#c-minion-excavation--safety-systems-both-modes)
 - [🧙‍♂️ 10. Universal Arcane Levitation & Obstacle Vaulting](#️-10-universal-arcane-levitation--obstacle-vaulting)
 - [🔔 11. Dual-Tier Panic Retreat & Emergency Citadel Call (Keybind R)](#-11-dual-tier-panic-retreat--emergency-citadel-call-keybind-r)
@@ -89,7 +89,7 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 | **Right-Click** _(Quick Tap)_                                         | Ground Block (up to 96m) | **Anchor Construction** _(BLUEPRINT)_: Deploys armed blueprint at targeted ground block. Builders activate 3D Arcane Levitation and block phasing to construct persistently to 100% completion.              |
 | **1st Left-Click**                                                    | Ground Block             | **Set Corner 1 (`Pos1`)** _(AREA)_: Sets Corner 1 on targeted surface for volumetric fill.                                                                                                                   |
 | **2nd Left-Click**                                                    | Ground Block             | **Set Corner 2 (`Pos2`)** _(AREA)_: Sets Corner 2, locking the 3D fill footprint and rendering Cyan/Aqua ghost grid wireframes.                                                                              |
-| **Ctrl + Scroll** / **`[`** / **`]`** / **`PageUp`** / **`PageDown`** | In `AREA` Sub-Mode       | **Adjust Fill Height**: Expands or contracts fill height live in-world without scaffolding (hold `Shift` for $\pm 5$ fast stepping).                                                                         |
+| **Ctrl + Scroll** / **`[`** / **`]`** / **`PageUp`** / **`PageDown`** | In `AREA` Sub-Mode       | **Adjust Fill Height & Depth**: Unified bi-directional control expands upward (+height) or contracts down to baseline. Decreasing past 1 automatically expands downward into the ground (`[↓ Xb deep]`). Hold `Shift` for $\pm 5$ fast stepping. |
 | **Right-Click**                                                       | Pos1 & Pos2 Selected     | **Open Fill Confirmation Modal** _(AREA)_: Opens `BuildAreaConfirmModalScreen` to choose block type, inspect volume/dimensions, and confirm construction.                                                    |
 | **Shift + Left-Click**                                                | In `AREA` Sub-Mode       | **Reset Build Corners**: Instantly clears `Pos1` and `Pos2` selection with bass tone.                                                                                                                        |
 | **Left-Click**                                                        | In `BARRIER` Sub-Mode    | **Place Node / Extend / Seal**: Sets consecutive waypoint (`Barrier 1..N`); clicking existing confirmed waypoint extends; clicking Point 1 or any waypoint snaps circuit closed and opens Seal modal.        |
@@ -121,12 +121,11 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 
 | Input                         | Target / Context           | Action                                                                                                                                                                 |
 | :---------------------------- | :------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1st Left-Click**            | In `AREA` Sub-Mode         | **Set Mining Corner 1 (`Pos1`)**: Anchors `Pos1` on targeted block surface with fiery orange marker box.                                                               |
-| **2nd Left-Click**            | In `AREA` Sub-Mode         | **Set Mining Corner 2 (`Pos2`)**: Completes 3D excavation volume and projects full fiery orange/amber ghost grid wireframes.                                           |
-| **Ctrl + Mouse Scroll**       | In `AREA` Sub-Mode         | **In-World Mining Height Adjustment**: Expands or contracts excavation height live in-world (Shift for $\pm 5$ fast stepping).                                         |
-| **Shift + Left-Click**        | In `AREA` Sub-Mode         | **Reset Mining Corners**: Clears both `Pos1` and `Pos2` with bass tone, guaranteeing fresh `Pos1` placement on next click.                                             |
-| **Right-Click** _(Quick Tap)_ | In `AREA` with Pos1 & Pos2 | **Open Mining Confirmation Modal**: Displays destructible block tallies, volume dimensions, height stepper row, and starts top-down excavation (`[ ✔ Start Mining ]`). |
-| **Right-Click** _(Quick Tap)_ | In `DIRECT` Sub-Mode       | **Instant Point / Structure Dismantle**: Anchors structure deconstruction session up to 96m away immediately on targeted block.                                        |
+| **1st Left-Click**            | Targeted Block Surface     | **Set Mining Corner 1 (`Pos1`)**: Anchors `Pos1` on targeted block surface with fiery orange marker box.                                                               |
+| **2nd Left-Click**            | Opposite Diagonal Surface  | **Set Mining Corner 2 (`Pos2`)**: Completes 3D excavation volume and projects full fiery orange/amber ghost grid wireframes.                                           |
+| **Ctrl + Mouse Scroll**       | Holding Scepter in MINE    | **In-World Mining Height & Depth Adjustment**: Unified bi-directional control expands upward or contracts down to baseline. Decreasing past 1 automatically digs downward into the ground (`[↓ Xb deep]`). Hold `Shift` for $\pm 5$ fast stepping. |
+| **Shift + Left-Click**        | Anywhere                   | **Reset Mining Corners**: Clears both `Pos1` and `Pos2` with bass tone, guaranteeing fresh `Pos1` placement on next click.                                             |
+| **Right-Click** _(Quick Tap)_ | With Pos1 & Pos2 Established | **Open Mining Confirmation Modal**: Displays destructible block tallies, volume dimensions, non-overlapping height/depth stepper buttons, and starts excavation (`[ ✔ Start Mining ]`). |
 
 ### 🔷 Visual Pathway Patrols (`PATHWAY` Mode)
 
@@ -553,9 +552,10 @@ The **`AREA`** building mode allows commanders to define exact 3D construction b
    - **2nd Left-Click (Corner 2 / `Pos2`)**: Sets `Pos2` on the opposite diagonal, completing the 3D volume footprint. Sparkle particles erupt, resonant chime audio plays, and the full cyan/dark aqua (`#00E5FF` / `#00A3CC`) 3D bounding wireframe and internal ghost grid outlines illuminate.
    - **Subsequent Left-Clicks (Cycle)**: Left-clicking again automatically starts a new selection cycle (`Pos1` updated, `Pos2` cleared).
    - **Shift + Left-Click (Reset)**: Instantly clears both `Pos1` and `Pos2` with a bass tone, guaranteeing the very next click places `Pos1` afresh.
-2. **In-World Real-Time Height Adjustment**:
-   - Hold **`Ctrl` + Mouse Scroll** (or use **`[`** / **`]`** or **`PageUp`** / **`PageDown`** keys) to expand or contract the fill height in real time without placing temporary scaffolding or dirt towers (hold **`Shift`** for $\pm 5$ fast stepping).
-   - HUD actionbar displays live height updates and total bounding dimensions (`✦ Build Area Height: H (WxHxL - V blocks)`).
+2. **In-World Real-Time Height & Depth Adjustment (Unified Bi-Directional Control)**:
+   - Hold **`Ctrl` + Mouse Scroll** (or use **`[`** / **`]`** or **`PageUp`** / **`PageDown`** keys) to expand or contract volume bounds live without scaffolding (hold **`Shift`** for $\pm 5$ fast stepping).
+   - **Unified Underground Expansion**: Decreasing height past 1 at the starting ground layer automatically expands the fill volume **downward into the ground**. Increasing height shrinks depth back up to the surface layer, seamlessly crossing over to expand above ground.
+   - HUD actionbar displays live height updates and depth status (`✦ Build Area Height: H [↓ Xb deep] (WxHxL - V blocks)`).
 3. **Area Fill Confirmation Modal (`BuildAreaConfirmModalScreen`)**:
    - With `Pos1` and `Pos2` defined, **Right-Click** the ground or air (or click **`[ ✦ Fill ]`** in the Command Hub) to open the confirmation modal.
    - **Volume Verification**: View exact width, height, length, and total volume block count (`W × H × L • V blocks`).
@@ -659,29 +659,22 @@ Click the **`[ 🎨 Remap ]`** button to open the **`BlueprintPaletteRemapModalS
 
 ## ⛏️ 9. Mining & Area Clearance (`MINE` Mode)
 
-The **`MINE`** mode features two distinct operational sub-modes for excavation and deconstruction: **`DIRECT`** (Structure / Point Dismantle) and **`AREA`** (Custom Boundary / Box Quarry Mining). You can toggle between these modes inside the Command Hub GUI (**`V`** key) or via scepter controls.
+**`MINE`** mode exclusively employs **Custom Area Boundary Selection** (`AREA`). Mining was previously designed with an experimental "Direct" point-and-click dismantle mode, but to prevent accidental destruction, ambiguous boundary targeting, and to ensure full safety inspection (including 3D ghost grid wireframes, destructible block verification, underground digging depth controls, and confirmation modals), mining operates strictly as a custom area selection quarry.
 
 ```
-                                  [MINE Operating Mode]
-                                            │
-                    ┌───────────────────────┴───────────────────────┐
-                    ▼                                               ▼
-         [DIRECT Sub-Mode]                               [AREA Sub-Mode]
-   • Instant point-and-click dismantle             • Configurable 3D boundary volume
-   • Anchors directly at clicked position          • Sequential Left-Clicks: Pos1 ➔ Pos2
-   • 96m crosshair reach                           • Fiery orange/amber ghost grid wireframes
-   • Dismantles structures or ground               • Real-time height adjustment (Ctrl + Scroll)
-   • No boundary setup required                    • Dedicated Confirmation Modal before mining
+                              [MINE Operating Mode]
+                                        │
+                                        ▼
+                         [Custom Area Quarry Selection]
+    • Configurable 3D boundary volume (`Pos1` ➔ `Pos2`)
+    • Fiery orange/amber ghost grid wireframes & block outlines
+    • Unified bi-directional height & underground depth adjustment
+    • Dedicated Confirmation Modal (`MiningConfirmModalScreen`)
+    • Non-overlapping right-aligned stepper buttons: [-5] [-1] [+1] [+5]
+    • 100% strict FIFO minion job dispatch (finish first job before touching second)
 ```
 
-### A. DIRECT Mining Mode (Point & Structure Dismantle)
-
-1. Select **`MINE`** mode with **`DIRECT`** sub-mode active.
-2. Aim at the structure, ground block, or terrain you want to clear to see a **Fiery Orange/Red 3D Wireframe Preview** anchored directly on the clicked block (up to 96m reach).
-3. **Right-Click** on the ground/block to initiate the dismantle session immediately.
-4. Assigned **Builder** minions immediately take flight with 3D Arcane Levitation and excavate all solid, destructible blocks top-to-bottom.
-
-### B. AREA Mining Mode (Configurable 3D Boundary & Box Quarry Mining)
+### A. Custom Area Boundary Quarry Mining (`AREA` Mode)
 
 The **`AREA`** mining mode allows commanders to define exact 3D excavation boundaries in the world, inspect block counts, adjust vertical depth/height in real time, and confirm mining operations via a dedicated modal:
 
@@ -691,26 +684,30 @@ The **`AREA`** mining mode allows commanders to define exact 3D excavation bound
    - **2nd Left-Click (Corner 2 / `Pos2`)**: Sets `Pos2` on the opposite diagonal, completing the 3D volume footprint. Sparkle particles erupt, resonant chime audio plays, and the full fiery orange/amber (`1.0F, 0.45F, 0.05F`) 3D bounding wireframe and non-air block ghost grid outlines illuminate.
    - **Subsequent Left-Clicks (Cycle)**: Left-clicking again automatically starts a new selection cycle (`Pos1` updated, `Pos2` cleared).
    - **Shift + Left-Click (Reset)**: Instantly clears both `Pos1` and `Pos2` with a bass tone, guaranteeing the very next click places `Pos1` afresh.
-2. **In-World Real-Time Height Adjustment**:
-   - Hold **`Ctrl` + Mouse Scroll** (or use **`[`** / **`]`** or **`PageUp`** / **`PageDown`** keys) to expand or contract the excavation height in real time without placing temporary blocks (hold **`Shift`** for $\pm 5$ fast stepping).
-   - HUD actionbar displays live height updates and total bounding dimensions.
+2. **In-World Real-Time Height & Depth Adjustment (Unified Bi-Directional Control)**:
+   - Hold **`Ctrl` + Mouse Scroll** (or use **`[`** / **`]`** or **`PageUp`** / **`PageDown`** keys) to expand or contract excavation bounds live without scaffolding (hold **`Shift`** for $\pm 5$ fast stepping).
+   - **Unified Underground Digging**: Decreasing height past 1 at the baseline layer automatically expands the quarry **downward into the ground**. Increasing height shrinks depth back up to the surface, smoothly crossing over to expand above ground.
+   - HUD actionbar displays live height and depth status (`§6✦ Mining Box Height: §fH §c[↓ Xb deep] §8| §7Dimensions: WxHxD (Vb)`).
 3. **Mining Area Confirmation Modal (`MiningConfirmModalScreen`)**:
    - Once `Pos1` and `Pos2` are set, **Right-Click** on the ground/air or click **`[ ⛏ Confirm Area ]`** in the Command Hub GUI to open the **Mining Confirmation Modal**.
    - **Modal Inspection Details**:
      - Displays `Pos1` and `Pos2` corner coordinates.
      - Displays Width $\times$ Height $\times$ Depth dimensions and total volume in voxels.
      - **Destructible Block Counter**: Analyzes and displays the exact count of destructible, non-air blocks within the boundary (excluding unbreakable bedrock).
-     - **Dedicated Height Stepper Row**: Fine-tune the excavation height directly inside the modal with **`[ -5 ]`**, **`[ -1 ]`**, **`[ +1 ]`**, and **`[ +5 ]`** buttons placed in a dedicated row cleanly isolated from modal title and spatial text, preventing visual overlap.
+     - **Non-Overlapping Stepper Layout**: Dedicated **`[ -5 ]`**, **`[ -1 ]`**, **`[ +1 ]`**, and **`[ +5 ]`** stepper buttons are right-aligned with ample margin from the `Height / Depth:` label, preventing text and button overlap even with underground depth tags (`[↓ Xb deep]`).
    - **Modal Actions**:
      - **`[ ✔ Start Mining ]`**: Dispatches `StartMiningAreaPayload` to the server, clears the client selection, plays horn & chime fanfare, and starts the top-down excavation session.
      - **`[ ⌫ Reset ]`**: Wipes `Pos1` and `Pos2` selection corners.
      - **`[ ✖ Cancel ]`**: Closes the modal without starting excavation, keeping your corner selection intact.
      - **Crisp Overlay**: Completely bypasses background blur (`applyBlur` no-op) to preserve 100% battlefield situational awareness.
 
-### C. Minion Excavation & Safety Systems (Both Modes)
+### B. Minion Excavation, Strict FIFO Queueing & Safety Systems
 
 Assigned **Builder** minions mobilize autonomously to execute the mining operation:
 
+- **Strict FIFO Job Completion (100% Finish-Before-Start)**:
+  - When multiple jobs are queued across the kingdom (whether building blueprints, volumetric area fills, or mining quarries), minions strictly commit 100% of their efforts to completing the earliest placed job first.
+  - Minions will **never** leave an older blueprint or mining area partially complete to start a newer job, even if the newer job is physically closer. Only when the first job reaches 100% completion do minions mobilize to subsequent jobs.
 - **Full Selected Area Clearance**: Builders mine **every** solid, destructible block within the selected volume from the highest Y level down to the lowest Y level.
 - **Zero Air-Mining Guarantee**: Builders strictly never claim, navigate to, or swing pickaxes at air blocks. If a block was destroyed or already air, minions instantly advance to the next real block without swinging or vocalizing.
 - **Anti-Bobbing Mining Flight**: Miners utilize the exact same Arcane Levitation flight as builders during mining. Minions fly to a stable elevated station at `targetY + 1.25D`, maintain zero gravity and zero vertical velocity oscillation, and freeze velocity (`0.0D`) during mining swings, never falling into trenches when mining blocks beneath them.

@@ -128,6 +128,9 @@ public class MinionActiveTargetGoal extends ActiveTargetGoal<LivingEntity> {
 		if (target == null || !target.isAlive()) {
 			return false;
 		}
+		if (target.getWorld() != null && !target.getWorld().isChunkLoaded(target.getBlockX() >> 4, target.getBlockZ() >> 4)) {
+			return false;
+		}
 		if (!this.minion.matchesRole(MinionRole.SENTINEL)) {
 			// Warriors require direct line of sight; drop target if hidden behind walls for > 60 ticks (3s)
 			if (this.minion.getVisibilityCache().canSee(target)) {

@@ -136,24 +136,24 @@ public class BuildAreaConfirmModalScreen extends Screen {
 		int startX = (this.width - WINDOW_WIDTH) / 2;
 		int startY = (this.height - WINDOW_HEIGHT) / 2;
 
-		// 1. Height adjustment buttons in dedicated row below spatial info
+		// 1. Height adjustment buttons in dedicated row below spatial info (right-aligned to prevent label overlap)
 		if (this.pos1 != null && this.pos2 != null) {
 			int hBtnY = startY + 58;
 			ButtonWidget minus5 = ButtonWidget.builder(Text.literal("§c-5"), b -> adjustModalHeight(-5))
-				.dimensions(startX + 104, hBtnY, 24, 18)
-				.tooltip(Tooltip.of(Text.literal("Decrease height by 5 blocks")))
+				.dimensions(startX + 184, hBtnY, 24, 18)
+				.tooltip(Tooltip.of(Text.literal("Decrease height / expand deeper underground by 5 blocks")))
 				.build();
 			ButtonWidget minus1 = ButtonWidget.builder(Text.literal("§c-1"), b -> adjustModalHeight(-1))
-				.dimensions(startX + 132, hBtnY, 20, 18)
-				.tooltip(Tooltip.of(Text.literal("Decrease height by 1 block")))
+				.dimensions(startX + 212, hBtnY, 20, 18)
+				.tooltip(Tooltip.of(Text.literal("Decrease height / expand deeper underground by 1 block")))
 				.build();
 			ButtonWidget plus1 = ButtonWidget.builder(Text.literal("§a+1"), b -> adjustModalHeight(1))
-				.dimensions(startX + 156, hBtnY, 20, 18)
-				.tooltip(Tooltip.of(Text.literal("Increase height by 1 block")))
+				.dimensions(startX + 236, hBtnY, 20, 18)
+				.tooltip(Tooltip.of(Text.literal("Increase height / shrink underground depth by 1 block")))
 				.build();
 			ButtonWidget plus5 = ButtonWidget.builder(Text.literal("§a+5"), b -> adjustModalHeight(5))
-				.dimensions(startX + 180, hBtnY, 24, 18)
-				.tooltip(Tooltip.of(Text.literal("Increase height by 5 blocks")))
+				.dimensions(startX + 260, hBtnY, 24, 18)
+				.tooltip(Tooltip.of(Text.literal("Increase height / shrink underground depth by 5 blocks")))
 				.build();
 
 			this.addDrawableChild(minus5);
@@ -415,7 +415,9 @@ public class BuildAreaConfirmModalScreen extends Screen {
 			context.drawTextWithShadow(this.textRenderer, Text.literal(geomText), startX + 16, startY + 43, valid ? 0x00D4FF : 0xFF5555);
 
 			// Height adjustment label in dedicated row
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§eAdjust Height:"), startX + 16, startY + 62, 0xFFD700);
+			boolean underground = ClientBuildCaptureTracker.isUnderground();
+			String hLabel = underground ? "§eHeight / Depth: §c[↓ " + ClientBuildCaptureTracker.getUndergroundDepth() + "b deep]" : "§eAdjust Height:";
+			context.drawTextWithShadow(this.textRenderer, Text.literal(hLabel), startX + 16, startY + 62, 0xFFD700);
 
 			// Fill Material Section
 			int matY = startY + 84;

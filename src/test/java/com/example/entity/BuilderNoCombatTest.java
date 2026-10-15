@@ -171,7 +171,7 @@ public class BuilderNoCombatTest {
 
 		// 1. evaluateAutoRole checks self health (< 70% max health) for Sentinel
 		Assertions.assertTrue(
-			minionContent.contains("if (this.getHealth() < this.getMaxHealth() * 0.70F) {\n\t\t\tneedsMedic = true;\n\t\t}"),
+			minionContent.contains("if (this.getHealth() < this.getMaxHealth() * 0.70F) {\n\t\t\t\t\tneedsMedic = true;\n\t\t\t\t}"),
 			"evaluateAutoRole must check minion's own health (< 70% HP) for Sentinel medic role"
 		);
 
@@ -183,6 +183,10 @@ public class BuilderNoCombatTest {
 		Assertions.assertTrue(
 			minionContent.contains("if (!nearbyHostiles.isEmpty()) {\n\t\t\t\ttargetAdaptiveRole = MinionRole.WARRIOR;"),
 			"evaluateAutoRole must switch to WARRIOR if hostiles are within 16m"
+		);
+		Assertions.assertTrue(
+			minionContent.contains("VillagerEntity.class"),
+			"evaluateAutoRole must query and heal VillagerEntity under 70% HP"
 		);
 
 		// 3. damage() immediately triggers evaluateAutoRole for AUTO minions
@@ -223,12 +227,14 @@ public class BuilderNoCombatTest {
 				if (this.role != com.example.entity.custom.MinionRole.AUTO) {
 					return; // Dedicated roles never adapt
 				}
-				boolean needsMedic = (this.health < this.maxHealth * 0.70F) || allyNeedsHealing;
-				if (needsMedic) {
-					this.adaptiveRole = com.example.entity.custom.MinionRole.SENTINEL;
-				} else if (underAttack || hostilesNearby) {
+				// 1. Danger first: Eliminate threat before healing or building
+				if (underAttack || hostilesNearby) {
 					this.adaptiveRole = com.example.entity.custom.MinionRole.WARRIOR;
+				} else if ((this.health < this.maxHealth * 0.70F) || allyNeedsHealing) {
+					// 2. Medic healing: If no danger, heal injured self, players, golems, or villagers (< 70% HP)
+					this.adaptiveRole = com.example.entity.custom.MinionRole.SENTINEL;
 				} else if (hasBuildTask) {
+					// 3. Resume building / mining: If all healed and no danger, resume construction/mining
 					this.adaptiveRole = com.example.entity.custom.MinionRole.BUILDER;
 				} else {
 					this.adaptiveRole = com.example.entity.custom.MinionRole.WARRIOR;
@@ -248,22 +254,39 @@ public class BuilderNoCombatTest {
 		autoMinion.evaluateAdaptiveRole(false, false, false, true);
 		Assertions.assertEquals(com.example.entity.custom.MinionRole.BUILDER, autoMinion.getEffectiveRole());
 
-		// C. Hostiles approach or attack while building -> AUTO minion switches to WARRIOR
+		// C. Hostiles approach or attack while building -> AUTO minion eliminates danger FIRST (WARRIOR)
 		autoMinion.evaluateAdaptiveRole(false, true, true, true);
 		Assertions.assertEquals(com.example.entity.custom.MinionRole.WARRIOR, autoMinion.getEffectiveRole());
 		Assertions.assertTrue(autoMinion.matchesRole(com.example.entity.custom.MinionRole.WARRIOR));
 		Assertions.assertFalse(autoMinion.matchesRole(com.example.entity.custom.MinionRole.BUILDER));
 
-		// D. Takes heavy damage (< 70% HP) / needs healing -> AUTO minion switches to SENTINEL
+		// D. Low HP (< 70%) while under attack -> DANGER FIRST (stays WARRIOR until danger eliminated)
 		autoMinion.health = 20.0F; // 50% HP
 		autoMinion.evaluateAdaptiveRole(false, true, true, true);
-		Assertions.assertEquals(com.example.entity.custom.MinionRole.SENTINEL, autoMinion.getEffectiveRole());
-		Assertions.assertTrue(autoMinion.matchesRole(com.example.entity.custom.MinionRole.SENTINEL));
-		Assertions.assertFalse(autoMinion.matchesRole(com.example.entity.custom.MinionRole.BUILDER));
+		Assertions.assertEquals(com.example.entity.custom.MinionRole.WARRIOR, autoMinion.getEffectiveRole(),
+			"AUTO minion under attack must eliminate danger first before switching to Sentinel to heal");
+		Assertions.assertTrue(autoMinion.matchesRole(com.example.entity.custom.MinionRole.WARRIOR));
 
-		// E. Ally needs healing -> AUTO minion switches to SENTINEL
-		autoMinion.health = 40.0F; // Full HP
+		// D2. Danger eliminated, wounded (< 70% HP) -> switches to SENTINEL to heal
+		autoMinion.evaluateAdaptiveRole(false, false, false, true);
+		Assertions.assertEquals(com.example.entity.custom.MinionRole.SENTINEL, autoMinion.getEffectiveRole(),
+			"AUTO minion must switch to Sentinel to heal once danger is cleared");
+		Assertions.assertTrue(autoMinion.matchesRole(com.example.entity.custom.MinionRole.SENTINEL));
+
+		// D3. Fully healed (>= 70% HP) and no threats -> returns to building / mining
+		autoMinion.health = 40.0F; // Healed
+		autoMinion.evaluateAdaptiveRole(false, false, false, true);
+		Assertions.assertEquals(com.example.entity.custom.MinionRole.BUILDER, autoMinion.getEffectiveRole(),
+			"AUTO minion must return to Builder once fully healed and safe");
+		Assertions.assertTrue(autoMinion.matchesRole(com.example.entity.custom.MinionRole.BUILDER));
+
+		// E. Ally (villager, golem, minion, player) needs healing and no threats -> switches to SENTINEL
 		autoMinion.evaluateAdaptiveRole(true, false, false, true);
 		Assertions.assertEquals(com.example.entity.custom.MinionRole.SENTINEL, autoMinion.getEffectiveRole());
+		Assertions.assertTrue(autoMinion.matchesRole(com.example.entity.custom.MinionRole.SENTINEL));
+
+		// E2. Ally healed and no threats -> switches back to BUILDER
+		autoMinion.evaluateAdaptiveRole(false, false, false, true);
+		Assertions.assertEquals(com.example.entity.custom.MinionRole.BUILDER, autoMinion.getEffectiveRole());
 	}
 }

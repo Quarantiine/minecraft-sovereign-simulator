@@ -22,7 +22,7 @@ This document provides a comprehensive technical breakdown of all gameplay featu
    - [6.5 Area Fill Confirmation Modal Screen (`BuildAreaConfirmModalScreen`)](#65-area-fill-confirmation-modal-screen-buildareaconfirmmodalscreen)
    - [6.6 Deterministic Bottom-Up Layer-by-Layer Topological Ordering](#66-deterministic-bottom-up-layer-by-layer-topological-ordering)
 7. [Structure Deconstruction, Mining Area Clearance & Bedrock Immunity](#7-structure-deconstruction-mining-area-clearance--bedrock-immunity)
-   - [7.1 Dual Operational Sub-Modes: DIRECT vs. AREA Mining](#71-dual-operational-sub-modes-direct-vs-area-mining)
+   - [7.1 Exclusive Operational Mode: Custom Area Quarry Selection (`AREA`)](#71-exclusive-operational-mode-custom-area-quarry-selection-area)
    - [7.2 Configurable 3D Area Boundary & Sequential Corner Invariants](#72-configurable-3d-area-boundary--sequential-corner-invariants)
    - [7.3 Real-Time In-World Height Adjustment](#73-real-time-in-world-height-adjustment)
    - [7.4 In-World Ghost Grid Wireframes & Semantic Highlighting](#74-in-world-ghost-grid-wireframes--semantic-highlighting-blueprinthologramrenderer)
@@ -296,7 +296,7 @@ To ensure commanders can monitor their thralls' vital status at a glance during 
 | Role           | Color        | Combat Profile                                                    | Primary Equipment                                                                                  | Behaviors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | :------------- | :----------- | :---------------------------------------------------------------- | :------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`WARRIOR`**  | Red (`§c`)   | Frontline Melee, Ranged Skirmish **&** Tactical Procurement Hunts | Swords, Axes, Maces, Tridents **OR** Bows, Crossbows, Thrown Ordnance (Frost Grenades, TNT Sticks) | **Offensive Vanguard & Hunter**: Frontline shock combatant empowered by a permanent `+4.0` Attack Damage bonus (`WARRIOR_ATTACK_DAMAGE_BONUS = 4.0D`), boosting unarmed fists to `9.0` base damage (vs. Sentinel/Builder `5.0`) and scaling all equipped melee weapons (`15.0` damage with Iron Sword; `16.0` with Diamond Sword). On-hit attacks trigger server-side critical strike particles (`CRIT`) and heavy knockback audio cues (`ENTITY_PLAYER_ATTACK_KNOCKBACK`). Features **Trident Duality** ($\le 5\text{D}$ melee, $5\text{D}\text{--}20\text{D}$ ranged javelin) with **Server-Side Loyalty Return Recovery** (`TridentEntityMixin`). Automatically accepts **Squad Material Procurement Contracts** commissioned by Builder thralls to hunt mob resources (wool, bones, slime, leather, etc.), synthesize refined goods, and deliver drops via peer logistics. Leads formation frontline ($+4.0\text{D}$ forward offset).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **`SENTINEL`** | Green (`§a`) | Perimeter Guard & Combat Medic                                    | Sword + Shield                                                                                     | **Defensive Bulwark, Combat Medic & Bastion Sentry**: Holds designated anchor; 8-block guard zone; 128-block leash freedom; prioritizes shields in offhand. Deals baseline `5.0` physical damage (unaffected by warrior damage boosts) to dedicate attributes to defensive endurance and squad sustain. **Wall-Penetrating "Hearing" & Sentry Senses**: Detects and targets hostiles through solid walls, closed doors, and floors/ceilings within 24m horizontal and 12m vertical via `ignoreVisibility()`. Emits sculk soul particles, sculk clicking SFX, and amethyst resonance cues when sensing obscured enemies, snapping gaze toward vibrations and dispatching nearby allied combat minions (within 16m) to investigate. **Warrior Combat Dual-Mode**: Sentinels fight like Warriors (actively scanning for hostiles via `MinionActiveTargetGoal`, using melee attack strikes at 1.35D speed, and wielding ranged/thrown weapons via `MinionRangedAttackGoal`) **ONLY if all nearby allied minions, friendly Iron Golems, and player commanders need zero healing** (are at 100% full health). The moment any nearby friendly minion, non-hostile Iron Golem, or commander takes damage / needs healing (`health < maxHealth`), the Sentinel immediately ceases warrior combat, breaks aggro (`setTarget(null)`), and switches exclusively into medical support and defensive perimeter guarding. **Aegis of Restoration**: Autonomously channels healing to the player commander, allied minions, and non-hostile/allied **Iron Golems** under 70% HP within 10 blocks (prioritizing the wounded player commander, then most critical minion or Iron Golem ally), restoring 6.0 HP (3 hearts) and granting Regeneration II for 5s with heart VFX, amethyst chime audio, and an action bar confirmation message (6s cooldown; fallback self-heal below 40% HP). Recognized as friendly teammates alongside Iron Golems via `isAlliedTeammate()`. |
+| **`SENTINEL`** | Green (`§a`) | Perimeter Guard & Combat Medic                                    | Sword + Shield                                                                                     | **Defensive Bulwark, Combat Medic & Bastion Sentry**: Holds designated anchor; 8-block guard zone; 128-block leash freedom; prioritizes shields in offhand. Deals baseline `5.0` physical damage (unaffected by warrior damage boosts) to dedicate attributes to defensive endurance and squad sustain. **Wall-Penetrating "Hearing" & Sentry Senses**: Detects and targets hostiles through solid walls, closed doors, and floors/ceilings within 24m horizontal and 12m vertical via `ignoreVisibility()`. Emits sculk soul particles, sculk clicking SFX, and amethyst resonance cues when sensing obscured enemies, snapping gaze toward vibrations and dispatching nearby allied combat minions (within 16m) to investigate. **Warrior Combat Dual-Mode**: Sentinels fight like Warriors (actively scanning for hostiles via `MinionActiveTargetGoal`, using melee attack strikes at 1.35D speed, and wielding ranged/thrown weapons via `MinionRangedAttackGoal`) **ONLY if all nearby allied minions, friendly Iron Golems, Villagers, and player commanders need zero healing** (are at 100% full health). The moment any nearby friendly minion, non-hostile Iron Golem, Villager, or commander takes damage / needs healing (`health < maxHealth`), the Sentinel immediately ceases warrior combat, breaks aggro (`setTarget(null)`), and switches exclusively into medical support and defensive perimeter guarding. **Aegis of Restoration**: Autonomously channels healing to the player commander, allied minions, non-hostile/allied **Iron Golems**, and **Villagers** under 70% HP within 10 blocks (prioritizing the wounded player commander, then most critical minion, Iron Golem, or Villager ally), restoring 6.0 HP (3 hearts) and granting Regeneration II for 5s with heart VFX, amethyst chime audio, and an action bar confirmation message (6s cooldown; fallback self-heal below 40% HP for dedicated Sentinels, below 70% HP for Auto units). Recognized as friendly teammates alongside Iron Golems and Villagers via `isAlliedTeammate()`. |
 | **`BUILDER`**  | Blue (`§9`)  | Construction, Deconstruction & Logistics Procurement              | Pickaxes, Axes, Shovels                                                                            | Master architect, resource excavator, and logistics specialist. Autonomously constructs blueprints, deconstructs areas, quarries natural stone, harvests timber via agro-forestry (using bone meal for instant growth), self-crafts tools, shares blocks via peer energy beams, deploys supply depot chests, and commissions **Squad Material Procurement** contracts to nearby Warrior thralls for mob-derived construction materials. Equipped with **Ceiling Clearance Raycasts**, **Doorway Traversal Fallbacks**, **Line-of-Sight Hover Stations**, and **Self-Intersection Entombment Prevention**. **Absolute Non-Combatant**: Builders have complete combat immunity—they strictly never acquire targets, never retaliate, bypass all melee and ranged attack goals, and are completely excluded from assault orders and ally defense alarms.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Archetype Combat Specialization: Offensive Warriors vs. Defensive Sentinels
@@ -572,7 +572,7 @@ Opened via **Sneak + Right-Click** directly on an owned minion. Features an expa
 
 - **Elimination of Vanilla Background Blur**: In vanilla Minecraft 1.21 (Yarn mappings), standard `Screen.renderBackground(DrawContext, int, int, float)` calls automatically invoke `this.applyBlur(delta)`, which triggers the costly `GameRenderer.renderBlur()` post-processing shader pass. In a high-tempo tactical strategy mod, blurring the world background obscures nearby combat skirmishes, minion construction progress, pathway wireframes, and tactical positioning, while introducing unnecessary visual lag.
 - **Universal No-Op Blur Bypass Across All Screens**: By overriding `protected void applyBlur(float delta)` with a clean no-op (`{}`) across all custom screens, background blurring is completely eliminated across the entire mod interface suite:
-  1. **`CommandScepterScreen`** (`extends Screen`): Tactical Command Hub, squad assignments, directive toggles, mining mode toggle (`DIRECT` vs `AREA`), and blueprint catalog.
+  1. **`CommandScepterScreen`** (`extends Screen`): Tactical Command Hub, squad assignments, directive toggles, custom area quarry actions, and blueprint catalog.
   2. **`MinionScreen`** (`extends HandledScreen<MinionScreenHandler>`): Minion backpack inventory, 6 equipment slots, hearts health display, and role cycle controls.
   3. **`BlueprintCaptureModalScreen`** (`extends Screen`): In-world spatial blueprint capture dialog, dimension inspection, and naming modal.
   4. **`MiningConfirmModalScreen`** (`extends Screen`): Mining area boundary inspection, dimension and volume verification, height fine-tuning steppers, and confirmation dialog.
@@ -624,14 +624,18 @@ In **`AREA`** building mode, commanders define the target construction volume in
    - **Cycle Stepping (`stepCorner`)**: Subsequent left-clicks seamlessly initiate a new selection cycle (`Pos1` updated to new target, `Pos2` cleared), allowing rapid re-targeting.
    - **Instant Reset (`clearBuildCorners`)**: Pressing **`Shift + Left-Click`** in air or on ground instantly wipes both corners with a low bass tone (`BLOCK_NOTE_BLOCK_BASS`), resetting to empty state.
 
-### 6.3 Real-Time In-World Height Adjustment
+### 6.3 Real-Time In-World Height & Depth Adjustment (Unified Bi-Directional Control)
 
-Commanders can customize the vertical height and depth of the construction volume directly in the world without placing temporary scaffolding or nerd-poling dirt towers:
+Commanders can customize the vertical height and underground depth of the construction volume directly in the world without placing temporary scaffolding or nerd-poling dirt towers:
 
-- **In-World Scroll Keybinds**: Holding **`Ctrl` + Mouse Scroll** dynamically expands or contracts the vertical height of the bounding volume.
-- **Keyboard Shortcuts**: Pressing **`[`** / **`]`** or **`PageUp`** / **`PageDown`** steps height incrementally.
+- **Unified Bi-Directional Height & Underground Depth**:
+  - **Above Ground**: Scrolling or stepping upward increases vertical fill height ($+1 / +5$). Decreasing height shrinks down toward the baseline surface layer (`initialBaseY`) where the player started the selection.
+  - **Automatic Underground Expansion**: Decreasing height past 1 at the baseline layer automatically expands the fill volume **downward into the ground**.
+  - **Seamless Bi-Directional Crossover**: When underground, increasing height shrinks underground depth back toward the surface layer and smoothly crosses over into above-ground expansion.
+- **In-World Scroll Keybinds**: Holding **`Ctrl` + Mouse Scroll** dynamically adjusts height and underground depth live in-world.
+- **Keyboard Shortcuts**: Pressing **`[`** / **`]`** or **`PageUp`** / **`PageDown`** steps bounds incrementally.
 - **Fast Stepping**: Holding **`Shift`** accelerates adjustments by 5 blocks per tick ($\pm 5$).
-- **Live HUD Feedback**: The action bar displays real-time dimension feedback during adjustments (`✦ Build Area Height: H (WxHxL - V blocks)`).
+- **Live HUD Feedback**: The action bar displays real-time dimension feedback with depth indicator during adjustments (`✦ Build Area Height: H [↓ Xb deep] (WxHxL - V blocks)`).
 
 ### 6.4 In-World Ghost Grid Wireframes & Cyan/Aqua Highlighting (`BlueprintHologramRenderer`)
 
@@ -729,8 +733,9 @@ Server-authoritative engine orchestrating automated multiblock building and demo
   - _Seamless Multi-Blueprint & Mining Transitions_: When builder minions finish a construction or dismantle/mining session, they immediately scan their 128-block vicinity for other pending active sessions belonging to their master instead of halting or grounding.
   - _Egress Exclusion & Zero Particle Traps_: `ConstructionManager.completeSession` completely bypasses building egress (`startEgressFromStructure`) whenever chaining to an active adjacent session (`nextSession.isPresent()`) for both construction and mining. Minions never trigger building egress, portal/enchant particle trails, or forced downward glide descent (`-0.22D`) that previously caused minions to stall until their feet hit the ground. Any active egress state is cleanly purged via `clearBuildingEgress()`.
   - _Uninterrupted 3D Arcane Levitation Flight_: Minions transition between consecutive mining and building sites via continuous 3D Arcane Levitation, keeping `activelyBuilding = true`, `arcaneLevitating = true`, and `noGravity = true`, bypassing perimeter stationing (`setSitting(false)`, `setGuardAnchorPos(null)`). Extended navigation stall thresholds (up to 160 ticks / 8.0s) allow open-air aerial flight across long distances without dropping into ground navigation even when transitioning to lower-elevation tasks.
-  - _Multi-Site Placement During Active Work_: If the commander places down additional blueprints or mining areas while minions are actively working elsewhere, minions seamlessly queue the new areas and transition directly to the closest site the moment their current work finishes.
-  - _Nearest-First Spatial Dispatch_: When multiple sessions are placed simultaneously, minions evaluate Euclidean distance across all pending sessions in the world and automatically prioritize and dispatch to the closest site.
+  - _Multi-Site Placement During Active Work_: If the commander places down additional blueprints or mining areas while minions are actively working elsewhere, minions seamlessly queue the new areas without dropping current tasks.
+  - _Strict FIFO Task Ordering (100% Finish-Before-Start)_: Minions strictly commit 100% of their construction and excavation efforts to the earliest placed active session (`session.getCreatedTick()`) before any minion begins work on subsequently placed jobs. Minions will never abandon an older blueprint or mining area to start a newer job, even if the newer job is physically closer.
+  - _Deterministic Proximity Tiebreaking_: If multiple active sessions share the exact same creation tick, minions break ties by Euclidean distance to dispatch to the nearest site.
   - _Periodic 20-Tick Active Mobilization_: `ConstructionManager.tick` executes a 20-tick (1-second) mobilization pulse across a 128-block bounding box around active sessions, waking any stationed builders (`setSitting(false)`, `setGuardAnchorPos(null)`) so they never miss newly placed blueprints or mining areas even if they were stationed prior to placement.
   - _Autonomous `MinionBuildGoal` Persistence & Immediate Re-Leasing_: `ConstructionSession.markCompleted()` immediately deactivates completed sessions (`isActive() == false`). In `MinionBuildGoal.tryClaimTaskOrChainNextSession`, removed sessions are discarded immediately and chained tasks from the next session are claimed atomically without exiting the build goal.
 
@@ -840,33 +845,29 @@ To eliminate issues where builders get stuck inside completed rooms, ram upward 
 
 ## 7. Structure Deconstruction, Mining Area Clearance & Bedrock Immunity
 
-The deconstruction engine (`CommandMode.MINE`, `MiningMode`, `ConstructionManager`, `ConstructionSession`, `MiningConfirmModalScreen`, `ClientMiningCaptureTracker`) provides dual operational modes for structure demolition and terrain quarrying:
+The deconstruction engine (`CommandMode.MINE`, `MiningMode`, `ConstructionManager`, `ConstructionSession`, `MiningConfirmModalScreen`, `ClientMiningCaptureTracker`) operates exclusively via **Custom Area Boundary Selection** (`AREA`). While an experimental direct point-and-click dismantle mode was explored during development, mining was consolidated strictly into custom 3D boundary selection to eliminate unintended deconstruction of player builds, ensure comprehensive voxel count and bedrock safety verification, and support full underground depth adjustment with confirmation modals.
 
 ```
-                                      [MINE Operating Mode]
-                                                │
-                 ┌──────────────────────────────┴──────────────────────────────┐
-                 ▼                                                             ▼
-         [DIRECT Sub-Mode]                                             [AREA Sub-Mode]
-   • Instant point-and-click dismantle                           • Configurable 3D boundary volume
-   • Anchors directly at clicked position                        • Sequential Left-Clicks: Pos1 ➔ Pos2
-   • 96m crosshair reach                                         • Fiery orange/amber ghost grid wireframes
-   • Dismantles structures or terrain                            • Real-time height adjustment (Ctrl + Scroll)
-   • Zero boundary setup required                                • Dedicated Confirmation Modal before mining
+                              [MINE Operating Mode]
+                                        │
+                                        ▼
+                         [Custom Area Quarry Selection]
+    • Configurable 3D boundary volume (`Pos1` ➔ `Pos2`)
+    • Fiery orange/amber ghost grid wireframes & block outlines
+    • Unified bi-directional height & underground depth adjustment
+    • Dedicated Confirmation Modal (`MiningConfirmModalScreen`)
+    • Non-overlapping right-aligned stepper buttons: [-5] [-1] [+1] [+5]
+    • 100% strict FIFO minion job dispatch (finish first job before touching second)
 ```
 
-### 7.1 Dual Operational Sub-Modes: DIRECT vs. AREA Mining
+### 7.1 Exclusive Operational Mode: Custom Area Quarry Selection (`AREA`)
 
-Commanders can toggle between operational sub-modes within `MINE` mode via the Command Hub GUI (**`V`** key) or via scepter controls:
+Commanders establish exact 3D excavation boundaries in the world, working symmetrically to `DESIGN` mode grid selections but engineered to excavate blocks top-to-bottom:
 
-1. **`AREA` Mode (`MiningMode.AREA`, "Custom Area", `§e`) — Default**:
-   - The default operational mode for mining.
-   - Allows commanders to establish exact, custom 3D mining boundaries in the world, working identically to `DESIGN` mode grid selections but to remove blocks top-to-bottom.
-   - Employs sequential left-click corner selection (`Pos1` ➔ `Pos2`), in-world fiery orange/amber ghost grid wireframes, real-time height adjustment, and a dedicated confirmation modal (`MiningConfirmModalScreen`) before initiating minion excavation.
-2. **`DIRECT` Mode (`MiningMode.DIRECT`, "Direct / Structure", `§6`)**:
-   - Alternate point-and-click deconstruction mode.
-   - Aiming crosshairs at any block or placed structure and right-clicking anchors a deconstruction session immediately without needing boundary setup.
-   - Long-range crosshair reach extends up to 96 blocks away.
+- **Strict Custom Area Selection**: Scepter interactions and Command Hub GUI controls in `MINE` mode route directly and exclusively to custom area boundary selection (`MiningMode.AREA`).
+- **Sequential Corner Selection**: Sequential left-clicks (`Pos1` ➔ `Pos2`) establish the horizontal footprint and baseline surface layer.
+- **Bi-Directional Depth & Height**: In-world mouse scrolling and keyboard shortcuts allow vertical expansion upward or deep underground mining past the baseline layer.
+- **Full Safety Modal**: A dedicated modal (`MiningConfirmModalScreen`) provides complete dimension metrics, destructible block counting, height adjustment, and one-click dispatch before minions begin excavation.
 
 ### 7.2 Configurable 3D Area Boundary & Sequential Corner Invariants
 
@@ -880,21 +881,25 @@ In **`AREA`** mining mode, commanders define the 3D excavation boundary using se
   - **Subsequent Left-Clicks (Cycle)**: Left-clicking with both corners set starts a new selection cycle (`Pos1` set to clicked block, `Pos2` cleared).
   - **Shift + Left-Click (Reset)**: Instantly clears both `Pos1` and `Pos2` with a bass tone (`BLOCK_NOTE_BLOCK_BASS`), guaranteeing the next left-click begins anew at `Pos1`.
 
-### 7.3 Real-Time In-World Height Adjustment
+### 7.3 Real-Time In-World Height & Depth Adjustment (Unified Bi-Directional Control)
 
 Commanders can dynamically adjust excavation depth and height without placing temporary scaffolding blocks:
 
+- **Unified Bi-Directional Height & Underground Digging**:
+  - **Above Ground**: Scrolling or stepping upward increases excavation height ($+1 / +5$). Decreasing height shrinks down toward the baseline surface layer (`initialBaseY`) where the player placed the selection.
+  - **Automatic Underground Quarrying**: Decreasing height past 1 at the baseline layer automatically expands the mining box **downward into the ground**. Players no longer need to dig down to bedrock to set bottom corners.
+  - **Seamless Bi-Directional Crossover**: When underground, increasing height pulls the quarry floor back up toward the surface layer and smoothly crosses over into above-ground expansion.
 - **Mouse Scroll Interception (`MouseMixin`)**:
   - Holding **`Ctrl` + Mouse Scroll** while holding the Scepter in `MINE` mode (with `MiningMode.AREA` active):
-    - Scroll **Up**: Expands top boundary ($Y$-max) by +1 block.
-    - Scroll **Down**: Lowers top boundary ($Y$-max) by -1 block.
-    - Holding **`Shift` + `Ctrl` + Scroll**: Fast-steps height by $\pm 5$ blocks.
+    - Scroll **Up**: Expands height upward or pulls depth up from underground by +1 block.
+    - Scroll **Down**: Lowers height downward or digs deeper underground by -1 block.
+    - Holding **`Shift` + `Ctrl` + Scroll**: Fast-steps height/depth by $\pm 5$ blocks.
     - Cancels vanilla mouse scroll to prevent cycling hotbar item slots.
 - **Keyboard Controls**:
-  - Pressing **`]`** (Right Bracket) or **`Page Up`**: Increases boundary height (+5 with Shift).
-  - Pressing **`[`** (Left Bracket) or **`Page Down`**: Decreases boundary height (-5 with Shift).
+  - Pressing **`]`** (Right Bracket) or **`Page Up`**: Increases boundary height / pulls depth up (+5 with Shift).
+  - Pressing **`[`** (Left Bracket) or **`Page Down`**: Decreases boundary height / digs deeper underground (-5 with Shift).
 - **HUD & Audio Feedback**:
-  - Actionbar displays live height updates: `§6✦ Mining Area Height: §fX blocks §8| §7Dimensions: WxHxD (Vb)`.
+  - Actionbar displays live height updates with underground depth: `§6✦ Mining Box Height: §fH §c[↓ Xb deep] §8| §7Dimensions: WxHxD (Vb)`.
   - Emits crisp note block hat audio feedback (`SoundEvents.BLOCK_NOTE_BLOCK_HAT`).
 
 ### 7.4 In-World Ghost Grid Wireframes & Semantic Highlighting (`BlueprintHologramRenderer`)
@@ -919,7 +924,7 @@ To prevent accidental excavation of large areas, establishing an `AREA` mining b
   - **Coordinates**: Displays exact `Pos1` and `Pos2` coordinates.
   - **Dimensions & Volume**: Displays Width $\times$ Height $\times$ Depth and total voxel volume.
   - **Destructible Block Counter**: Counts and displays the exact number of solid, destructible blocks queued for mining (excluding air and indestructible bedrock).
-- **Dedicated Height Stepper Row**: Interactive **`[ -5 ]`**, **`[ -1 ]`**, **`[ +1 ]`**, and **`[ +5 ]`** buttons placed in a dedicated row cleanly separated from title and boundary descriptions, allowing fine-tuning boundary height directly within the modal without visual overlap.
+- **Right-Aligned Height/Depth Stepper Row**: Interactive **`[ -5 ]`**, **`[ -1 ]`**, **`[ +1 ]`**, and **`[ +5 ]`** buttons are right-aligned against the right modal boundary (`startX + 184` to `startX + 284`), cleanly separated from the `§eHeight / Depth:` label and underground depth indicator (`§c[↓ Xb deep]`) with zero visual overlap.
 - **Modal Action Buttons**:
   - **`[ ✔ Start Mining ]`**: Dispatches `StartMiningAreaPayload(pos1, pos2)` to the server, clears client corner selections, plays horn/chime audio, and initiates top-to-bottom excavation.
   - **`[ ⌫ Reset ]`**: Wipes `Pos1` and `Pos2` corners across tracker and scepter data components.
@@ -1491,22 +1496,23 @@ Minions project dynamic billboarding badges hovering above their nameplates:
 ### Default Archetype & Dynamic Role Morphing Engine (`evaluateAutoRole`)
 
 - **Default Role on Creation & Recruitment**: All minions dynamically spawned, summoned via egg/command, or recruited into thrall service via the Command Scepter (`RECRUIT` mode) now default to **`MinionRole.AUTO`** (`id = 3`, icon `⚙`, color `§e`).
-- **Autonomous Tactical Adaptation**: Minions configured in Auto mode act as intelligent autonomous agents, dynamically evaluating their tactical environment every 20 ticks (1 second)—and immediately upon taking damage on the server—adapting into the archetype best suited for current conditions:
+- **Autonomous Tactical Adaptation**: Minions configured in Auto mode act as intelligent autonomous agents, dynamically evaluating their tactical environment every 5 ticks (0.25 seconds)—as well as every 5 ticks while actively constructing/mining in `MinionBuildGoal` and immediately upon taking damage on the server—adapting into the archetype best suited for current conditions:
 
-1. **Medical Emergency Assessment (Priority 1 -> Sentinel)**:
-   - Evaluates the health of the minion itself (< 70% max HP), the player commander (within 16m), and all allied minions / Iron Golems (within 16m).
-   - If the minion itself or any friendly unit is wounded below 70% maximum health, the autonomous agent adapts into a **Sentinel**, drawing sword and shield via `autoEquipFromInventory` and prioritizing restorative healing via _Aegis of Restoration_.
-2. **Combat Threat Assessment (Priority 2 -> Warrior)**:
-   - Evaluates active combat targets (`getTarget() != null`), active attackers (`getAttacker() != null`), or hostile entities within a 16-block radius.
-   - If threats or attacks are detected, the minion adapts into a **Warrior**, drawing weapons, activating the `+4.0` frontline Attack Damage bonus (`WARRIOR_ATTACK_DAMAGE_BONUS`), and executing coordinated melee or ranged attacks with critical strike particles.
+1. **Combat Threat & Danger Elimination (Priority 1 -> Warrior)**:
+   - Evaluates active combat targets (`getTarget() != null`), active attackers (`getAttacker() != null`), commander under attack (`owner.getAttacker() != null`), queued scepter assault targets (`hasAssaultTargets()`), or hostile monsters within a 16-block radius.
+   - **Eliminate Danger First**: If threats or attacks are detected, the minion **immediately adapts to Warrior first**, even if building or mining.
+   - If an `AUTO` minion was actively constructing or mining when danger strikes, `MinionBuildGoal.shouldContinue()` and `MinionBuildGoal.tick()` detect the role shift immediately, stopping the build goal, releasing the task lease back to the session with zero progress loss, restoring weapons, and landing safely from Arcane Levitation to eliminate the threat.
+2. **Medical Emergency & Villager Triage (Priority 2 -> Sentinel)**:
+   - Once all immediate danger and hostile threats are eliminated (or if perfectly peaceful), the minion evaluates the health of the minion itself (< 70% max HP), the player commander, allied players, fellow squad minions, non-hostile Iron Golems, and **Villagers** within 16m.
+   - If the minion itself or any nearby friendly unit, Iron Golem, or Villager is wounded below **70% maximum health**, the autonomous agent adapts into a **Sentinel**, drawing sword and shield via `autoEquipFromInventory` and channeling restorative healing via _Aegis of Restoration_.
+   - Auto minions critically wounded themselves (< 70% max HP) also activate self-healing via `SentinelHealAllyGoal`.
 3. **Civil Engineering & Blueprint Logistics (Priority 3 -> Builder)**:
-   - If no immediate medical or combat threats exist, the minion inspects active construction or deconstruction sessions belonging to the commander within 128 blocks via `ConstructionManager.findNearestSessionForMinion`, or active block phasing.
-   - If blueprint sessions exist, the agent adapts into a **Builder**, taking flight with Arcane Levitation to construct structures, quarry materials, harvest timber, or manage supply depots.
-   - If an `AUTO` minion was actively building when it adapts to Sentinel or Warrior, `MinionBuildGoal.shouldContinue()` yields immediately, safely releasing its task lease and landing from levitation to heal or fight.
+   - If all nearby allies (including Villagers, Iron Golems, and the minion itself) are **healed to 70% HP or above** AND **no hostile threats or attackers remain**, the minion inspects active construction or mining/dismantle sessions belonging to the commander within 128 blocks via `ConstructionManager.findNearestSessionForMinion`, or active block phasing.
+   - If active blueprint or excavation sessions exist, the agent adapts back into a **Builder**, taking flight with Arcane Levitation to resume construction, quarrying, or area filling.
 4. **Position Holding / Standing Guard (Priority 4 -> Sentinel)**:
-   - If stationed on standing guard (`guardAnchorPos != null`) or sitting, the minion assumes a **Sentinel** defensive guard posture.
+   - If peaceful, all units healed, and no active construction sessions exist, but the minion is stationed on standing guard (`guardAnchorPos != null`) or sitting, the minion assumes a **Sentinel** defensive guard posture.
 5. **Peacetime Escort & Marching Formation (Priority 5 -> Warrior)**:
-   - When accompanying the commander peacefully with no active construction or immediate threats, the minion adapts into a **Warrior** escort, marching proudly in frontline battle ranks.
+   - When accompanying the commander peacefully with no active construction, no wounded allies, and no immediate threats, the minion adapts into a **Warrior** escort, marching proudly in frontline battle ranks.
 
 ### Universal Equipment & Goal Compatibility
 

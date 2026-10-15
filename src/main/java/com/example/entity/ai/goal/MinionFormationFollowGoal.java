@@ -79,6 +79,10 @@ public class MinionFormationFollowGoal extends Goal {
 			return false;
 		}
 
+		if (!this.minion.getWorld().isChunkLoaded(this.minion.getBlockX() >> 4, this.minion.getBlockZ() >> 4)) {
+			return false;
+		}
+
 		LivingEntity owner = this.minion.getOwner();
 		if (owner == null || !owner.isAlive() || owner.isSpectator()) {
 			return false;
@@ -128,6 +132,10 @@ public class MinionFormationFollowGoal extends Goal {
 	@Override
 	public boolean shouldContinue() {
 		if (!this.minion.isAlive() || !this.minion.isTamed() || this.minion.isSitting() || this.minion.hasVehicle() || !this.minion.isSelected()) {
+			return false;
+		}
+
+		if (!this.minion.getWorld().isChunkLoaded(this.minion.getBlockX() >> 4, this.minion.getBlockZ() >> 4)) {
 			return false;
 		}
 
@@ -485,11 +493,12 @@ public class MinionFormationFollowGoal extends Goal {
 		double flankOffset = side * colSpacing;
 
 		double baseForward;
-		switch (role) {
-			case WARRIOR -> baseForward = 4.0D;
-			case SENTINEL -> baseForward = 1.8D;
-			case BUILDER -> baseForward = -2.0D;
-			default -> baseForward = -2.0D;
+		if (role == MinionRole.WARRIOR) {
+			baseForward = 4.0D;
+		} else if (role == MinionRole.SENTINEL) {
+			baseForward = 1.8D;
+		} else {
+			baseForward = -2.0D;
 		}
 
 		double forwardOffset = baseForward - (lineIndex * 2.0D);
@@ -543,6 +552,9 @@ public class MinionFormationFollowGoal extends Goal {
 		}
 		int blockX = MathHelper.floor(x);
 		int blockZ = MathHelper.floor(z);
+		if (!world.isChunkLoaded(blockX >> 4, blockZ >> 4)) {
+			return baseY;
+		}
 		int startY = MathHelper.floor(baseY);
 		BlockPos.Mutable mutable = new BlockPos.Mutable(blockX, startY + 4, blockZ);
 

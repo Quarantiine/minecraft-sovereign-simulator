@@ -152,6 +152,10 @@ public class MinionBuildGoal extends Goal {
 			return false;
 		}
 
+		if (this.minion.getRole() == MinionRole.AUTO && this.minion.age % 5 == 0) {
+			this.minion.evaluateAutoRole();
+		}
+
 		if (!this.minion.matchesRole(MinionRole.BUILDER)) {
 			return false;
 		}
@@ -296,6 +300,16 @@ public class MinionBuildGoal extends Goal {
 	public void tick() {
 		if (!(this.minion.getWorld() instanceof ServerWorld serverWorld)) {
 			return;
+		}
+
+		if (this.minion.getRole() == MinionRole.AUTO) {
+			if (this.minion.age % 5 == 0) {
+				this.minion.evaluateAutoRole();
+			}
+			if (!this.minion.matchesRole(MinionRole.BUILDER)) {
+				this.stop();
+				return;
+			}
 		}
 
 		if (this.currentTask == null || this.currentSession == null || !this.currentSession.isActive()) {

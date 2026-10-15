@@ -1198,11 +1198,14 @@ public class MinionSquadAndRoleTest {
 			void updateEnvironmentalContext(boolean allyWounded, boolean hasTargetOrHostiles, boolean hasBuildSession, boolean holdingPosition) {
 				if (this.role != MinionRole.AUTO) return;
 
-				if (allyWounded) {
-					this.adaptiveRole = MinionRole.SENTINEL;
-				} else if (hasTargetOrHostiles) {
+				// 1. Danger first: Eliminate danger before healing or building
+				if (hasTargetOrHostiles) {
 					this.adaptiveRole = MinionRole.WARRIOR;
+				} else if (allyWounded) {
+					// 2. Medic healing: If no danger, heal wounded allies
+					this.adaptiveRole = MinionRole.SENTINEL;
 				} else if (hasBuildSession) {
+					// 3. Resume building / mining: If all healed and no danger
 					this.adaptiveRole = MinionRole.BUILDER;
 				} else if (holdingPosition) {
 					this.adaptiveRole = MinionRole.SENTINEL;
@@ -1255,6 +1258,27 @@ public class MinionSquadAndRoleTest {
 			"AUTO minion re-adapting to Warrior must dynamically GAIN the +4.0 attack damage bonus again (9.0D)");
 		Assertions.assertEquals(16.0D, minion.getWeaponAttackDamage(diamondSwordBonus), 0.001D,
 			"AUTO minion re-adapted to Warrior must deal 16.0D with Diamond Sword (9 base + 7 weapon)");
+
+		// Phase 3b: Danger First - Both ally wounded AND hostile threats present while building -> eliminates danger first (WARRIOR)
+		minion.updateEnvironmentalContext(true, true, true, false);
+		Assertions.assertEquals(MinionRole.WARRIOR, minion.adaptiveRole,
+			"Danger must take precedence over healing: adapts to WARRIOR when hostiles threaten");
+		Assertions.assertTrue(minion.matchesRole(MinionRole.WARRIOR));
+		Assertions.assertEquals(9.0D, minion.getAttributeValue(), 0.001D);
+
+		// Phase 3c: Hostiles cleared, ally still wounded -> switches to SENTINEL medic
+		minion.updateEnvironmentalContext(true, false, true, false);
+		Assertions.assertEquals(MinionRole.SENTINEL, minion.adaptiveRole,
+			"Once danger is eliminated, adapts to SENTINEL to heal wounded allies");
+		Assertions.assertTrue(minion.matchesRole(MinionRole.SENTINEL));
+
+		// Phase 3d: Ally fully healed, active construction blueprint session placed -> returns to BUILDER
+		minion.updateEnvironmentalContext(false, false, true, false);
+		Assertions.assertEquals(MinionRole.BUILDER, minion.adaptiveRole,
+			"Once all healed and no threats, returns to BUILDER");
+		Assertions.assertTrue(minion.matchesRole(MinionRole.BUILDER));
+		Assertions.assertEquals(12.0D, minion.getWeaponAttackDamage(diamondSwordBonus), 0.001D,
+			"AUTO minion re-adapted to Builder must deal 12.0D with Diamond Sword (5 base + 7 weapon)");
 
 		// Phase 4: Commander orders squad to hold position / stand guard -> adapts to SENTINEL guard
 		minion.updateEnvironmentalContext(false, false, false, true);

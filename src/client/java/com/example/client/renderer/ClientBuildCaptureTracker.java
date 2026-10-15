@@ -20,6 +20,7 @@ public class ClientBuildCaptureTracker {
 
 	private static BlockPos pos1 = null;
 	private static BlockPos pos2 = null;
+	private static Integer initialBaseY = null;
 	private static net.minecraft.util.math.Direction facing = net.minecraft.util.math.Direction.NORTH;
 	private static boolean invertedHalf = false;
 
@@ -51,6 +52,13 @@ public class ClientBuildCaptureTracker {
 
 	public static synchronized void setPos1(BlockPos pos) {
 		pos1 = pos != null ? pos.toImmutable() : null;
+		if (pos1 != null && pos2 != null) {
+			initialBaseY = Math.min(pos1.getY(), pos2.getY());
+		} else if (pos1 != null) {
+			initialBaseY = pos1.getY();
+		} else if (pos2 == null) {
+			initialBaseY = null;
+		}
 		syncWithHeldScepter();
 	}
 
@@ -60,6 +68,13 @@ public class ClientBuildCaptureTracker {
 
 	public static synchronized void setPos2(BlockPos pos) {
 		pos2 = pos != null ? pos.toImmutable() : null;
+		if (pos1 != null && pos2 != null) {
+			initialBaseY = Math.min(pos1.getY(), pos2.getY());
+		} else if (pos2 != null) {
+			initialBaseY = pos2.getY();
+		} else if (pos1 == null) {
+			initialBaseY = null;
+		}
 		syncWithHeldScepter();
 	}
 
@@ -70,12 +85,22 @@ public class ClientBuildCaptureTracker {
 	public static synchronized void setCorners(BlockPos p1, BlockPos p2) {
 		pos1 = p1 != null ? p1.toImmutable() : null;
 		pos2 = p2 != null ? p2.toImmutable() : null;
+		if (p1 != null && p2 != null) {
+			initialBaseY = Math.min(p1.getY(), p2.getY());
+		} else if (p1 != null) {
+			initialBaseY = p1.getY();
+		} else if (p2 != null) {
+			initialBaseY = p2.getY();
+		} else {
+			initialBaseY = null;
+		}
 		syncWithHeldScepter();
 	}
 
 	public static synchronized void clear() {
 		pos1 = null;
 		pos2 = null;
+		initialBaseY = null;
 		try {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			if (mc != null && mc.player != null) {
@@ -114,10 +139,12 @@ public class ClientBuildCaptureTracker {
 		if (pos1 == null) {
 			pos1 = pos.toImmutable();
 			pos2 = null;
+			initialBaseY = pos.getY();
 			syncWithHeldScepter();
 			return 1;
 		} else if (pos2 == null) {
 			pos2 = pos.toImmutable();
+			initialBaseY = Math.min(pos1.getY(), pos2.getY());
 			syncWithHeldScepter();
 			return 2;
 		} else {
@@ -128,6 +155,7 @@ public class ClientBuildCaptureTracker {
 			// Restart cycle at Pos1
 			pos1 = pos.toImmutable();
 			pos2 = null;
+			initialBaseY = pos.getY();
 			syncWithHeldScepter();
 			return 1;
 		}
@@ -204,13 +232,54 @@ public class ClientBuildCaptureTracker {
 		return getSizeX() + "x" + getSizeY() + "x" + getSizeZ() + " (" + getVolume() + "b)";
 	}
 
+	private static int getWorldBottomY() {
+		try {
+			MinecraftClient mc = MinecraftClient.getInstance();
+			if (mc != null && mc.world != null) {
+				return mc.world.getBottomY();
+			}
+		} catch (Throwable ignored) {
+		}
+		return -64;
+	}
+
+	public static synchronized int getInitialBaseY() {
+		if (initialBaseY != null) {
+			return initialBaseY;
+		}
+		if (pos1 != null && pos2 != null) {
+			return Math.min(pos1.getY(), pos2.getY());
+		}
+		if (pos1 != null) {
+			return pos1.getY();
+		}
+		if (pos2 != null) {
+			return pos2.getY();
+		}
+		return 64;
+	}
+
+	public static synchronized boolean isUnderground() {
+		if (pos1 == null || pos2 == null) return false;
+		int baseY = getInitialBaseY();
+		int minY = Math.min(pos1.getY(), pos2.getY());
+		int maxY = Math.max(pos1.getY(), pos2.getY());
+		return minY < baseY && maxY <= baseY;
+	}
+
+	public static synchronized int getUndergroundDepth() {
+		if (!isUnderground()) return 0;
+		return getInitialBaseY() - Math.min(pos1.getY(), pos2.getY());
+	}
+
 	/**
-	 * Adjusts the vertical height of the current build selection box by {@code delta} blocks.
-	 * Clamps height to between 1 and MAX_HEIGHT (96).
-	 * If both Pos1 and Pos2 are established, moves the upper Y coordinate up or down.
-	 * If only Pos1 is set, initializes Pos2 at (Pos1.x, Pos1.y + delta, Pos1.z).
+	 * Adjusts the vertical bounds of the current build selection box by {@code delta} blocks.
+	 * Unified bi-directional control:
+	 * - Above the baseline surface layer: delta expands upward (+delta) or shrinks downward (-delta).
+	 * - At baseline surface layer (height 1): decreasing past 1 expands downward into the ground.
+	 * - Below baseline surface layer: delta digs deeper underground (-delta) or shrinks back up (+delta).
 	 *
-	 * @param delta Number of blocks to expand (+1, +5) or shrink (-1, -5).
+	 * @param delta Number of blocks to adjust (+1, +5, -1, -5).
 	 * @return The new height in blocks (getSizeY()).
 	 */
 	public static synchronized int adjustHeight(int delta) {
@@ -218,23 +287,123 @@ public class ClientBuildCaptureTracker {
 			return 0;
 		}
 
+		int worldBottom = getWorldBottomY();
+		int baseY = getInitialBaseY();
+
 		if (pos1 != null && pos2 == null) {
-			int initialHeight = Math.max(1, Math.min(MAX_HEIGHT, 1 + delta));
-			pos2 = new BlockPos(pos1.getX(), pos1.getY() + initialHeight - 1, pos1.getZ());
+			if (delta >= 0) {
+				int targetY = Math.min(baseY + MAX_HEIGHT - 1, pos1.getY() + delta);
+				pos2 = new BlockPos(pos1.getX(), targetY, pos1.getZ());
+			} else {
+				// Extend underground below Pos1
+				int targetY = Math.max(worldBottom, Math.max(baseY - MAX_HEIGHT + 1, pos1.getY() + delta));
+				pos2 = new BlockPos(pos1.getX(), targetY, pos1.getZ());
+			}
 			syncWithHeldScepter();
 			return getSizeY();
 		}
 
 		int minY = Math.min(pos1.getY(), pos2.getY());
 		int maxY = Math.max(pos1.getY(), pos2.getY());
-		int currentHeight = maxY - minY + 1;
-		int newHeight = Math.max(1, Math.min(MAX_HEIGHT, currentHeight + delta));
-		int targetMaxY = minY + newHeight - 1;
 
-		if (pos1.getY() > pos2.getY()) {
-			pos1 = new BlockPos(pos1.getX(), targetMaxY, pos1.getZ());
+		if (minY >= baseY) {
+			// Box is on or above the baseline surface layer
+			if (delta > 0) {
+				int newMaxY = Math.min(baseY + MAX_HEIGHT - 1, maxY + delta);
+				maxY = newMaxY;
+				minY = baseY;
+			} else if (delta < 0) {
+				int canShrinkAbove = maxY - baseY;
+				int absDelta = -delta;
+				if (absDelta <= canShrinkAbove) {
+					maxY -= absDelta;
+					minY = baseY;
+				} else {
+					// Shrink all the way to baseY, then remaining delta expands underground!
+					int remaining = absDelta - canShrinkAbove;
+					maxY = baseY;
+					minY = Math.max(worldBottom, Math.max(baseY - MAX_HEIGHT + 1, baseY - remaining));
+				}
+			}
+		} else if (maxY <= baseY) {
+			// Box is on or below the baseline surface layer (underground)
+			if (delta < 0) {
+				// Dig deeper underground
+				int newMinY = Math.max(worldBottom, Math.max(baseY - MAX_HEIGHT + 1, minY + delta));
+				minY = newMinY;
+				maxY = baseY;
+			} else if (delta > 0) {
+				int canPullUp = baseY - minY;
+				if (delta <= canPullUp) {
+					minY += delta;
+					maxY = baseY;
+				} else {
+					// Pull up all the way to baseY, then remaining delta expands above ground!
+					int remaining = delta - canPullUp;
+					minY = baseY;
+					maxY = Math.min(baseY + MAX_HEIGHT - 1, baseY + remaining);
+				}
+			}
 		} else {
-			pos2 = new BlockPos(pos2.getX(), targetMaxY, pos2.getZ());
+			// Box spans both above and below baseY
+			if (delta > 0) {
+				maxY = Math.min(baseY + MAX_HEIGHT - 1, maxY + delta);
+			} else if (delta < 0) {
+				int canShrinkAbove = maxY - baseY;
+				int absDelta = -delta;
+				if (absDelta <= canShrinkAbove) {
+					maxY -= absDelta;
+				} else {
+					int remaining = absDelta - canShrinkAbove;
+					maxY = baseY;
+					minY = Math.max(worldBottom, Math.max(baseY - MAX_HEIGHT + 1, minY - remaining));
+				}
+			}
+		}
+
+		// Reassign pos1 and pos2 Y coordinates to match [minY, maxY]
+		if (pos1.getY() >= pos2.getY()) {
+			pos1 = new BlockPos(pos1.getX(), maxY, pos1.getZ());
+			pos2 = new BlockPos(pos2.getX(), minY, pos2.getZ());
+		} else {
+			pos1 = new BlockPos(pos1.getX(), minY, pos1.getZ());
+			pos2 = new BlockPos(pos2.getX(), maxY, pos2.getZ());
+		}
+
+		syncWithHeldScepter();
+		return getSizeY();
+	}
+
+	/**
+	 * Explicitly sets the height of the current build selection box to {@code targetHeight} blocks.
+	 * Clamps height to between 1 and MAX_HEIGHT (96).
+	 *
+	 * @param targetHeight Desired height in blocks.
+	 * @return The resulting height in blocks (getSizeY()).
+	 */
+	public static synchronized int setHeight(int targetHeight) {
+		if (pos1 == null || pos2 == null) return 0;
+		int clampedHeight = Math.max(1, Math.min(MAX_HEIGHT, targetHeight));
+		int worldBottom = getWorldBottomY();
+		int baseY = getInitialBaseY();
+
+		int minY;
+		int maxY;
+		if (isUnderground()) {
+			// Preserve underground orientation if currently underground
+			maxY = baseY;
+			minY = Math.max(worldBottom, baseY - clampedHeight + 1);
+		} else {
+			minY = Math.min(baseY, Math.min(pos1.getY(), pos2.getY()));
+			maxY = minY + clampedHeight - 1;
+		}
+
+		if (pos1.getY() >= pos2.getY()) {
+			pos1 = new BlockPos(pos1.getX(), maxY, pos1.getZ());
+			pos2 = new BlockPos(pos2.getX(), minY, pos2.getZ());
+		} else {
+			pos1 = new BlockPos(pos1.getX(), minY, pos1.getZ());
+			pos2 = new BlockPos(pos2.getX(), maxY, pos2.getZ());
 		}
 
 		syncWithHeldScepter();

@@ -295,7 +295,7 @@ All builds and runtime tasks are managed via the included Gradle wrapper (`./gra
 To bump the version, commit, build, and publish a GitHub release with the compiled mod `.jar` in a single command:
 
 ```bash
-VERSION="1.1.1"
+VERSION="1.2.0"
 TITLE="v${VERSION} - Title"
 NOTES="Description here..."
 
@@ -317,7 +317,7 @@ Sovereign explicitly permits independent third-party mods to compile against its
 
 - **Querying Minion Archetypes**: Access `minion.getRole()`, `minion.getEffectiveRole()`, and `minion.matchesRole(MinionRole.X)`.
 - **Interrogating Healing Status**: Query `minion.hasNearbyAlliesNeedingHealing(radius)` to evaluate squad medical status.
-- **Teammate Integration**: `MinionEntity.isAlliedTeammate(Entity other)` seamlessly respects allied minions, owners, and non-hostile Iron Golems without overriding final methods.
+- **Teammate Integration**: `MinionEntity.isAlliedTeammate(Entity other)` seamlessly respects allied minions, owners, Villagers, and non-hostile Iron Golems without overriding final methods.
 - **Listening to Construction Events**: Hook into `ConstructionManager.getInstance()` to track blueprint start, progress, and completion callbacks.
 
 ---

@@ -321,7 +321,7 @@ public class ConstructionManager {
 
 		this.activeSessions.put(session.getId(), session);
 		this.sessionsByAnchor.put(immutableAnchor, session);
-		this.sessionsByOwner.computeIfAbsent(owner.getUuid(), k -> new ArrayList<>()).add(session);
+		this.sessionsByOwner.computeIfAbsent(owner.getUuid(), k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(session);
 
 		// Synchronize persistent active blueprint wireframe with tracking clients
 		SyncConstructionSessionPayload syncPayload = new SyncConstructionSessionPayload(
@@ -1070,8 +1070,12 @@ public class ConstructionManager {
 			return Optional.empty();
 		}
 
+		// Strict FIFO Task Ordering:
+		// Minions must finish the first placed job 100% before anyone touches subsequent jobs,
+		// whether building blueprints, volumetric area filling, or area quarry mining.
 		double maxDistSq = maxDistance * maxDistance;
-		ConstructionSession nearest = null;
+		ConstructionSession primarySession = null;
+		long earliestTick = Long.MAX_VALUE;
 		double bestDistSq = Double.MAX_VALUE;
 
 		for (ConstructionSession session : ownerSessions) {
@@ -1083,13 +1087,20 @@ public class ConstructionManager {
 				continue;
 			}
 			double distSq = minionPos.getSquaredDistance(session.getAnchorPos());
-			if (distSq <= maxDistSq && distSq < bestDistSq) {
-				bestDistSq = distSq;
-				nearest = session;
+			if (distSq <= maxDistSq) {
+				long sessionCreated = session.getCreatedTick();
+				if (sessionCreated < earliestTick) {
+					earliestTick = sessionCreated;
+					bestDistSq = distSq;
+					primarySession = session;
+				} else if (sessionCreated == earliestTick && distSq < bestDistSq) {
+					bestDistSq = distSq;
+					primarySession = session;
+				}
 			}
 		}
 
-		return Optional.ofNullable(nearest);
+		return Optional.ofNullable(primarySession);
 	}
 
 	/**
@@ -1269,6 +1280,9 @@ public class ConstructionManager {
 
 			BlockBox box = session.getWorldBoundingBox();
 			BlockPos anchor = session.getAnchorPos();
+			if (!world.isChunkLoaded(anchor.getX() >> 4, anchor.getZ() >> 4)) {
+				continue;
+			}
 
 			// Anchor point focal aura
 			world.spawnParticles(

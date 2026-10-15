@@ -316,8 +316,7 @@ public class CommandScepterItem extends Item {
 	 * @return The active MiningMode, defaulting to {@link MiningMode#AREA}.
 	 */
 	public static MiningMode getMiningMode(ItemStack stack) {
-		if (stack == null || stack.isEmpty()) return MiningMode.AREA;
-		return stack.getOrDefault(ModDataComponents.MINING_MODE, MiningMode.AREA);
+		return MiningMode.AREA;
 	}
 
 	/**
@@ -328,21 +327,19 @@ public class CommandScepterItem extends Item {
 	 */
 	public static void setMiningMode(ItemStack stack, MiningMode mode) {
 		if (stack == null || stack.isEmpty()) return;
-		stack.set(ModDataComponents.MINING_MODE, Objects.requireNonNull(mode, "mining mode cannot be null"));
+		stack.set(ModDataComponents.MINING_MODE, MiningMode.AREA);
 	}
 
 	/**
-	 * Cycles to the next {@link MiningMode} in sequence (DIRECT -> AREA -> DIRECT),
-	 * playing audio feedback and projecting an action-bar overlay notification.
+	 * Cycles mining mode (strictly Custom Area Selection).
 	 *
 	 * @param stack  The scepter ItemStack.
 	 * @param player The commanding player.
 	 * @param world  The world instance.
-	 * @return The newly assigned MiningMode.
+	 * @return Always MiningMode.AREA.
 	 */
 	public static MiningMode cycleMiningMode(ItemStack stack, PlayerEntity player, World world) {
-		MiningMode nextMode = getMiningMode(stack).next();
-		setMiningMode(stack, nextMode);
+		setMiningMode(stack, MiningMode.AREA);
 
 		if (world != null && player != null) {
 			world.playSound(
@@ -353,12 +350,12 @@ public class CommandScepterItem extends Item {
 				SoundEvents.BLOCK_NOTE_BLOCK_HARP.value(),
 				SoundCategory.PLAYERS,
 				1.0F,
-				nextMode == MiningMode.AREA ? 1.4F : 1.0F
+				1.4F
 			);
 
-			player.sendMessage(Text.literal("§6✦ Mining Sub-Mode: §r" + nextMode.getFormattedName()), true);
+			player.sendMessage(Text.literal("§6✦ Mining Mode: §eCustom Area Selection"), true);
 		}
-		return nextMode;
+		return MiningMode.AREA;
 	}
 
 	/**
@@ -2862,22 +2859,12 @@ public class CommandScepterItem extends Item {
 			return ActionResult.success(world.isClient());
 		}
 
-		// MINE Mode: Anchor deconstruction session at clicked block or structure (DIRECT) or open confirm modal (AREA)
+		// MINE Mode: Open confirm modal (Custom Area Selection)
 		if (mode == CommandMode.MINE) {
-			MiningMode miningMode = getMiningMode(stack);
-			if (miningMode == MiningMode.AREA) {
-				if (world.isClient() && MINE_MODAL_OPENER != null) {
-					BlockPos p1 = getMinePos1(stack);
-					BlockPos p2 = getMinePos2(stack);
-					MINE_MODAL_OPENER.openMineModal(player, context.getHand(), stack, p1, p2);
-				}
-				return ActionResult.success(world.isClient());
-			}
-			if (player.getItemCooldownManager().isCoolingDown(stack.getItem())) {
-				return ActionResult.success(world.isClient());
-			}
-			if (!world.isClient() && world instanceof ServerWorld serverWorld) {
-				executeMinePlacement(serverWorld, player, stack, clickedPos);
+			if (world.isClient() && MINE_MODAL_OPENER != null) {
+				BlockPos p1 = getMinePos1(stack);
+				BlockPos p2 = getMinePos2(stack);
+				MINE_MODAL_OPENER.openMineModal(player, context.getHand(), stack, p1, p2);
 			}
 			return ActionResult.success(world.isClient());
 		}

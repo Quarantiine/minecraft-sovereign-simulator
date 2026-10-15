@@ -70,6 +70,7 @@ import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.passive.TameableEntity;
+import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.entity.projectile.PersistentProjectileEntity;
@@ -940,6 +941,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		if (y <= world.getBottomY() || y >= world.getTopY()) {
 			return false;
 		}
+		if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+			return false;
+		}
 
 		BlockPos ground = pos.down();
 		BlockState groundState = world.getBlockState(ground);
@@ -1011,6 +1015,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 */
 	public static BlockPos findNearestSafeStandingPosition(World world, BlockPos center, int maxRadius) {
 		if (world == null || center == null) {
+			return null;
+		}
+		if (!world.isChunkLoaded(center.getX() >> 4, center.getZ() >> 4)) {
 			return null;
 		}
 		if (isSafeStandingPosition(world, center)) {
@@ -1507,8 +1514,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 						|| MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
 					return false;
 				}
-				if (MinionEntity.this.hasLeader() || MinionEntity.this.isActivelyBuilding()
-						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this)) {
+				boolean isDedicatedBuilder = MinionEntity.this.getRole() == MinionRole.BUILDER;
+				if (MinionEntity.this.hasLeader() || (isDedicatedBuilder && (MinionEntity.this.isActivelyBuilding()
+						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this)))) {
 					return false;
 				}
 				if (MinionEntity.this.matchesRole(MinionRole.SENTINEL) && MinionEntity.this.hasNearbyAlliesNeedingHealing()) {
@@ -1526,8 +1534,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 						|| MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.DEFENSIVE) {
 					return false;
 				}
-				if (MinionEntity.this.hasLeader() || MinionEntity.this.isActivelyBuilding()
-						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this)) {
+				boolean isDedicatedBuilder = MinionEntity.this.getRole() == MinionRole.BUILDER;
+				if (MinionEntity.this.hasLeader() || (isDedicatedBuilder && (MinionEntity.this.isActivelyBuilding()
+						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this)))) {
 					return false;
 				}
 				if (MinionEntity.this.matchesRole(MinionRole.SENTINEL) && MinionEntity.this.hasNearbyAlliesNeedingHealing()) {
@@ -1547,8 +1556,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 						|| MinionEntity.this.getCombatPolicy() == MinionCombatPolicy.PASSIVE) {
 					return false;
 				}
-				if (MinionEntity.this.isActivelyBuilding()
-						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this)) {
+				boolean isDedicatedBuilder = MinionEntity.this.getRole() == MinionRole.BUILDER;
+				if (isDedicatedBuilder && (MinionEntity.this.isActivelyBuilding()
+						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(MinionEntity.this))) {
 					return false;
 				}
 				return super.canStart();
@@ -1680,11 +1690,13 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 				}
 			}
 
+			// Evaluate AUTO role adaptation periodically (every 5 ticks / 250ms for responsive threat response)
+			if (this.getRole() == MinionRole.AUTO && this.age % 5 == 0) {
+				this.evaluateAutoRole();
+			}
+
 			// Periodic auto-equipment check from internal 9-slot inventory (every 20 ticks / 1 second)
 			if (this.age % 20 == 0) {
-				if (this.getRole() == MinionRole.AUTO) {
-					this.evaluateAutoRole();
-				}
 				autoEquipFromInventory();
 			}
 
@@ -2307,9 +2319,12 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	 * Dynamically updates the adaptive role of minions operating under {@link MinionRole#AUTO}.
 	 * <p>
 	 * Priority order:
-	 * 1. {@link MinionRole#SENTINEL}: If this minion itself, the commander, or any nearby ally/golem needs healing (< 70% max HP).
-	 * 2. {@link MinionRole#WARRIOR}: If targeting a hostile, actively attacked, or hostile mobs are within 16m.
-	 * 3. {@link MinionRole#BUILDER}: If peaceful and an active construction or deconstruction session is nearby or engaged.
+	 * 1. {@link MinionRole#WARRIOR} (Eliminate Danger First): If targeting a hostile, actively attacked,
+	 *    commander is under attack, or hostile mobs are within 16m. Takes top priority over building, mining, or healing.
+	 * 2. {@link MinionRole#SENTINEL} (Combat Medic): If peaceful (no threats) and this minion itself, commander,
+	 *    any nearby allied player, fellow minion, Iron Golem, or Villager needs healing (< 70% max HP).
+	 * 3. {@link MinionRole#BUILDER} (Architect / Miner): If peaceful and all allies healed (>= 70% HP), and an active
+	 *    construction or mining/dismantle session is nearby or engaged.
 	 * 4. {@link MinionRole#SENTINEL}: If placed on hold position / stationed at a guard post.
 	 * 5. {@link MinionRole#WARRIOR}: Default peacetime vanguard escort role.
 	 */
@@ -2320,42 +2335,14 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 		MinionRole targetAdaptiveRole;
 
-		// 1. Check if this minion itself, commander, or any nearby allied minion/golem within 16m needs healing (< 70% max health)
-		boolean needsMedic = false;
-		if (this.getHealth() < this.getMaxHealth() * 0.70F) {
-			needsMedic = true;
-		}
-		if (!needsMedic && this.getOwner() instanceof LivingEntity owner && owner.isAlive() && this.squaredDistanceTo(owner) <= 256.0D) {
-			if (owner.getHealth() < owner.getMaxHealth() * 0.70F) {
-				needsMedic = true;
-			}
-		}
-		if (!needsMedic && this.getOwnerUuid() != null) {
-			List<MinionEntity> woundedAllies = serverWorld.getEntitiesByClass(
-				MinionEntity.class,
-				this.getBoundingBox().expand(16.0D),
-				ally -> ally.isAlive() && Objects.equals(ally.getOwnerUuid(), this.getOwnerUuid()) && ally.getHealth() < ally.getMaxHealth() * 0.70F
-			);
-			if (!woundedAllies.isEmpty()) {
-				needsMedic = true;
-			}
-		}
-		if (!needsMedic) {
-			List<IronGolemEntity> woundedGolems = serverWorld.getEntitiesByClass(
-				IronGolemEntity.class,
-				this.getBoundingBox().expand(16.0D),
-				golem -> golem.isAlive() && isAlliedTeammate(golem) && golem.getHealth() < golem.getMaxHealth() * 0.70F
-			);
-			if (!woundedGolems.isEmpty()) {
-				needsMedic = true;
-			}
-		}
-
-		if (needsMedic) {
-			targetAdaptiveRole = MinionRole.SENTINEL;
-		} else if (this.getTarget() != null && this.getTarget().isAlive()) {
+		// 1. DANGER FIRST: Minions first eliminate danger first if building or mining etc
+		if (this.getTarget() != null && this.getTarget().isAlive()) {
 			targetAdaptiveRole = MinionRole.WARRIOR;
 		} else if (this.getAttacker() != null && this.getAttacker().isAlive()) {
+			targetAdaptiveRole = MinionRole.WARRIOR;
+		} else if (this.hasAssaultTargets()) {
+			targetAdaptiveRole = MinionRole.WARRIOR;
+		} else if (this.getOwner() instanceof LivingEntity owner && owner.isAlive() && owner.getAttacker() != null && owner.getAttacker().isAlive()) {
 			targetAdaptiveRole = MinionRole.WARRIOR;
 		} else {
 			List<LivingEntity> nearbyHostiles = serverWorld.getEntitiesByClass(
@@ -2366,15 +2353,72 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			);
 			if (!nearbyHostiles.isEmpty()) {
 				targetAdaptiveRole = MinionRole.WARRIOR;
-			} else if (this.isActivelyBuilding() || this.isPhasingBlocks()
-					|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(this)) {
-				targetAdaptiveRole = MinionRole.BUILDER;
-			} else if (this.getOwnerUuid() != null && com.example.construction.ConstructionManager.getInstance().findNearestSessionForMinion(serverWorld, this.getBlockPos(), this.getOwnerUuid(), 128.0D, MinionRole.BUILDER).isPresent()) {
-				targetAdaptiveRole = MinionRole.BUILDER;
-			} else if (this.isHoldingPosition()) {
-				targetAdaptiveRole = MinionRole.SENTINEL;
 			} else {
-				targetAdaptiveRole = MinionRole.WARRIOR;
+				// 2. MEDIC HEALING: If no threat/danger, check if minion itself, player commander, allied players,
+				// fellow minions, friendly Iron Golems, or Villagers need healing (< 70% max health)
+				boolean needsMedic = false;
+				if (this.getHealth() < this.getMaxHealth() * 0.70F) {
+					needsMedic = true;
+				}
+				if (!needsMedic && this.getOwner() instanceof LivingEntity owner && owner.isAlive() && this.squaredDistanceTo(owner) <= 256.0D) {
+					if (owner.getHealth() < owner.getMaxHealth() * 0.70F) {
+						needsMedic = true;
+					}
+				}
+				if (!needsMedic && this.getOwnerUuid() != null) {
+					List<MinionEntity> woundedAllies = serverWorld.getEntitiesByClass(
+						MinionEntity.class,
+						this.getBoundingBox().expand(16.0D),
+						ally -> ally.isAlive() && Objects.equals(ally.getOwnerUuid(), this.getOwnerUuid()) && ally.getHealth() < ally.getMaxHealth() * 0.70F
+					);
+					if (!woundedAllies.isEmpty()) {
+						needsMedic = true;
+					}
+				}
+				if (!needsMedic) {
+					List<IronGolemEntity> woundedGolems = serverWorld.getEntitiesByClass(
+						IronGolemEntity.class,
+						this.getBoundingBox().expand(16.0D),
+						golem -> golem.isAlive() && isAlliedTeammate(golem) && golem.getHealth() < golem.getMaxHealth() * 0.70F
+					);
+					if (!woundedGolems.isEmpty()) {
+						needsMedic = true;
+					}
+				}
+				if (!needsMedic) {
+					List<VillagerEntity> woundedVillagers = serverWorld.getEntitiesByClass(
+						VillagerEntity.class,
+						this.getBoundingBox().expand(16.0D),
+						villager -> villager.isAlive() && villager.getHealth() < villager.getMaxHealth() * 0.70F
+					);
+					if (!woundedVillagers.isEmpty()) {
+						needsMedic = true;
+					}
+				}
+				if (!needsMedic) {
+					List<PlayerEntity> woundedPlayers = serverWorld.getEntitiesByClass(
+						PlayerEntity.class,
+						this.getBoundingBox().expand(16.0D),
+						player -> player.isAlive() && !player.isSpectator() && player.getHealth() < player.getMaxHealth() * 0.70F
+					);
+					if (!woundedPlayers.isEmpty()) {
+						needsMedic = true;
+					}
+				}
+
+				// 3. RESUME BUILDING / MINING: If all healed and no threat, resume active or nearest construction/mining session
+				if (needsMedic) {
+					targetAdaptiveRole = MinionRole.SENTINEL;
+				} else if (this.isActivelyBuilding() || this.isPhasingBlocks()
+						|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(this)) {
+					targetAdaptiveRole = MinionRole.BUILDER;
+				} else if (this.getOwnerUuid() != null && com.example.construction.ConstructionManager.getInstance().findNearestSessionForMinion(serverWorld, this.getBlockPos(), this.getOwnerUuid(), 128.0D, MinionRole.BUILDER).isPresent()) {
+					targetAdaptiveRole = MinionRole.BUILDER;
+				} else if (this.isHoldingPosition()) {
+					targetAdaptiveRole = MinionRole.SENTINEL;
+				} else {
+					targetAdaptiveRole = MinionRole.WARRIOR;
+				}
 			}
 		}
 
@@ -2706,6 +2750,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			}
 			return true;
 		}
+		if (other instanceof VillagerEntity) {
+			return true;
+		}
 		if (this.isTamed()) {
 			LivingEntity owner = this.getOwner();
 			if (owner != null) {
@@ -2768,6 +2815,30 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		);
 		for (IronGolemEntity golem : nearbyGolems) {
 			if (this.squaredDistanceTo(golem) <= radiusSq && golem.getHealth() < golem.getMaxHealth() - 0.05F) {
+				return true;
+			}
+		}
+
+		// 4. Check nearby Villagers
+		List<VillagerEntity> nearbyVillagers = this.getWorld().getEntitiesByClass(
+			VillagerEntity.class,
+			searchBox,
+			villager -> villager != null && villager.isAlive()
+		);
+		for (VillagerEntity villager : nearbyVillagers) {
+			if (this.squaredDistanceTo(villager) <= radiusSq && villager.getHealth() < villager.getMaxHealth() - 0.05F) {
+				return true;
+			}
+		}
+
+		// 5. Check other nearby players
+		List<PlayerEntity> nearbyPlayers = this.getWorld().getEntitiesByClass(
+			PlayerEntity.class,
+			searchBox,
+			player -> player != null && player.isAlive() && !player.isSpectator()
+		);
+		for (PlayerEntity player : nearbyPlayers) {
+			if (this.squaredDistanceTo(player) <= radiusSq && player.getHealth() < player.getMaxHealth() - 0.05F) {
 				return true;
 			}
 		}

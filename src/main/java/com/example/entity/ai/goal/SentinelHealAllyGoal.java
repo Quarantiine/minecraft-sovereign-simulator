@@ -7,6 +7,7 @@ import net.minecraft.entity.ai.goal.Goal;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.passive.IronGolemEntity;
+import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -76,8 +77,9 @@ public class SentinelHealAllyGoal extends Goal {
 			return true;
 		}
 
-		// 2. Fallback: Self-healing if Sentinel itself is critically wounded and no allies need aid
-		if (this.minion.getHealth() < this.minion.getMaxHealth() * SELF_HEALTH_THRESHOLD) {
+		// 2. Fallback: Self-healing if Sentinel itself is critically wounded (or Auto-role needs heal under 70%) and no allies need aid
+		float selfThreshold = this.minion.getRole() == MinionRole.AUTO ? ALLY_HEALTH_THRESHOLD : SELF_HEALTH_THRESHOLD;
+		if (this.minion.getHealth() < this.minion.getMaxHealth() * selfThreshold) {
 			this.targetAlly = this.minion;
 			return true;
 		}
@@ -319,6 +321,23 @@ public class SentinelHealAllyGoal extends Goal {
 					lowestRatio = ratio;
 					bestRecipient = player;
 				}
+			}
+		}
+
+		// 5. Search nearby Villagers within 10 blocks under 70% HP
+		List<VillagerEntity> nearbyVillagers = this.minion.getWorld().getEntitiesByClass(
+				VillagerEntity.class,
+				searchBox,
+				v -> v != null
+						&& v.isAlive()
+						&& this.minion.squaredDistanceTo(v) <= HEAL_RANGE_SQ
+						&& v.getHealth() < v.getMaxHealth() * ALLY_HEALTH_THRESHOLD
+		);
+		for (VillagerEntity villager : nearbyVillagers) {
+			float ratio = villager.getHealth() / villager.getMaxHealth();
+			if (ratio < lowestRatio) {
+				lowestRatio = ratio;
+				bestRecipient = villager;
 			}
 		}
 
