@@ -183,8 +183,39 @@ public final class MinionHarvestingHelper {
 		Item requiredItem,
 		ConstructionSession session
 	) {
-		// Strict Resource Origin Contract: Builder minions are strictly barred from quarrying or felling
-		// blocks in the world. Minions are only allowed to use blocks or nonblocks that are in chests or in their inventory.
+		if (minion == null || world == null || requiredItem == null) {
+			return false;
+		}
+
+		// Blocks or non-blocks that cannot be found naturally in the world are strictly CHESTS OR INVENTORY ONLY.
+		if (!isNaturallyOccurringWorldResource(requiredItem)) {
+			return false;
+		}
+
+		// 1. Tool check & self-crafting: ensure appropriate tool is equipped
+		ensureAppropriateTool(minion, world, requiredItem);
+
+		// 2. Natural Tree Timber Harvesting (Logs only; strictly natural wild trees)
+		if (requiredItem.getDefaultStack().isIn(ItemTags.LOGS)) {
+			if (harvestWoodOrAgroForestry(minion, world, session)) {
+				return hasItemInInventory(minion, requiredItem);
+			}
+		}
+
+		// 3. Natural Stone, Deepslate, Earth, Sand, Clay, Gravel Quarrying (strictly from natural terrain)
+		if (isNaturallyOccurringWorldResource(requiredItem) && requiredItem != Items.WATER_BUCKET && !requiredItem.getDefaultStack().isIn(ItemTags.LOGS)) {
+			if (quarryNaturalStone(minion, world, requiredItem, 1, session)) {
+				return hasItemInInventory(minion, requiredItem);
+			}
+		}
+
+		// 4. Water Gathering: Scoop natural water source with bucket
+		if (requiredItem == Items.WATER_BUCKET) {
+			if (gatherWaterBucket(minion, world, session)) {
+				return hasItemInInventory(minion, requiredItem);
+			}
+		}
+
 		return false;
 	}
 
@@ -622,11 +653,6 @@ public final class MinionHarvestingHelper {
 		ServerWorld world,
 		ConstructionSession session
 	) {
-		// Strict Resource Origin Contract: Builder minions are strictly barred from felling trees or harvesting blocks in the world.
-		if (STRICT_RESOURCE_ORIGIN_CHEST_OR_INVENTORY_ONLY) {
-			return false;
-		}
-
 		BlockPos minionPos = minion.getBlockPos();
 
 		// 1. Scan for existing natural logs within 16 blocks (strictly natural trees with leaves and earth roots; never building logs!)
@@ -794,8 +820,7 @@ public final class MinionHarvestingHelper {
 		int maxCount,
 		ConstructionSession session
 	) {
-		// Strict Resource Origin Contract: Builder minions are strictly barred from quarrying or breaking blocks in the world.
-		if (STRICT_RESOURCE_ORIGIN_CHEST_OR_INVENTORY_ONLY) {
+		if (!isNaturallyOccurringWorldResource(requiredItem)) {
 			return false;
 		}
 
@@ -968,9 +993,8 @@ public final class MinionHarvestingHelper {
 		if (requiredItem == Items.QUARTZ || requiredItem == Items.QUARTZ_BLOCK) {
 			return state.isOf(Blocks.NETHER_QUARTZ_ORE);
 		}
-		if (requiredItem == Items.DEEPSLATE || requiredItem == Items.COBBLED_DEEPSLATE || requiredItem == Items.POLISHED_DEEPSLATE
-			|| requiredItem == Items.DEEPSLATE_BRICKS || requiredItem == Items.DEEPSLATE_TILES) {
-			return state.isOf(Blocks.DEEPSLATE) || state.isOf(Blocks.COBBLED_DEEPSLATE);
+		if (requiredItem == Items.DEEPSLATE || requiredItem == Items.COBBLED_DEEPSLATE) {
+			return state.isOf(Blocks.DEEPSLATE);
 		}
 		if (requiredItem == Items.ANDESITE || requiredItem == Items.POLISHED_ANDESITE) {
 			return state.isOf(Blocks.ANDESITE);
@@ -982,35 +1006,26 @@ public final class MinionHarvestingHelper {
 			return state.isOf(Blocks.GRANITE);
 		}
 
-		return state.isOf(Blocks.STONE) || state.isOf(Blocks.COBBLESTONE);
+		if (requiredItem == Items.COBBLESTONE || requiredItem == Items.STONE) {
+			return state.isOf(Blocks.STONE);
+		}
+		return false;
 	}
 
 	private static boolean isNaturalStoneOrEarth(BlockState state) {
 		return state.isOf(Blocks.STONE)
-			|| state.isOf(Blocks.COBBLESTONE)
 			|| state.isOf(Blocks.DEEPSLATE)
-			|| state.isOf(Blocks.COBBLED_DEEPSLATE)
 			|| state.isOf(Blocks.ANDESITE)
 			|| state.isOf(Blocks.DIORITE)
 			|| state.isOf(Blocks.GRANITE)
+			|| state.isOf(Blocks.TUFF)
 			|| state.isOf(Blocks.DIRT)
 			|| state.isOf(Blocks.SAND)
 			|| state.isOf(Blocks.RED_SAND)
 			|| state.isOf(Blocks.GRAVEL)
-			|| state.isOf(Blocks.SANDSTONE)
-			|| state.isOf(Blocks.RED_SANDSTONE)
 			|| state.isOf(Blocks.CLAY)
 			|| state.isOf(Blocks.NETHERRACK)
-			|| state.isOf(Blocks.BASALT)
-			|| state.isOf(Blocks.COAL_ORE)
-			|| state.isOf(Blocks.DEEPSLATE_COAL_ORE)
-			|| state.isOf(Blocks.IRON_ORE)
-			|| state.isOf(Blocks.DEEPSLATE_IRON_ORE)
-			|| state.isOf(Blocks.COPPER_ORE)
-			|| state.isOf(Blocks.DEEPSLATE_COPPER_ORE)
-			|| state.isOf(Blocks.GOLD_ORE)
-			|| state.isOf(Blocks.DEEPSLATE_GOLD_ORE)
-			|| state.isOf(Blocks.NETHER_QUARTZ_ORE);
+			|| state.isOf(Blocks.BASALT);
 	}
 
 	private static Item resolveQuarryDrop(BlockState state, Item requiredItem) {
@@ -1056,9 +1071,24 @@ public final class MinionHarvestingHelper {
 		BlockState state = world.getBlockState(pos);
 		if (!state.isIn(BlockTags.LOGS)) return false;
 
-		// 1. Never harvest logs inside any active construction session tasks or bounding boxes
-		if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyActiveSession(pos)) {
+		// 1. Never harvest logs inside any active or completed construction session tasks or bounding boxes
+		if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyConstructedStructure(pos)) {
 			return false;
+		}
+
+		// 1b. Proximity check: If any block within 6 blocks is part of a build, this is a wooden pillar or building, NOT a wild tree
+		for (int dx = -6; dx <= 6; dx++) {
+			for (int dy = -4; dy <= 4; dy++) {
+				for (int dz = -6; dz <= 6; dz++) {
+					BlockPos near = pos.add(dx, dy, dz);
+					BlockState nearState = world.getBlockState(near);
+					if (nearState.isOf(Blocks.COBBLESTONE)
+						|| nearState.isOf(Blocks.COBBLED_DEEPSLATE)
+						|| isProcessedBlockId(Registries.BLOCK.getId(nearState.getBlock()).getPath())) {
+						return false;
+					}
+				}
+			}
 		}
 
 		// 2. A natural tree trunk must be rooted in natural earth (dirt, grass, moss, mud, mangrove roots, nylium, netherrack)
@@ -1152,23 +1182,36 @@ public final class MinionHarvestingHelper {
 			return true;
 		}
 
-		// Inside ANY active construction session in the world
-		if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyActiveSession(pos)) {
+		// Inside ANY active or historically completed construction session in the world
+		if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyConstructedStructure(pos)) {
 			return true;
 		}
 
-		// Processed/crafted blocks check
+		// Cobblestone, cobbled deepslate, or processed/crafted blocks are NEVER harvestable as natural blocks
+		if (state.isOf(Blocks.COBBLESTONE) || state.isOf(Blocks.COBBLED_DEEPSLATE)) {
+			return true;
+		}
 		String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
 		if (isProcessedBlockId(blockId)) {
 			return true;
 		}
 
-		// Structure contact protection: If directly touching any processed architectural building blocks, it is part of a build!
-		for (Direction dir : Direction.values()) {
-			BlockState neighbor = world.getBlockState(pos.offset(dir));
-			String neighborId = Registries.BLOCK.getId(neighbor.getBlock()).getPath();
-			if (isProcessedBlockId(neighborId)) {
-				return true;
+		// Structure contact protection: If directly touching any processed architectural building blocks
+		// Structure proximity protection: If within 6 blocks of ANY constructed structure, cobblestone, or processed building block
+		for (int dx = -6; dx <= 6; dx++) {
+			for (int dy = -4; dy <= 4; dy++) {
+				for (int dz = -6; dz <= 6; dz++) {
+					BlockPos neighbor = pos.add(dx, dy, dz);
+					if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyConstructedStructure(neighbor)) {
+						return true;
+					}
+					BlockState neighborState = world.getBlockState(neighbor);
+					if (neighborState.isOf(Blocks.COBBLESTONE)
+						|| neighborState.isOf(Blocks.COBBLED_DEEPSLATE)
+						|| isProcessedBlockId(Registries.BLOCK.getId(neighborState.getBlock()).getPath())) {
+						return true;
+					}
+				}
 			}
 		}
 
@@ -1182,6 +1225,18 @@ public final class MinionHarvestingHelper {
 				|| neighborState.isOf(Blocks.RESPAWN_ANCHOR)) {
 				return true;
 			}
+		}
+
+		// Natural Terrain Solidity: Structural walls have open air on multiple sides above ground level.
+		// Natural quarrying only mines solid natural stone/earth.
+		int airSides = 0;
+		for (Direction dir : Direction.Type.HORIZONTAL) {
+			if (world.getBlockState(pos.offset(dir)).isAir()) {
+				airSides++;
+			}
+		}
+		if (airSides >= 2) {
+			return true; // Exposed wall or pillar
 		}
 
 		return false;
@@ -1623,10 +1678,41 @@ public final class MinionHarvestingHelper {
 	 * @param item The item required for construction.
 	 * @return True if builder minions have autonomous procurement routines for this resource.
 	 */
+	/**
+	 * Determines whether a resource can be gathered directly from the natural world (e.g. natural logs,
+	 * stone/cobblestone from natural stone, dirt, sand, gravel, clay, water).
+	 * Any block or non-block that cannot be found naturally in the world is strictly CHESTS OR INVENTORY ONLY.
+	 */
+	public static boolean isNaturallyOccurringWorldResource(Item item) {
+		if (item == null) return false;
+		if (item.getDefaultStack().isIn(ItemTags.LOGS)) {
+			return true;
+		}
+		if (item == Items.WATER_BUCKET) {
+			return true;
+		}
+		return item == Items.COBBLESTONE
+			|| item == Items.STONE
+			|| item == Items.DEEPSLATE
+			|| item == Items.COBBLED_DEEPSLATE
+			|| item == Items.ANDESITE
+			|| item == Items.DIORITE
+			|| item == Items.GRANITE
+			|| item == Items.TUFF
+			|| item == Items.DIRT
+			|| item == Items.SAND
+			|| item == Items.RED_SAND
+			|| item == Items.GRAVEL
+			|| item == Items.CLAY
+			|| item == Items.CLAY_BALL
+			|| item == Items.NETHERRACK
+			|| item == Items.BASALT;
+	}
+
 	public static boolean isHarvestable(Item item) {
-		// Strict Resource Origin Contract: Minions are only allowed to use blocks or nonblocks
-		// that are in chests or in their inventory only. Autonomous world harvesting is permanently disabled.
-		return false;
+		// Only naturally occurring raw resources that exist in the world can be autonomously gathered.
+		// Any blocks or non-blocks that cannot be found naturally in the world are CHESTS OR INVENTORY ONLY.
+		return isNaturallyOccurringWorldResource(item);
 	}
 
 	private static boolean isPlanksItem(Item item) {

@@ -727,6 +727,18 @@ public class MinionBuildGoal extends Goal {
 					}
 				}
 			}
+
+			// 4. Natural World Harvesting (ONLY for blocks/non-blocks that can be found in the natural world)
+			if (!hasResources && com.example.entity.ai.logistics.MinionHarvestingHelper.isNaturallyOccurringWorldResource(requiredItem)) {
+				boolean harvested = com.example.entity.ai.logistics.MinionHarvestingHelper.tryAutonomousHarvest(this.minion, serverWorld, requiredItem, this.currentSession);
+				if (harvested) {
+					int slot = findItemSlot(minionInv, requiredItem);
+					if (slot != -1) {
+						consumeResourceFromInventory(minionInv, slot, requiredItem);
+						hasResources = true;
+					}
+				}
+			}
 		}
 
 		// If resources could not be found in inventory or nearby containers

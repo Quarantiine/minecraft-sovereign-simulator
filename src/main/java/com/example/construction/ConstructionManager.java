@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.util.math.Vec3d;
@@ -47,6 +48,7 @@ public class ConstructionManager {
 	private final Map<UUID, ConstructionSession> activeSessions = new ConcurrentHashMap<>();
 	private final Map<BlockPos, ConstructionSession> sessionsByAnchor = new ConcurrentHashMap<>();
 	private final Map<UUID, List<ConstructionSession>> sessionsByOwner = new ConcurrentHashMap<>();
+	private final Set<BlockBox> constructedStructureBounds = ConcurrentHashMap.newKeySet();
 
 	private ConstructionManager() {}
 
@@ -452,6 +454,9 @@ public class ConstructionManager {
 
 		BlockPos anchor = session.getAnchorPos();
 		BlockBox box = session.getWorldBoundingBox();
+		if (box != null) {
+			this.constructedStructureBounds.add(box);
+		}
 
 		// Triumphant sound at structure center
 		double centerX = (box.getMinX() + box.getMaxX()) / 2.0;
@@ -1000,6 +1005,20 @@ public class ConstructionManager {
 		if (pos == null) return false;
 		for (ConstructionSession session : this.activeSessions.values()) {
 			if (session != null && session.containsBlockPos(pos)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Checks if the given position falls within any active OR historically completed construction session's volume.
+	 */
+	public boolean isPositionInAnyConstructedStructure(BlockPos pos) {
+		if (pos == null) return false;
+		if (isPositionInAnyActiveSession(pos)) return true;
+		for (BlockBox box : this.constructedStructureBounds) {
+			if (box != null && box.contains(pos)) {
 				return true;
 			}
 		}

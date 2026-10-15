@@ -172,20 +172,22 @@ public class BlueprintPaletteRemapAndSaveChoiceTest {
 	}
 
 	@Test
-	@DisplayName("Source Invariant: Strict Resource Origin Contract - Minions strictly barred from world harvesting")
+	@DisplayName("Source Invariant: Chests or Inventory Only for items not found in the world")
 	void testStrictResourceOriginContract() throws IOException {
 		Path buildGoalPath = Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java");
 		Assertions.assertTrue(Files.exists(buildGoalPath));
 		String buildGoalContent = Files.readString(buildGoalPath);
-		Assertions.assertFalse(buildGoalContent.contains("tryAutonomousHarvest"),
-			"MinionBuildGoal must not call tryAutonomousHarvest during block placement work");
+		Assertions.assertTrue(buildGoalContent.contains("isNaturallyOccurringWorldResource(requiredItem)")
+			&& buildGoalContent.contains("tryAutonomousHarvest"),
+			"MinionBuildGoal must only attempt autonomous harvest for naturally occurring world resources");
 
 		Path harvestHelperPath = Path.of("src/main/java/com/example/entity/ai/logistics/MinionHarvestingHelper.java");
 		Assertions.assertTrue(Files.exists(harvestHelperPath));
 		String harvestContent = Files.readString(harvestHelperPath);
-		Assertions.assertTrue(harvestContent.contains("public static boolean isHarvestable(Item item) {\n\t\t// Strict Resource Origin Contract")
-			|| harvestContent.contains("return false;\n\t}"),
-			"MinionHarvestingHelper must define isHarvestable returning false");
+		Assertions.assertTrue(harvestContent.contains("public static boolean isNaturallyOccurringWorldResource"),
+			"MinionHarvestingHelper must define isNaturallyOccurringWorldResource");
+		Assertions.assertTrue(harvestContent.contains("!isNaturallyOccurringWorldResource(requiredItem)"),
+			"tryAutonomousHarvest and quarryNaturalStone must reject items that cannot be found in the world");
 	}
 
 	@Test

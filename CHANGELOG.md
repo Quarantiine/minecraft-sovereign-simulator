@@ -12,13 +12,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-#### 📦 Strict Resource Origin Contract & Village-Wide Storage Radius (128m)
-- **Strict Resource Origin Contract (`MinionHarvestingHelper.STRICT_RESOURCE_ORIGIN_CHEST_OR_INVENTORY_ONLY`, `MinionBuildGoal`)**:
-  - Resolved an issue where builder minions would break, quarry, or fell blocks and timber from adjacent player builds or nearby structures in the world when constructing a blueprint.
-  - Enforced a strict resource origin invariant: **builder minions are strictly barred from breaking, mining, felling, quarrying, or harvesting any blocks in the world for blueprint or area fill construction**.
-  - Minions are **only allowed to use blocks or non-blocks that are in chests/containers or in their inventory only** (including in-inventory crafting/conversion from items withdrawn from containers or inventory).
-  - Removed autonomous world harvesting routines from `MinionBuildGoal.executePlacementWork`.
-  - Missing resources cleanly trigger `handleResourceDeficiency` (alerting the player via action bar and releasing the task) rather than destroying the world.
+#### 📦 Chests or Inventory Only Rule & Structure-Protected World Harvesting (128m Village Range)
+- **Chests or Inventory Only for Non-World Resources (`MinionHarvestingHelper.isNaturallyOccurringWorldResource`, `MinionBuildGoal`)**:
+  - Enforced the rule that **any block or non-block that cannot be found naturally in the world** (e.g. wood planks, stairs, slabs, fences, gates, doors, trapdoors, stone bricks, polished/smooth stone, cut sandstone, terracotta, concrete, glass, wool, carpets, lanterns, torches, workstations, beds, metal ingots) is strictly **Chests or Inventory Only**.
+  - If a required non-world block or non-block is not in the minion's inventory, cannot be found in nearby containers, and cannot be crafted from base ingredients already in containers or inventory, minions will **never** attempt to break blocks from the world or dismantle builds; they cleanly trigger `handleResourceDeficiency`.
+- **Protected Autonomous Harvesting for Naturally Occurring World Resources**:
+  - For blocks and resources that **can be found naturally in the world** (natural logs from trees, stone/cobblestone quarried from natural stone rock, deepslate, dirt, sand, red sand, gravel, clay, and water), minions can autonomously harvest them from the environment if missing from inventory and village containers.
+  - **Zero Build Damage Guarantee**:
+    - **No Cobblestone Mining**: Minions quarrying for cobblestone or cobbled deepslate strictly mine natural underground `Blocks.STONE` or `Blocks.DEEPSLATE`. They **never** break `Blocks.COBBLESTONE` or `Blocks.COBBLED_DEEPSLATE` in the world, ensuring all player cobblestone walls, houses, and towers are 100% immune from destruction.
+    - **Permanent Historical Structure Protection**: `ConstructionManager` now permanently remembers all historically completed and active blueprint bounding boxes (`constructedStructureBounds`), barring minions from ever quarrying within any player-constructed build.
+    - **Structural Proximity Perimeter**: Any block within 6 blocks of any active/completed structure, cobblestone, or processed building block (planks, stairs, slabs, glass, doors, etc.) is strictly protected.
+    - **Natural Terrain Solidity**: Natural stone quarrying checks surrounding solidity—blocks with 2 or more exposed horizontal air faces (walls, pillars) are classified as architecture and rejected.
+    - **Wild Tree Validation**: Natural log felling requires natural soil roots (dirt/grass/mud) and canopy foliage, and rejects any log column near buildings or touching processed blocks.
 - **Village-Scale Storage Radius (`MinionHarvestingHelper.VILLAGE_CONTAINER_SEARCH_RADIUS = 128`, `VILLAGE_CONTAINER_VERTICAL_RADIUS = 64`)**:
   - Expanded container detection radius from 32m to **128 blocks horizontally and 64 blocks vertically**, allowing minions to construct entire villages from a single central chest or storage hub.
   - **Dual-Center Search**: Scans loaded chunks around both the minion's current position and the construction session's anchor position, ensuring supply chests remain accessible anywhere in the village.
