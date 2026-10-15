@@ -81,6 +81,7 @@ public class ExampleModClient implements ClientModInitializer {
 		// Register 3D holographic blueprint wireframe renderer for WorldRenderEvents.AFTER_TRANSLUCENT
 		BlueprintHologramRenderer.register();
 		com.example.client.renderer.PathwayHologramRenderer.register();
+		com.example.client.renderer.BarrierHologramRenderer.register();
 
 		// Register the Command Hub GUI opener callback for CommandScepterItem sneak-right-click
 		CommandScepterItem.SCREEN_OPENER = (player, hand, stack) -> {
@@ -131,6 +132,62 @@ public class ExampleModClient implements ClientModInitializer {
 		// Hook client-side build corner stepper and resetter into CommandScepterItem for BUILD AREA mode
 		CommandScepterItem.BUILD_CORNER_STEPPER = com.example.client.renderer.ClientBuildCaptureTracker::stepCorner;
 		CommandScepterItem.BUILD_CORNER_RESETTER = com.example.client.renderer.ClientBuildCaptureTracker::clear;
+
+		// Hook client-side barrier node appender, sealer, resetter, and remover into CommandScepterItem for BUILD BARRIER mode
+		CommandScepterItem.BARRIER_NODE_APPENDER = com.example.client.renderer.ClientBarrierTracker::addNode;
+		CommandScepterItem.BARRIER_ZONE_SEALER = com.example.client.renderer.ClientBarrierTracker::seal;
+		CommandScepterItem.BARRIER_RESETTER = com.example.client.renderer.ClientBarrierTracker::clear;
+		CommandScepterItem.BARRIER_PENDING_COUNT = com.example.client.renderer.ClientBarrierTracker::getPendingNodeCount;
+		CommandScepterItem.BARRIER_MODAL_OPENER = (player, hand, stack) -> {
+			MinecraftClient client = MinecraftClient.getInstance();
+			client.execute(() -> {
+				if (com.example.client.renderer.ClientBarrierTracker.getPendingNodeCount() >= 2) {
+					client.setScreen(new com.example.client.gui.BarrierConfirmModalScreen(stack, null));
+				}
+			});
+		};
+		CommandScepterItem.BARRIER_CLOSER = (targetPos, clickedPos) -> {
+			BlockPos closeTarget = com.example.client.renderer.ClientBarrierTracker.findCloseTarget(targetPos, clickedPos);
+			if (closeTarget != null) {
+				// If closing on an existing confirmed waypoint not yet in pendingNodes,
+				// append it to complete the perimeter circuit!
+				if (!com.example.client.renderer.ClientBarrierTracker.containsPendingNode(closeTarget)) {
+					com.example.client.renderer.ClientBarrierTracker.addNode(closeTarget);
+				}
+				return true;
+			}
+			return false;
+		};
+		CommandScepterItem.BARRIER_RESUMER = (targetPos, clickedPos) -> {
+			if (!com.example.client.renderer.ClientBarrierTracker.hasPendingNodes()) {
+				BlockPos matchedNode = com.example.client.renderer.ClientBarrierTracker.findConfirmedNodeAt(targetPos, clickedPos);
+				if (matchedNode != null) {
+					com.example.client.renderer.ClientBarrierTracker.startExtensionFrom(matchedNode);
+					MinecraftClient client = MinecraftClient.getInstance();
+					if (client.player != null) {
+						client.player.sendMessage(Text.literal("§6✦ Started barrier extension from [" + matchedNode.toShortString() + "]. Left-click to place points and close on any waypoint to Seal!§r"), true);
+						client.player.playSound(SoundEvents.BLOCK_ENCHANTMENT_TABLE_USE, 1.0F, 1.2F);
+					}
+					return true;
+				}
+			}
+			return false;
+		};
+		CommandScepterItem.BARRIER_REMOVER = (targetPos, clickedPos) -> {
+			MinecraftClient client = MinecraftClient.getInstance();
+			net.minecraft.util.math.Vec3d eyePos = (client.player != null) ? client.player.getEyePos() : null;
+			net.minecraft.util.math.Vec3d lookVec = (client.player != null) ? client.player.getRotationVec(1.0F) : null;
+
+			BlockPos removedNode = com.example.client.renderer.ClientBarrierTracker.removeNodeFromAnyBarrier(targetPos, clickedPos, eyePos, lookVec, 16.0D);
+			if (removedNode != null) {
+				if (client.player != null) {
+					client.player.sendMessage(Text.literal("§c✦ Removed Barrier Node at [" + removedNode.toShortString() + "]§r"), true);
+					client.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), 1.0F, 0.8F);
+				}
+				return true;
+			}
+			return false;
+		};
 
 		// Hook client-side patrol route provider into CommandScepterItem for route cycling
 		CommandScepterItem.CLIENT_ROUTE_PROVIDER = com.example.client.renderer.ClientPatrolRouteTracker::getAllRoutesList;
@@ -272,6 +329,8 @@ public class ExampleModClient implements ClientModInitializer {
 						player.getItemCooldownManager().set(stack.getItem(), 4);
 						return TypedActionResult.success(stack);
 					}
+				} else if (CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.BARRIER) {
+					return TypedActionResult.pass(stack);
 				} else {
 					// Strictly BLUEPRINT mode:
 					MinecraftClient client = MinecraftClient.getInstance();
@@ -580,6 +639,42 @@ public class ExampleModClient implements ClientModInitializer {
 										client.options.attackKey.setPressed(false);
 									} catch (Throwable ignored) {}
 									CommandScepterItem.handleMineReset(client.player, client.world, heldScepter);
+								}
+							}
+						}
+					} else if (heldMode.ordinal() == CommandMode.BUILD.ordinal() && CommandScepterItem.getBuildingMode(heldScepter) == com.example.component.BuildingMode.BARRIER) {
+						long currentTick = client.world != null ? client.world.getTime() : 0L;
+						long currentTime = System.currentTimeMillis();
+						if (currentTick == lastBuildClickTick || (currentTime - lastBuildClickTime) < 350L || CommandScepterItem.isBuildClickDebounced()) {
+							while (client.options.attackKey.wasPressed()) {}
+						} else {
+							// Tactical camera extended-range raycasting
+							boolean tacticalActive = com.example.client.camera.TacticalBuildCameraController.isEnabled();
+							if (tacticalActive) {
+								BlockHitResult hit = TacticalBuildCameraController.getCameraTargetedBlock(client, 96.0F);
+								if (hit != null && hit.getType() == HitResult.Type.BLOCK) {
+									BlockPos clicked = hit.getBlockPos();
+									BlockPos effectiveClicked = (client.world != null && client.world.getBlockState(clicked).isReplaceable())
+										? clicked
+										: (hit.getSide() != null ? clicked.offset(hit.getSide()) : clicked.up());
+									lastBuildClickTick = currentTick;
+									lastBuildClickTime = currentTime;
+									while (client.options.attackKey.wasPressed()) {}
+									try {
+										client.options.attackKey.setPressed(false);
+									} catch (Throwable ignored) {}
+									CommandScepterItem.handleBuildClick(client.player, client.world, heldScepter, effectiveClicked, clicked, physicalSneak);
+								}
+							} else if (physicalSneak || (client.crosshairTarget == null || client.crosshairTarget.getType() != HitResult.Type.BLOCK)) {
+								// Open-air Left-Click:
+								lastBuildClickTick = currentTick;
+								lastBuildClickTime = currentTime;
+								while (client.options.attackKey.wasPressed()) {}
+								try {
+									client.options.attackKey.setPressed(false);
+								} catch (Throwable ignored) {}
+								if (physicalSneak) {
+									CommandScepterItem.handleBuildReset(client.player, client.world, heldScepter);
 								}
 							}
 						}

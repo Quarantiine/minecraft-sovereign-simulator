@@ -44,10 +44,11 @@ public class ExampleMod implements ModInitializer {
 		// Register server world load event to initialize persistent patrol routes and custom blueprints
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents.LOAD.register((server, world) -> {
 			if (world.getRegistryKey().equals(net.minecraft.world.World.OVERWORLD)) {
-				LOGGER.info("Initializing PatrolRouteManager and CustomBlueprintManager persistent state for overworld: {}", world.getRegistryKey().getValue());
+				LOGGER.info("Initializing PatrolRouteManager, CustomBlueprintManager, and BarrierManager persistent state for overworld: {}", world.getRegistryKey().getValue());
 				com.example.patrol.PatrolRouteManager.getInstance().init(world);
 				com.example.blueprint.CustomBlueprintManager.getInstance().init(world);
 				com.example.targeting.MinionTargetFilterManager.getInstance().init(world);
+				com.example.barrier.BarrierManager.getInstance().init(world);
 			}
 		});
 
@@ -55,10 +56,11 @@ public class ExampleMod implements ModInitializer {
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			net.minecraft.server.world.ServerWorld overworld = server.getOverworld();
 			if (overworld != null) {
-				LOGGER.info("Ensuring PatrolRouteManager and CustomBlueprintManager initialized on SERVER_STARTED for overworld");
+				LOGGER.info("Ensuring PatrolRouteManager, CustomBlueprintManager, and BarrierManager initialized on SERVER_STARTED for overworld");
 				com.example.patrol.PatrolRouteManager.getInstance().init(overworld);
 				com.example.blueprint.CustomBlueprintManager.getInstance().init(overworld);
 				com.example.targeting.MinionTargetFilterManager.getInstance().init(overworld);
+				com.example.barrier.BarrierManager.getInstance().init(overworld);
 			}
 		});
 
@@ -67,6 +69,7 @@ public class ExampleMod implements ModInitializer {
 			com.example.patrol.PatrolRouteManager.getInstance().onServerStopping();
 			com.example.blueprint.CustomBlueprintManager.getInstance().onServerStopping();
 			com.example.targeting.MinionTargetFilterManager.getInstance().onServerStopping();
+			com.example.barrier.BarrierManager.getInstance().onServerStopping();
 		});
 
 		// Register player connect event to sync saved patrol routes and custom blueprints immediately on world join
@@ -74,6 +77,7 @@ public class ExampleMod implements ModInitializer {
 			com.example.patrol.PatrolRouteManager.getInstance().syncToPlayer(handler.getPlayer());
 			com.example.blueprint.CustomBlueprintManager.getInstance().syncToPlayer(handler.getPlayer());
 			com.example.targeting.MinionTargetFilterManager.getInstance().syncToPlayer(handler.getPlayer());
+			com.example.barrier.BarrierManager.getInstance().syncToPlayer(handler.getPlayer());
 		});
 
 		// Register server tick event to update construction sessions and holograms
@@ -114,13 +118,13 @@ public class ExampleMod implements ModInitializer {
 						}
 					}
 					return ActionResult.SUCCESS;
-				} else if (mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA) {
+				} else if (mode == CommandMode.BUILD && (CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA || CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.BARRIER)) {
 					if (world.isClient()) {
 						boolean sneaking = player.isSneaking();
 						BlockPos effectivePos = world.getBlockState(pos).isReplaceable()
 							? pos
 							: ((direction != null) ? pos.offset(direction) : pos.up());
-						CommandScepterItem.handleBuildClick(player, world, stack, effectivePos, sneaking);
+						CommandScepterItem.handleBuildClick(player, world, stack, effectivePos, pos, sneaking);
 						if (CommandScepterItem.BUILD_CLICK_CONSUMER != null) {
 							CommandScepterItem.BUILD_CLICK_CONSUMER.run();
 						}
@@ -221,11 +225,11 @@ public class ExampleMod implements ModInitializer {
 						}
 					}
 					return ActionResult.SUCCESS;
-				} else if (mode == CommandMode.BUILD && CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA) {
+				} else if (mode == CommandMode.BUILD && (CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.AREA || CommandScepterItem.getBuildingMode(stack) == com.example.component.BuildingMode.BARRIER)) {
 					if (world.isClient()) {
 						BlockPos entityPos = entity.getBlockPos();
 						boolean sneaking = player.isSneaking();
-						CommandScepterItem.handleBuildClick(player, world, stack, entityPos, sneaking);
+						CommandScepterItem.handleBuildClick(player, world, stack, entityPos, entityPos, sneaking);
 						if (CommandScepterItem.BUILD_CLICK_CONSUMER != null) {
 							CommandScepterItem.BUILD_CLICK_CONSUMER.run();
 						}

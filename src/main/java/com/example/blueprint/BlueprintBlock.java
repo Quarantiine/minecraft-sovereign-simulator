@@ -65,17 +65,88 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 	 * @return The Item associated with this block state, or Items.AIR if not obtainable.
 	 */
 	public Item getRequiredItem() {
-		if (this.state == null) {
-			return net.minecraft.item.Items.AIR;
+		try {
+			if (this.state == null) {
+				return net.minecraft.item.Items.AIR;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.WATER)) {
+				return net.minecraft.item.Items.WATER_BUCKET;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.LAVA)) {
+				return net.minecraft.item.Items.LAVA_BUCKET;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.SKELETON_WALL_SKULL)) {
+				return net.minecraft.item.Items.SKELETON_SKULL;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.WITHER_SKELETON_WALL_SKULL)) {
+				return net.minecraft.item.Items.WITHER_SKELETON_SKULL;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.PLAYER_WALL_HEAD)) {
+				return net.minecraft.item.Items.PLAYER_HEAD;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.ZOMBIE_WALL_HEAD)) {
+				return net.minecraft.item.Items.ZOMBIE_HEAD;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.CREEPER_WALL_HEAD)) {
+				return net.minecraft.item.Items.CREEPER_HEAD;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.PIGLIN_WALL_HEAD)) {
+				return net.minecraft.item.Items.PIGLIN_HEAD;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.DRAGON_WALL_HEAD)) {
+				return net.minecraft.item.Items.DRAGON_HEAD;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.WALL_TORCH)) {
+				return net.minecraft.item.Items.TORCH;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.SOUL_WALL_TORCH)) {
+				return net.minecraft.item.Items.SOUL_TORCH;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.REDSTONE_WALL_TORCH)) {
+				return net.minecraft.item.Items.REDSTONE_TORCH;
+			}
+			Item item = this.state.getBlock().asItem();
+			if (item != null && item != net.minecraft.item.Items.AIR) {
+				return item;
+			}
+			// Universal wall-variant mapping for unmapped block-items (wall signs, wall banners, hanging signs, torches, heads)
+			try {
+				net.minecraft.util.Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(this.state.getBlock());
+				if (blockId != null) {
+					String path = blockId.getPath();
+					String targetPath = null;
+					if (path.contains("_wall_hanging_sign")) {
+						targetPath = path.replace("_wall_hanging_sign", "_hanging_sign");
+					} else if (path.contains("_wall_sign")) {
+						targetPath = path.replace("_wall_sign", "_sign");
+					} else if (path.contains("_wall_banner")) {
+						targetPath = path.replace("_wall_banner", "_banner");
+					} else if (path.contains("_wall_fan")) {
+						targetPath = path.replace("_wall_fan", "_fan");
+					} else if (path.contains("_wall_head")) {
+						targetPath = path.replace("_wall_head", "_head");
+					} else if (path.contains("_wall_skull")) {
+						targetPath = path.replace("_wall_skull", "_skull");
+					} else if (path.equals("wall_torch")) {
+						targetPath = "torch";
+					} else if (path.equals("soul_wall_torch")) {
+						targetPath = "soul_torch";
+					} else if (path.equals("redstone_wall_torch")) {
+						targetPath = "redstone_torch";
+					}
+
+					if (targetPath != null) {
+						Item mapped = net.minecraft.registry.Registries.ITEM.get(net.minecraft.util.Identifier.of(blockId.getNamespace(), targetPath));
+						if (mapped != null && mapped != net.minecraft.item.Items.AIR) {
+							return mapped;
+						}
+					}
+				}
+			} catch (Throwable ignored) {}
+			return item != null ? item : net.minecraft.item.Items.AIR;
+		} catch (Throwable ignored) {
+			return null;
 		}
-		if (this.state.isOf(net.minecraft.block.Blocks.WATER)) {
-			return net.minecraft.item.Items.WATER_BUCKET;
-		}
-		if (this.state.isOf(net.minecraft.block.Blocks.LAVA)) {
-			return net.minecraft.item.Items.LAVA_BUCKET;
-		}
-		Item item = this.state.getBlock().asItem();
-		return item != null ? item : net.minecraft.item.Items.AIR;
 	}
 
 	/**

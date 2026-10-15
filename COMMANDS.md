@@ -33,6 +33,9 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 - [🛡️ 6. Minion Archetypes, Policies & Combat Ranks](#️-6-minion-archetypes-policies--combat-ranks)
   - [Individual Minion Combat Policies (MinionCombatPolicy)](#individual-minion-combat-policies-minioncombatpolicy)
 - [🏛️ 7. Building Structures (BUILD Mode)](#️-7-building-structures-build-mode)
+  - [A. BLUEPRINT Sub-Mode (Structure Placement)](#a-blueprint-sub-mode-structure-placement)
+  - [B. AREA Sub-Mode (Volumetric Area Fill & Dimensional Construction)](#b-area-sub-mode-volumetric-area-fill--dimensional-construction)
+  - [C. BARRIER Sub-Mode (Sovereign Defense Perimeters)](#c-barrier-sub-mode-sovereign-defense-perimeters)
 - [📐 8. Custom Blueprint Capture & Palette Remapping (DESIGN Mode)](#-8-custom-blueprint-capture--palette-remapping-design-mode)
   - [1. In-World Spatial Selection](#1-in-world-spatial-selection)
   - [2. The Blueprint Capture Modal](#2-the-blueprint-capture-modal-blueprintcapturemodalscreen)
@@ -80,24 +83,28 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 
 ### 🏗️ Multiblock Construction & Flight (`BUILD` Mode)
 
-| Input                               | Target / Context         | Action                                                                                                                                                                                                       |
-| :---------------------------------- | :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sub-Mode Toggle**                 | Command Hub / Scepter    | **Toggle Sub-Mode**: Toggle between `BLUEPRINT` (structure paste) and `AREA` (volumetric fill) with `[ 🏛 Blue ]` / `[ ◫ Area ]`.                                                                          |
-| **Right-Click** _(Quick Tap)_       | Ground Block (up to 96m) | **Anchor Construction** _(BLUEPRINT)_: Deploys armed blueprint at targeted ground block. Builders activate 3D Arcane Levitation and block phasing to construct persistently to 100% completion.            |
-| **1st Left-Click**                  | Ground Block             | **Set Corner 1 (`Pos1`)** _(AREA)_: Sets Corner 1 on targeted surface for volumetric fill.                                                                                                                   |
-| **2nd Left-Click**                  | Ground Block             | **Set Corner 2 (`Pos2`)** _(AREA)_: Sets Corner 2, locking the 3D fill footprint and rendering Cyan/Aqua ghost grid wireframes.                                                                              |
-| **Ctrl + Scroll** / **`[`** / **`]`** / **`PageUp`** / **`PageDown`** | In `AREA` Sub-Mode | **Adjust Fill Height**: Expands or contracts fill height live in-world without scaffolding (hold `Shift` for $\pm 5$ fast stepping).                                              |
-| **Right-Click**                     | Pos1 & Pos2 Selected     | **Open Fill Confirmation Modal** _(AREA)_: Opens `BuildAreaConfirmModalScreen` to choose block type, inspect volume/dimensions, and confirm construction.                                                    |
-| **Shift + Left-Click**              | In `AREA` Sub-Mode       | **Reset Build Corners**: Instantly clears `Pos1` and `Pos2` selection with bass tone.                                                                                                                        |
-| **Right-Click** _(Quick Tap)_       | Open Sky                 | **Retains Armed Blueprint**: Retains blueprint selection without accidental cycling or dropping.                                                                                                             |
-| **Keybind `R`**                     | In `BLUEPRINT` Sub-Mode  | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°). In `AREA` sub-mode, `R` triggers Squad Retreat / Emergency Recall instead.                                                   |
-| **Left-Click / Shift + Left-Click** | In `BLUEPRINT` Sub-Mode  | **Normal Hit / Break**: Standard survival attack or creative block break; does **not** rotate blueprint.                                                                                                     |
-| **Arcane Build Flight**             | Scepter in `BUILD` Mode  | **Survival 3D Flight**: Free unconstrained vanilla flight (Space to ascend, Shift to descend, WASD flight). Shallow water $\le 5$ blocks permitted; deep water (>5 blocks) cancels flight with safe descent. |
-| **Keybind `H`**                     | In `BUILD` Mode          | **Tactical RTS Camera Zoom**: Cycles zoom presets (`0.75x`, `1.0x` default, `1.5x`, `2.0x`).                                                                                                                 |
-| **Ctrl + Mouse Scroll**             | In `BLUEPRINT` Sub-Mode  | **Smooth Camera Zoom**: Smoothly zooms tactical perspective without hotbar cycling conflicts.                                                                                                                |
-| **`[ 📋 BOM ]` Button**             | In Command Hub           | **Material BOM Modal**: Live resource readiness & inventory delta calculator across bags and nearby minion backpacks within 64m.                                                                             |
-| **`[ 🔍 3D View ]` Button**         | In Command Hub           | **3D Architectural Blueprint Explorer**: Interactive 3D voxel inspection, floor slicer, palette remapping (`[ 🎨 Remap ]`), direct renaming (`[ ✏ Rename ]` / `[R]`), and mega-structure pre-caching.        |
-| **Catalog Delete `[ ✕ ]`**          | In Command Hub           | **Delete Custom Blueprint**: Permanently deletes player-captured blueprint with safety confirmation modal.                                                                                                   |
+| Input                                                                 | Target / Context         | Action                                                                                                                                                                                                       |
+| :-------------------------------------------------------------------- | :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sub-Mode Toggle**                                                   | Command Hub / Scepter    | **Toggle Sub-Mode**: Cycle between `BLUEPRINT` (structure paste), `AREA` (volumetric fill), and `BARRIER` (defense perimeter) with `[ 🏛 Build ]` / `[ ◫ Area ]` / `[ 🛡 Barrier ]`.                         |
+| **Right-Click** _(Quick Tap)_                                         | Ground Block (up to 96m) | **Anchor Construction** _(BLUEPRINT)_: Deploys armed blueprint at targeted ground block. Builders activate 3D Arcane Levitation and block phasing to construct persistently to 100% completion.              |
+| **1st Left-Click**                                                    | Ground Block             | **Set Corner 1 (`Pos1`)** _(AREA)_: Sets Corner 1 on targeted surface for volumetric fill.                                                                                                                   |
+| **2nd Left-Click**                                                    | Ground Block             | **Set Corner 2 (`Pos2`)** _(AREA)_: Sets Corner 2, locking the 3D fill footprint and rendering Cyan/Aqua ghost grid wireframes.                                                                              |
+| **Ctrl + Scroll** / **`[`** / **`]`** / **`PageUp`** / **`PageDown`** | In `AREA` Sub-Mode       | **Adjust Fill Height**: Expands or contracts fill height live in-world without scaffolding (hold `Shift` for $\pm 5$ fast stepping).                                                                         |
+| **Right-Click**                                                       | Pos1 & Pos2 Selected     | **Open Fill Confirmation Modal** _(AREA)_: Opens `BuildAreaConfirmModalScreen` to choose block type, inspect volume/dimensions, and confirm construction.                                                    |
+| **Shift + Left-Click**                                                | In `AREA` Sub-Mode       | **Reset Build Corners**: Instantly clears `Pos1` and `Pos2` selection with bass tone.                                                                                                                        |
+| **Left-Click**                                                        | In `BARRIER` Sub-Mode    | **Place Node / Extend / Seal**: Sets consecutive waypoint (`Barrier 1..N`); clicking existing confirmed waypoint extends; clicking Point 1 or any waypoint snaps circuit closed and opens Seal modal.        |
+| **Right-Click**                                                       | Waypoint Node (BARRIER)  | **Remove Node**: Right-clicking an existing or pending waypoint deletes **only that specific clicked node**.                                                                                                 |
+| **Right-Click**                                                       | Ground / Air (BARRIER)   | **Open Seal Modal**: Right-clicking non-waypoint terrain, interior land, or open air opens `BarrierConfirmModalScreen` **strictly when $\ge 2$ waypoints exist**.                                            |
+| **Shift + Left-Click**                                                | In `BARRIER` Sub-Mode    | **Reset Barrier Draft**: Instantly clears all unsealed drafting nodes.                                                                                                                                       |
+| **Right-Click** _(Quick Tap)_                                         | Open Sky                 | **Retains Armed Blueprint**: Retains blueprint selection without accidental cycling or dropping.                                                                                                             |
+| **Keybind `R`**                                                       | In `BLUEPRINT` Sub-Mode  | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°). In `AREA` and `BARRIER` sub-modes, `R` triggers Squad Retreat / Emergency Recall instead.                                     |
+| **Left-Click / Shift + Left-Click**                                   | In `BLUEPRINT` Sub-Mode  | **Normal Hit / Break**: Standard survival attack or creative block break; does **not** rotate blueprint.                                                                                                     |
+| **Arcane Build Flight**                                               | Scepter in `BUILD` Mode  | **Survival 3D Flight**: Free unconstrained vanilla flight (Space to ascend, Shift to descend, WASD flight). Shallow water $\le 5$ blocks permitted; deep water (>5 blocks) cancels flight with safe descent. |
+| **Keybind `H`**                                                       | In `BUILD` Mode          | **Tactical RTS Camera Zoom**: Cycles zoom presets (`0.75x`, `1.0x` default, `1.5x`, `2.0x`).                                                                                                                 |
+| **Ctrl + Mouse Scroll**                                               | In `BLUEPRINT` Sub-Mode  | **Smooth Camera Zoom**: Smoothly zooms tactical perspective without hotbar cycling conflicts.                                                                                                                |
+| **`[ 📋 BOM ]` Button**                                               | In Command Hub           | **Material BOM Modal**: Live resource readiness & inventory delta calculator across bags and nearby minion backpacks within 64m.                                                                             |
+| **`[ 🔍 3D View ]` Button**                                           | In Command Hub           | **3D Architectural Blueprint Explorer**: Interactive 3D voxel inspection, floor slicer, palette remapping (`[ 🎨 Remap ]`), direct renaming (`[ ✏ Rename ]` / `[R]`), and mega-structure pre-caching.        |
+| **Catalog Delete `[ ✕ ]`**                                            | In Command Hub           | **Delete Custom Blueprint**: Permanently deletes player-captured blueprint with safety confirmation modal.                                                                                                   |
 
 ### 📐 Custom Blueprint Capture & Palette Remap (`DESIGN` Mode)
 
@@ -435,20 +442,20 @@ Commanders can customize the rules of engagement for individual minions, allowin
 
 ## 🏛️ 7. Building Structures (`BUILD` Mode)
 
-The **`BUILD`** mode features two distinct operational sub-modes for construction: **`BLUEPRINT`** (Structure Placement) and **`AREA`** (Volumetric Area Fill & Dimensional Construction). You can toggle between these modes inside the Command Hub GUI (**`V`** key) via the `[ 🏛 Blue ]` vs `[ ◫ Area ]` buttons, or via scepter controls.
+The **`BUILD`** mode features three distinct operational sub-modes for construction and defense: **`BLUEPRINT`** (Structure Placement), **`AREA`** (Volumetric Area Fill & Dimensional Construction), and **`BARRIER`** (Sovereign Defense Perimeters). You can cycle between these modes inside the Command Hub GUI (**`V`** key) via the `[ 🏛 Build ]` / `[ ◫ Area ]` / `[ 🛡 Barrier ]` buttons, or via scepter controls.
 
 ```
-                                  [BUILD Operating Mode]
-                                            │
-                    ┌───────────────────────┴───────────────────────┐
-                    ▼                                               ▼
-         [BLUEPRINT Sub-Mode]                            [AREA Sub-Mode]
-   • Multiblock structure placement                • Volumetric area filling & solid construction
-   • Armed from player custom blueprint catalog    • Arbitrary block selection (Stone, Bricks, etc.)
-   • Rotatable 3D holograms (0°, 90°, 180°, 270°)  • Sequential Left-Clicks: Pos1 ➔ Pos2
-   • 96m crosshair reach aerial placement          • Real-time height adjustment (Ctrl + Scroll)
-   • Multi-tier material Bill of Materials (BOM)   • Cyan/Aqua ghost grid bounding wireframe
-   • Persistent blueprint chaining                 • Dedicated Confirmation Modal Screen
+                                              [BUILD Operating Mode]
+                                                        │
+                      ┌─────────────────────────────────┼─────────────────────────────────┐
+                      ▼                                 ▼                                 ▼
+            [BLUEPRINT Sub-Mode]                 [AREA Sub-Mode]                  [BARRIER Sub-Mode]
+      • Multiblock structure placement     • Volumetric area filling & solid • Polygonal defense perimeters
+      • Armed from blueprint catalog       • Arbitrary block selection       • Zero accidental harvesting
+      • Rotatable 3D holograms             • Sequential Left-Clicks: Pos1➔Pos2 • Multi-node points: 1..N
+      • 96m aerial crosshair placement     • Real-time height (Ctrl+Scroll)  • Left-Click place/extend/seal
+      • Multi-tier material BOM modal      • Cyan/Aqua ghost grid wireframe  • Right-Click remove/modal
+      • Persistent blueprint chaining      • Dedicated Confirmation Modal    • 100% clean, open interior
 ```
 
 ### A. BLUEPRINT Sub-Mode (Structure Placement)
@@ -558,6 +565,49 @@ The **`AREA`** building mode allows commanders to define exact 3D construction b
 4. **Autonomous Minion Volumetric Construction**:
    - Builder minions receive the authoritative area blueprint, sorted bottom-up layer-by-layer ($Y = 0 \to H-1$, $Z$, $X$).
    - Builders take flight via 3D Arcane Levitation, phase through blocks, retrieve or craft the required fill blocks on demand, and construct the entire volume block-by-block to 100% completion.
+
+### C. BARRIER Sub-Mode (Sovereign Defense Perimeters)
+
+The **`BARRIER`** sub-mode enables commanders to establish custom multi-node polygonal defense perimeters (`Barrier 1..N`) around villages, bases, structures, and farms. Sealed barrier zones protect interior territory from accidental minion damage while preserving complete tactical mobility:
+
+1. **Defensive Purpose: Minion Harvesting Protection**:
+   - **Zero Accidental Harvesting**: Builder minions will **never** fell trees, quarry stone, scoop water, or break blocks inside any protected barrier zone during autonomous resource gathering.
+   - **Automated Agro-Forestry Plants Outside Barriers**: When builder minions require timber for blueprint construction, `findPlantingPosition` filters candidate spots through `isProtectedBlock`. Builder minions strictly plant saplings and fell trees **outside** sealed barrier perimeters in the wild, leaving village grounds, decorative trees, and public parks inside the perimeter untouched.
+   - **Other Minion Modes Completely Unaffected**:
+     - **Follow Mode**: Minions walk, run, and cross barrier perimeters freely alongside their commander without physical obstruction.
+     - **Hold Mode**: Minions hold positions normally anywhere inside or outside the barrier.
+     - **Patrol (Pathway) Mode**: Minions patrol routes, guard gates, and follow waypoints inside, along, or across barrier borders without restriction.
+     - **Combat / Defense**: Minions engage hostiles, fire arrows, and heal allies across barrier zones seamlessly.
+   - **Explicit Task Exceptions**: Minions can only modify blocks inside barrier perimeters if explicitly commanded by the player via **Mining Mode** (`MINE`), **Blueprint Construction**, or **Area Fill Mode** (`AREA`).
+
+2. **Polygonal Multi-Node Boundaries**:
+   - Unlike rigid 2-point rectangular boxes, Barrier mode supports an arbitrary sequence of $N$ boundary points (`Point 1, 2, 3... N`) to hug organic village borders, hills, rivers, and walls.
+   - **Point-in-Polygon (Jordan Curve) Containment**: Evaluates interior territory using ray-casting algorithms on the horizontal X/Z plane with 1-block perimeter edge tolerance.
+   - **Generous 256-Block Vertical Coverage**: Perimeters automatically span from deep underground/bedrock (`minY = clickedY - 64`) up to 256 blocks above (`maxY = clickedY + 256`), providing comprehensive vertical protection by default.
+
+3. **Unified Barrier Mode Controls**:
+   - **Left-Click (Primary Action: Place / Extend / Seal)**:
+     - **Set Sequential Waypoints**: Left-clicking solid ground/blocks adds a perimeter waypoint (`Point 1, 2, 3... N`) to the active draft. Nodes are anchored directly on top of the clicked block face.
+     - **Dynamic Crosshair Ghost Tether**: A golden vector line tethers dynamically from the last placed node to your crosshair, previewing the next perimeter wall before clicking.
+     - **Extend Existing Barriers**: Left-clicking an existing confirmed waypoint while idle initiates a new barrier extension anchored directly at that node.
+     - **Close & Seal Perimeter**: Left-clicking Point 1 or any waypoint while drafting snaps the circuit closed with a vibrant pulsing emerald beacon (`§a✦ [ Left-Click to Close & Seal ] ✦`) and immediately opens the `BarrierConfirmModalScreen`.
+     - **Shift + Left-Click (Reset)**: Clears all unsealed draft waypoints.
+   - **Right-Click (Removal & Modal Trigger)**:
+     - **Remove Specific Node**: Right-clicking any targeted barrier waypoint (pending or confirmed) deletes **only that specific clicked node**, preserving all other connected waypoints.
+     - **Open Seal Modal**: Right-clicking on **anything else** (regular ground terrain, interior land, solid blocks, or open air) opens the **Confirm Sovereign Barrier Modal** **strictly when at least 2 waypoints have been placed down**. If 0 or 1 waypoints exist, right-clicking non-waypoints does nothing until the second waypoint is placed down.
+     - **Shift + Right-Click**: Opens the Command Hub GUI.
+
+4. **100% Uncluttered Clean Interior**:
+   - Sealed barriers visualize exclusively along their outer perimeter wireframe (`RenderLayer.getLines()`) and hovering billboard tags above boundary waypoints (`[ Barrier 1 #1 ]`, `[ Barrier 1 #2 ]`, etc.).
+   - **Zero Middle Obstructions**: Completely free of central pillars, laser lines, center ground boxes, center titles, or sky crests. Village squares, streets, and courtyards remain completely open, unobstructed, and aesthetically pristine.
+
+5. **Custom Barrier Naming & Command Hub Dashboard**:
+   - **Naming Input Field**: The `BarrierConfirmModalScreen` includes an interactive text field to name each barrier upon sealing (e.g. `Main Citadel`, `Oak Orchard`, `Castle Courtyard`).
+   - **Barrier Dashboard in Command Hub (`V`)**: In `BUILD (BARRIER)` mode, the GUI displays a paginated list of all confirmed barriers with their names, waypoint counts, and coverage specs.
+   - **One-Click Deletion (`[ ✕ ]`)**: Permanently removes the entire barrier and all its nodes in one click.
+   - **Rename Modal (`[ ✎ ]`)**: Opens `BarrierEditModalScreen` to rename any existing barrier or inspect its perimeter metrics.
+   - **Defunct Barrier Automatic Cleanup**: If a barrier's waypoint count drops below 2 after removing nodes, it is automatically purged from the world and the GUI.
+   - **World Persistence**: Sealed barriers persist across world restarts and dimension transfers via `data/sovereign_barrier_zones.dat` and synchronize automatically with clients.
 
 ---
 

@@ -594,7 +594,8 @@ public class StructureBlueprint {
 				} else if (fillBlockState.isOf(net.minecraft.block.Blocks.LAVA)) {
 					requiredItem = net.minecraft.item.Items.LAVA_BUCKET;
 				} else {
-					Item candidate = fillBlockState.getBlock().asItem();
+					BlueprintBlock dummy = new BlueprintBlock(BlockPos.ORIGIN, fillBlockState);
+					Item candidate = dummy.getRequiredItem();
 					if (candidate != null && candidate != net.minecraft.item.Items.AIR) {
 						requiredItem = candidate;
 					}
@@ -603,7 +604,7 @@ public class StructureBlueprint {
 		} catch (Throwable ignored) {}
 		if (requiredItem == null) {
 			try {
-				requiredItem = net.minecraft.item.Items.COBBLESTONE;
+				requiredItem = net.minecraft.item.Items.AIR;
 			} catch (Throwable ignored) {}
 		}
 

@@ -70,19 +70,31 @@ public class CommandScepterBuildingModeTest {
 		Assertions.assertEquals("§3", area.getColorCode());
 		Assertions.assertEquals("§3Area Fill / Volumetric", area.getFormattedName());
 
-		// Cycling
+		BuildingMode barrier = BuildingMode.BARRIER;
+		Assertions.assertNotNull(barrier);
+		Assertions.assertEquals(2, barrier.getId());
+		Assertions.assertEquals("barrier", barrier.asString());
+		Assertions.assertEquals("Barrier", barrier.getDisplayName());
+		Assertions.assertEquals("§6", barrier.getColorCode());
+		Assertions.assertEquals("§6Barrier", barrier.getFormattedName());
+
+		// Cycling: BLUEPRINT -> AREA -> BARRIER -> BLUEPRINT
 		Assertions.assertEquals(BuildingMode.AREA, blueprint.next());
-		Assertions.assertEquals(BuildingMode.BLUEPRINT, area.next());
-		Assertions.assertEquals(BuildingMode.AREA, blueprint.previous());
+		Assertions.assertEquals(BuildingMode.BARRIER, area.next());
+		Assertions.assertEquals(BuildingMode.BLUEPRINT, barrier.next());
+		Assertions.assertEquals(BuildingMode.BARRIER, blueprint.previous());
 		Assertions.assertEquals(BuildingMode.BLUEPRINT, area.previous());
+		Assertions.assertEquals(BuildingMode.AREA, barrier.previous());
 
 		// Lookup by id and name
 		Assertions.assertEquals(BuildingMode.BLUEPRINT, BuildingMode.fromId(0));
 		Assertions.assertEquals(BuildingMode.AREA, BuildingMode.fromId(1));
+		Assertions.assertEquals(BuildingMode.BARRIER, BuildingMode.fromId(2));
 		Assertions.assertEquals(BuildingMode.BLUEPRINT, BuildingMode.fromId(99)); // Default fallback
 
 		Assertions.assertEquals(BuildingMode.BLUEPRINT, BuildingMode.fromName("blueprint"));
 		Assertions.assertEquals(BuildingMode.AREA, BuildingMode.fromName("area"));
+		Assertions.assertEquals(BuildingMode.BARRIER, BuildingMode.fromName("barrier"));
 		Assertions.assertEquals(BuildingMode.BLUEPRINT, BuildingMode.fromName("unknown"));
 	}
 

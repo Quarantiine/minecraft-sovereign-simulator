@@ -82,6 +82,9 @@ public class MinionBuildGoal extends Goal {
 	// Equipment preservation across construction cycles
 	private ItemStack savedHeldWeapon = ItemStack.EMPTY;
 
+	private static final long DEFICIENCY_SOUND_COOLDOWN_TICKS = 100L;
+	private static long lastGlobalDeficiencySoundTick = 0L;
+
 	public MinionBuildGoal(MinionEntity minion) {
 		this.minion = minion;
 		this.setControls(EnumSet.of(Goal.Control.MOVE, Goal.Control.LOOK));
@@ -215,14 +218,14 @@ public class MinionBuildGoal extends Goal {
 
 		if (this.currentTask != null) {
 			this.minion.setActivelyBuilding(true);
-			// Preserve held weapon before equipping preview block or dismantle tool
-			saveHeldWeapon();
 
-			// Visually equip the item in main hand while working
+			// Visually equip temporary item in main hand while working (Creative preview or Dismantle tool)
 			if (this.currentSession != null && this.currentSession.isDismantle()) {
+				saveHeldWeapon();
 				ItemStack dismantleTool = resolveDismantleTool();
 				this.minion.equipStack(EquipmentSlot.MAINHAND, dismantleTool);
-			} else {
+			} else if (this.currentSession != null && this.currentSession.isCreative()) {
+				saveHeldWeapon();
 				ItemStack previewStack = this.currentTask.getBlueprintBlock().getRequiredStack();
 				this.minion.equipStack(EquipmentSlot.MAINHAND, previewStack);
 			}
@@ -1128,8 +1131,8 @@ public class MinionBuildGoal extends Goal {
 	}
 
 	/**
-	 * Handles missing resources: emits smoke particles, dispenser fail sound,
-	 * releases the task back to the pending pool, and sends an action-bar alert to the master.
+	 * Handles missing resources: emits smoke particles, rate-limited dispenser fail sound,
+	 * releases the task back to the pending pool, and sends a throttled action-bar alert to the master.
 	 */
 	private void handleResourceDeficiency(ServerWorld world, Item requiredItem) {
 		world.spawnParticles(
@@ -1144,27 +1147,31 @@ public class MinionBuildGoal extends Goal {
 			0.05
 		);
 
-		world.playSound(
-			null,
-			this.minion.getX(),
-			this.minion.getY(),
-			this.minion.getZ(),
-			SoundEvents.ENTITY_VILLAGER_NO,
-			SoundCategory.NEUTRAL,
-			1.0F,
-			1.0F
-		);
+		long currentTick = world.getTime();
+		boolean canPlaySound = (currentTick < lastGlobalDeficiencySoundTick || currentTick - lastGlobalDeficiencySoundTick >= DEFICIENCY_SOUND_COOLDOWN_TICKS);
+		if (canPlaySound) {
+			lastGlobalDeficiencySoundTick = currentTick;
 
-		world.playSound(
-			null,
-			this.minion.getX(),
-			this.minion.getY(),
-			this.minion.getZ(),
-			SoundEvents.BLOCK_DISPENSER_FAIL,
-			SoundCategory.NEUTRAL,
-			0.8F,
-			1.2F
-		);
+			world.playSound(
+				null,
+				this.minion.getX(),
+				this.minion.getY(),
+				this.minion.getZ(),
+				SoundEvents.BLOCK_DISPENSER_FAIL,
+				SoundCategory.NEUTRAL,
+				0.5F,
+				1.2F
+			);
+
+			// Notify owner via action bar (throttled to once every 5 seconds)
+			ServerPlayerEntity owner = world.getServer().getPlayerManager().getPlayer(this.currentSession.getOwnerUuid());
+			if (owner != null) {
+				owner.sendMessage(
+					Text.literal("§cMinion needs §e" + requiredItem.getName().getString() + " §cto continue building!§r"),
+					true
+				);
+			}
+		}
 
 		// Release the task so other minions or later retries can pick it up
 		if (this.currentTask != null) {
@@ -1179,17 +1186,8 @@ public class MinionBuildGoal extends Goal {
 		this.minion.getNavigation().stop();
 		this.minion.fallDistance = 0.0F;
 
-		// Short 10-tick retry interval to allow claiming other available materials or allied deliveries
-		this.failureCooldownUntilTick = world.getTime() + 10L;
-
-		// Notify owner via action bar
-		ServerPlayerEntity owner = world.getServer().getPlayerManager().getPlayer(this.currentSession.getOwnerUuid());
-		if (owner != null) {
-			owner.sendMessage(
-				Text.literal("§cMinion needs §e" + requiredItem.getName().getString() + " §cto continue building!§r"),
-				true
-			);
-		}
+		// 60-tick retry interval to give player time to deposit materials without churn
+		this.failureCooldownUntilTick = world.getTime() + 60L;
 	}
 	/**
 	 * Checks if solid ceiling blocks exist directly above the minion within checkBlocks height.
@@ -1578,8 +1576,6 @@ public class MinionBuildGoal extends Goal {
 		if (!this.savedHeldWeapon.isEmpty()) {
 			this.minion.equipStack(EquipmentSlot.MAINHAND, this.savedHeldWeapon.copy());
 			this.savedHeldWeapon = ItemStack.EMPTY;
-		} else {
-			this.minion.equipStack(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
 		}
 	}
 
@@ -2204,7 +2200,7 @@ public class MinionBuildGoal extends Goal {
 				this.minion.setActivelyBuilding(true);
 				ItemStack toolOrBlock = this.currentSession.isDismantle()
 					? resolveDismantleTool()
-					: this.currentTask.getBlueprintBlock().getRequiredStack();
+					: (this.currentSession.isCreative() ? this.currentTask.getBlueprintBlock().getRequiredStack() : ItemStack.EMPTY);
 				this.minion.equipStack(EquipmentSlot.MAINHAND, toolOrBlock);
 				setupTaskKinematics(serverWorld, nextTask.getWorldPos());
 				return true;
@@ -2241,7 +2237,7 @@ public class MinionBuildGoal extends Goal {
 					this.minion.setGuardAnchorPos(null);
 					ItemStack toolOrBlock = chainedSession.isDismantle()
 						? resolveDismantleTool()
-						: chainedTask.getBlueprintBlock().getRequiredStack();
+						: (chainedSession.isCreative() ? chainedTask.getBlueprintBlock().getRequiredStack() : ItemStack.EMPTY);
 					this.minion.equipStack(EquipmentSlot.MAINHAND, toolOrBlock);
 					setupTaskKinematics(serverWorld, chainedTask.getWorldPos());
 					return true;

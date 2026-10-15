@@ -78,11 +78,22 @@ public class CommandScepterScreen extends Screen {
 	private ButtonWidget addRouteBtn;
 	private ButtonWidget prevPathwayPageBtn;
 	private ButtonWidget nextPathwayPageBtn;
+
+	public static final int BARRIER_PAGE_SIZE = 4;
+	private int barrierPage = 0;
+	private final List<ButtonWidget> barrierDashboardWidgets = new ArrayList<>();
+	private final List<ButtonWidget> barrierSelectButtons = new ArrayList<>();
+	private final List<ButtonWidget> barrierEditButtons = new ArrayList<>();
+	private final List<ButtonWidget> barrierDeleteButtons = new ArrayList<>();
+	private ButtonWidget prevBarrierPageBtn;
+	private ButtonWidget nextBarrierPageBtn;
 	private ButtonWidget rotateBtn;
 	private ButtonWidget materialBomBtn;
 	private ButtonWidget buildingModeBtn;
 	private ButtonWidget buildConfirmModalBtn;
 	private ButtonWidget clearBuildCornersBtn;
+	private ButtonWidget sealBarrierBtn;
+	private ButtonWidget clearBarrierBtn;
 	private ButtonWidget captureModalBtn;
 	private ButtonWidget clearCornersBtn;
 	private ButtonWidget miningModeBtn;
@@ -172,6 +183,10 @@ public class CommandScepterScreen extends Screen {
 		this.pathwayEditButtons.clear();
 		this.pathwayClearButtons.clear();
 		this.pathwayDeleteButtons.clear();
+		this.barrierDashboardWidgets.clear();
+		this.barrierSelectButtons.clear();
+		this.barrierEditButtons.clear();
+		this.barrierDeleteButtons.clear();
 
 		if (!this.initializedOpenState) {
 			if (!this.shiftHeldOnOpen) {
@@ -397,6 +412,28 @@ public class CommandScepterScreen extends Screen {
 		this.clearBuildCornersBtn.visible = this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.AREA;
 		this.addDrawableChild(this.clearBuildCornersBtn);
 
+		// Seal Barrier Button (visible in BUILD mode with BARRIER sub-mode)
+		this.sealBarrierBtn = ButtonWidget.builder(
+			Text.literal("§6✦ Seal"),
+			b -> sealBarrierGui()
+		)
+		.dimensions(startX + 62, pageControlsY, 52, 19)
+		.tooltip(Tooltip.of(Text.literal("§6✦ Seal Barrier\n§7Opens modal to seal perimeter.\n§7Stops minions from harvesting inside.")))
+		.build();
+		this.sealBarrierBtn.visible = this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.BARRIER;
+		this.addDrawableChild(this.sealBarrierBtn);
+
+		// Clear Barrier Nodes Button (visible in BUILD mode with BARRIER sub-mode)
+		this.clearBarrierBtn = ButtonWidget.builder(
+			Text.literal("§c⌫ Reset"),
+			b -> clearBarrierNodesGui()
+		)
+		.dimensions(startX + 116, pageControlsY, 44, 19)
+		.tooltip(Tooltip.of(Text.literal("§c⌫ Reset Barrier Nodes\n§7Clears all pending boundary points.")))
+		.build();
+		this.clearBarrierBtn.visible = this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.BARRIER;
+		this.addDrawableChild(this.clearBarrierBtn);
+
 		// 3D Architectural Blueprint Explorer Button (visible in BUILD mode)
 		this.explorerBtn = ButtonWidget.builder(
 			Text.literal("§6🔍 3D View"),
@@ -405,7 +442,7 @@ public class CommandScepterScreen extends Screen {
 		.dimensions(startX + 260, startY + 100, 65, 15)
 		.tooltip(Tooltip.of(Text.literal("§6✦ 3D Architectural Blueprint Explorer\n§7Browse, search, rotate structures in 3D, and inspect specifications.")))
 		.build();
-		this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD;
+		this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD && (this.selectedBuildingMode == BuildingMode.BLUEPRINT);
 		this.addDrawableChild(this.explorerBtn);
 
 		// Spatial Capture Modal Button (visible in DESIGN mode)
@@ -572,8 +609,97 @@ public class CommandScepterScreen extends Screen {
 		this.pathwayWidgets.add(this.nextPathwayPageBtn);
 		this.addDrawableChild(this.nextPathwayPageBtn);
 
+		// Barrier Dashboard Controls (Paginated 4 Channel Rows: Select/Resume, Edit/Rename, Delete)
+		for (int slot = 0; slot < BARRIER_PAGE_SIZE; slot++) {
+			final int slotIndex = slot;
+			int rowY = startY + 118 + slot * 24;
+
+			ButtonWidget selectBtn = ButtonWidget.builder(Text.empty(), b -> {
+				int index = this.barrierPage * BARRIER_PAGE_SIZE + slotIndex;
+				List<com.example.barrier.BarrierZone> zones = com.example.client.renderer.ClientBarrierTracker.getConfirmedZones();
+				if (index >= 0 && index < zones.size()) {
+					com.example.client.renderer.ClientBarrierTracker.resumeZone(zones.get(index).getId());
+					if (this.client != null && this.client.player != null) {
+						this.client.player.sendMessage(Text.literal("§6✦ Resumed editing " + zones.get(index).getName() + ". Left-click points and snap to any waypoint to Seal!§r"), true);
+					}
+					this.close();
+				}
+			})
+			.dimensions(startX + 165, rowY, 114, 20)
+			.build();
+			this.barrierSelectButtons.add(selectBtn);
+			this.barrierDashboardWidgets.add(selectBtn);
+			this.addDrawableChild(selectBtn);
+
+			ButtonWidget editBtn = ButtonWidget.builder(Text.literal("§e✎"), b -> {
+				int index = this.barrierPage * BARRIER_PAGE_SIZE + slotIndex;
+				List<com.example.barrier.BarrierZone> zones = com.example.client.renderer.ClientBarrierTracker.getConfirmedZones();
+				if (index >= 0 && index < zones.size()) {
+					if (this.client != null) {
+						this.client.setScreen(new BarrierEditModalScreen(zones.get(index), this));
+					}
+				}
+			})
+			.dimensions(startX + 282, rowY, 20, 20)
+			.tooltip(Tooltip.of(Text.literal("§e✎ Edit Barrier\n§7Rename or inspect barrier specifications.")))
+			.build();
+			this.barrierEditButtons.add(editBtn);
+			this.barrierDashboardWidgets.add(editBtn);
+			this.addDrawableChild(editBtn);
+
+			ButtonWidget delBtn = ButtonWidget.builder(Text.literal("§c✕"), b -> {
+				int index = this.barrierPage * BARRIER_PAGE_SIZE + slotIndex;
+				List<com.example.barrier.BarrierZone> zones = com.example.client.renderer.ClientBarrierTracker.getConfirmedZones();
+				if (index >= 0 && index < zones.size()) {
+					int zId = zones.get(index).getId();
+					String zName = zones.get(index).getName();
+					com.example.client.renderer.ClientBarrierTracker.deleteConfirmedZone(zId);
+					if (this.client != null && this.client.player != null) {
+						this.client.player.sendMessage(Text.literal("§c✦ Deleted Sovereign Barrier: " + zName + "§r"), true);
+						this.client.player.playSound(SoundEvents.BLOCK_BEACON_DEACTIVATE, 1.0F, 0.9F);
+					}
+					updateBarrierButtons();
+				}
+			})
+			.dimensions(startX + 304, rowY, 20, 20)
+			.tooltip(Tooltip.of(Text.literal("§c✕ Delete Barrier\n§7Permanently removes this entire barrier and all its nodes.")))
+			.build();
+			this.barrierDeleteButtons.add(delBtn);
+			this.barrierDashboardWidgets.add(delBtn);
+			this.addDrawableChild(delBtn);
+		}
+
+		// Barrier Dashboard Pagination
+		int barrierControlsY = startY + 226;
+		this.prevBarrierPageBtn = ButtonWidget.builder(Text.literal("◀"), b -> {
+			if (this.barrierPage > 0) {
+				this.barrierPage--;
+				updateBarrierButtons();
+			}
+		})
+		.dimensions(startX + 165, barrierControlsY, 18, 18)
+		.tooltip(Tooltip.of(Text.literal("Previous Page")))
+		.build();
+		this.barrierDashboardWidgets.add(this.prevBarrierPageBtn);
+		this.addDrawableChild(this.prevBarrierPageBtn);
+
+		this.nextBarrierPageBtn = ButtonWidget.builder(Text.literal("▶"), b -> {
+			List<com.example.barrier.BarrierZone> zones = com.example.client.renderer.ClientBarrierTracker.getConfirmedZones();
+			int totalPages = Math.max(1, (zones.size() + BARRIER_PAGE_SIZE - 1) / BARRIER_PAGE_SIZE);
+			if (this.barrierPage + 1 < totalPages) {
+				this.barrierPage++;
+				updateBarrierButtons();
+			}
+		})
+		.dimensions(startX + 306, barrierControlsY, 18, 18)
+		.tooltip(Tooltip.of(Text.literal("Next Page")))
+		.build();
+		this.barrierDashboardWidgets.add(this.nextBarrierPageBtn);
+		this.addDrawableChild(this.nextBarrierPageBtn);
+
 		updateBlueprintButtons();
 		updatePathwayButtons();
+		updateBarrierButtons();
 		updateControlsVisibility();
 
 		// Action Buttons: Execute Directive, Deselect All, Teleport Minions, Dismiss All Minions, & Close
@@ -805,6 +931,12 @@ public class CommandScepterScreen extends Screen {
 		if (this.clearBuildCornersBtn != null) {
 			this.clearBuildCornersBtn.visible = isBuild && (this.selectedBuildingMode == BuildingMode.AREA);
 		}
+		if (this.sealBarrierBtn != null) {
+			this.sealBarrierBtn.visible = isBuild && (this.selectedBuildingMode == BuildingMode.BARRIER);
+		}
+		if (this.clearBarrierBtn != null) {
+			this.clearBarrierBtn.visible = isBuild && (this.selectedBuildingMode == BuildingMode.BARRIER);
+		}
 		if (this.captureModalBtn != null) {
 			this.captureModalBtn.visible = isDesign;
 		}
@@ -821,7 +953,7 @@ public class CommandScepterScreen extends Screen {
 			this.clearMineCornersBtn.visible = isMine && (this.selectedMiningMode == MiningMode.AREA);
 		}
 
-		boolean hideBlueprints = isPathway || (isBuild && this.selectedBuildingMode == BuildingMode.AREA);
+		boolean hideBlueprints = isPathway || (isBuild && (this.selectedBuildingMode == BuildingMode.AREA || this.selectedBuildingMode == BuildingMode.BARRIER));
 		for (ButtonWidget btn : this.blueprintButtons) {
 			btn.visible = !hideBlueprints;
 		}
@@ -840,6 +972,14 @@ public class CommandScepterScreen extends Screen {
 		}
 		if (isPathway) {
 			updatePathwayButtons();
+		}
+
+		boolean isBarrier = isBuild && (this.selectedBuildingMode == BuildingMode.BARRIER);
+		for (ButtonWidget btn : this.barrierDashboardWidgets) {
+			btn.visible = isBarrier;
+		}
+		if (isBarrier) {
+			updateBarrierButtons();
 		}
 	}
 
@@ -1077,7 +1217,7 @@ public class CommandScepterScreen extends Screen {
 	}
 
 	public void toggleBuildingModeGui() {
-		this.selectedBuildingMode = this.selectedBuildingMode == BuildingMode.BLUEPRINT ? BuildingMode.AREA : BuildingMode.BLUEPRINT;
+		this.selectedBuildingMode = this.selectedBuildingMode.next();
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.setBuildingMode(this.scepterStack, this.selectedBuildingMode);
 		}
@@ -1113,18 +1253,36 @@ public class CommandScepterScreen extends Screen {
 		refreshButtonLabels();
 	}
 
+	public void sealBarrierGui() {
+		if (this.client != null) {
+			this.client.setScreen(new BarrierConfirmModalScreen(this.scepterStack, this));
+		}
+	}
+
+	public void clearBarrierNodesGui() {
+		com.example.client.renderer.ClientBarrierTracker.clear();
+		if (this.client != null && this.client.player != null) {
+			this.client.player.sendMessage(Text.literal("§c✦ Cleared Sovereign Barrier boundary nodes.§r"), true);
+		}
+		refreshButtonLabels();
+	}
+
 	private Text getBuildingModeButtonText() {
 		if (this.selectedBuildingMode == BuildingMode.AREA) {
 			return Text.literal("§3◫ Area");
+		} else if (this.selectedBuildingMode == BuildingMode.BARRIER) {
+			return Text.literal("§6🛡 Barrier");
 		}
-		return Text.literal("§b🏛 Blue");
+		return Text.literal("§b🏛 Build");
 	}
 
 	private Tooltip getBuildingModeTooltip() {
 		if (this.selectedBuildingMode == BuildingMode.AREA) {
-			return Tooltip.of(Text.literal("§3✦ Building Sub-Mode: Volumetric Area Fill\n§7Click to switch to Blueprint / Structure mode."));
+			return Tooltip.of(Text.literal("§3✦ Building Sub-Mode: Volumetric Area Fill\n§7Click to switch to Sovereign Barrier mode."));
+		} else if (this.selectedBuildingMode == BuildingMode.BARRIER) {
+			return Tooltip.of(Text.literal("§6✦ Sub-Mode: Barrier\n§7Protects territory from minion harvesting.\n§7Click to switch to Blueprint mode."));
 		}
-		return Tooltip.of(Text.literal("§b✦ Building Sub-Mode: Blueprint / Structure\n§7Click to switch to Volumetric Area Fill mode."));
+		return Tooltip.of(Text.literal("§b✦ Sub-Mode: Build (Blueprint)\n§7Click to switch to Volumetric Area Fill mode."));
 	}
 
 	public MiningMode getSelectedMiningMode() {
@@ -1341,7 +1499,7 @@ public class CommandScepterScreen extends Screen {
 		if (this.nextPageBtn != null) this.nextPageBtn.active = !isConfirming;
 		if (this.targetFilterBtn != null) this.targetFilterBtn.active = !isConfirming;
 		if (this.explorerBtn != null) {
-			this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD;
+			this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD && (this.selectedBuildingMode == BuildingMode.BLUEPRINT);
 			this.explorerBtn.active = !isConfirming;
 		}
 
@@ -1537,10 +1695,11 @@ public class CommandScepterScreen extends Screen {
 			updateBlueprintButtons();
 		}
 		if (this.explorerBtn != null) {
-			this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD;
+			this.explorerBtn.visible = this.selectedMode == CommandMode.BUILD && (this.selectedBuildingMode == BuildingMode.BLUEPRINT);
 			this.explorerBtn.active = (this.pendingConfirmation == ConfirmationType.NONE);
 		}
 		updatePathwayButtons();
+		updateBarrierButtons();
 
 		updateControlsVisibility();
 	}
@@ -1620,6 +1779,72 @@ public class CommandScepterScreen extends Screen {
 		if (this.addRouteBtn != null) {
 			this.addRouteBtn.visible = true;
 			this.addRouteBtn.active = (this.pendingConfirmation == ConfirmationType.NONE);
+		}
+	}
+
+	private void updateBarrierButtons() {
+		boolean isBarrier = this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.BARRIER;
+		if (!isBarrier) {
+			for (ButtonWidget btn : this.barrierDashboardWidgets) {
+				btn.visible = false;
+				btn.active = false;
+			}
+			return;
+		}
+
+		List<com.example.barrier.BarrierZone> zones = com.example.client.renderer.ClientBarrierTracker.getConfirmedZones();
+		zones.removeIf(z -> z == null || z.getNodeCount() < 2);
+		int totalPages = Math.max(1, (zones.size() + BARRIER_PAGE_SIZE - 1) / BARRIER_PAGE_SIZE);
+		if (this.barrierPage >= totalPages) {
+			this.barrierPage = totalPages - 1;
+		}
+		if (this.barrierPage < 0) {
+			this.barrierPage = 0;
+		}
+
+		for (int slot = 0; slot < BARRIER_PAGE_SIZE; slot++) {
+			int index = this.barrierPage * BARRIER_PAGE_SIZE + slot;
+			boolean hasZone = index < zones.size();
+
+			ButtonWidget selectBtn = slot < this.barrierSelectButtons.size() ? this.barrierSelectButtons.get(slot) : null;
+			ButtonWidget editBtn = slot < this.barrierEditButtons.size() ? this.barrierEditButtons.get(slot) : null;
+			ButtonWidget delBtn = slot < this.barrierDeleteButtons.size() ? this.barrierDeleteButtons.get(slot) : null;
+
+			if (hasZone) {
+				com.example.barrier.BarrierZone z = zones.get(index);
+				if (selectBtn != null) {
+					selectBtn.visible = true;
+					selectBtn.active = (this.pendingConfirmation == ConfirmationType.NONE);
+					selectBtn.setMessage(Text.literal("§6" + z.getName() + " §8[" + z.getNodeCount() + "]"));
+					selectBtn.setTooltip(Tooltip.of(Text.literal(
+						"§6✦ " + z.getName() + "\n" +
+						"§7Nodes: §f" + z.getNodeCount() + " boundary points\n" +
+						"§7Height: §f" + (z.getMaxY() - z.getMinY() + 1) + " blocks (Y: " + z.getMinY() + " → " + z.getMaxY() + ")\n" +
+						"§eClick to resume editing or expand this barrier."
+					)));
+				}
+				if (editBtn != null) {
+					editBtn.visible = true;
+					editBtn.active = (this.pendingConfirmation == ConfirmationType.NONE);
+				}
+				if (delBtn != null) {
+					delBtn.visible = true;
+					delBtn.active = (this.pendingConfirmation == ConfirmationType.NONE);
+				}
+			} else {
+				if (selectBtn != null) { selectBtn.visible = false; selectBtn.active = false; }
+				if (editBtn != null) { editBtn.visible = false; editBtn.active = false; }
+				if (delBtn != null) { delBtn.visible = false; delBtn.active = false; }
+			}
+		}
+
+		if (this.prevBarrierPageBtn != null) {
+			this.prevBarrierPageBtn.visible = isBarrier;
+			this.prevBarrierPageBtn.active = (this.pendingConfirmation == ConfirmationType.NONE) && this.barrierPage > 0;
+		}
+		if (this.nextBarrierPageBtn != null) {
+			this.nextBarrierPageBtn.visible = isBarrier;
+			this.nextBarrierPageBtn.active = (this.pendingConfirmation == ConfirmationType.NONE) && (this.barrierPage + 1) < totalPages;
 		}
 	}
 
@@ -1761,6 +1986,9 @@ public class CommandScepterScreen extends Screen {
 			if (this.selectedBuildingMode == BuildingMode.BLUEPRINT) {
 				context.drawTextWithShadow(this.textRenderer, Text.literal("§b✦ Active Blueprint Construction Directives"), startX + 16, startY + 69, 0x55FFFF);
 				context.drawTextWithShadow(this.textRenderer, Text.literal("§7Constructs 100% exact captured blocks - zero substitutions."), startX + 16, startY + 84, 0xAAAAAA);
+			} else if (this.selectedBuildingMode == BuildingMode.BARRIER) {
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§6✦ Sovereign Territory Barrier Protection"), startX + 16, startY + 69, 0xFFA500);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§7Multi-point dynamic perimeter to protect base/village from harvesting."), startX + 16, startY + 84, 0xAAAAAA);
 			} else {
 				context.drawTextWithShadow(this.textRenderer, Text.literal("§3✦ Volumetric Area Fill Construction"), startX + 16, startY + 69, 0x00E5FF);
 				BlockPos p1 = ClientBuildCaptureTracker.getPos1();
@@ -1827,6 +2055,19 @@ public class CommandScepterScreen extends Screen {
 				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§8[ No Selection ]"), startX + 245, startY + 140, 0x888888);
 				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Left-click 2 blocks in world"), startX + 245, startY + 158, 0xAAAAAA);
 				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7to set Pos1 & Pos2 corners"), startX + 245, startY + 174, 0xAAAAAA);
+			}
+		} else if (this.selectedMode == CommandMode.BUILD && this.selectedBuildingMode == BuildingMode.BARRIER) {
+			List<com.example.barrier.BarrierZone> zones = com.example.client.renderer.ClientBarrierTracker.getConfirmedZones();
+			if (zones.isEmpty()) {
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§6✦ Sovereign Barriers:"), startX + 165, startY + 106, 0xFFA500);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Left-click ground to place points"), startX + 245, startY + 155, 0xAAAAAA);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§eLeft-click Point 1 to Close & Seal"), startX + 245, startY + 170, 0xFFD700);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§cRight-click waypoint to remove"), startX + 245, startY + 185, 0xFF8888);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§8Right-click elsewhere to open Seal modal"), startX + 245, startY + 200, 0x666666);
+			} else {
+				int totalPages = Math.max(1, (zones.size() + BARRIER_PAGE_SIZE - 1) / BARRIER_PAGE_SIZE);
+				context.drawTextWithShadow(this.textRenderer, Text.literal("§6✦ Sovereign Barriers (" + zones.size() + "):"), startX + 165, startY + 106, 0xFFA500);
+				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Page " + (this.barrierPage + 1) + " / " + totalPages), startX + 245, startY + 231, 0xAAAAAA);
 			}
 		} else {
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§bBlueprint Catalog:"), startX + 165, startY + 106, 0x55FFFF);
@@ -1929,6 +2170,9 @@ public class CommandScepterScreen extends Screen {
 			if (this.selectedMode == CommandMode.BUILD) {
 				if (this.selectedBuildingMode == BuildingMode.AREA) {
 					bannerText = Text.literal("§3BUILD AREA §8| §fVolumetric Fill §7[✦Fill]");
+				} else if (this.selectedBuildingMode == BuildingMode.BARRIER) {
+					int count = com.example.client.renderer.ClientBarrierTracker.getPendingNodeCount();
+					bannerText = Text.literal("§6BARRIER §8| §f" + count + " Nodes §7[✦Seal]");
 				} else {
 					SyncResourceEstimationPayload est = ClientResourceEstimatorTracker.getEstimation(this.selectedBlueprintId);
 					if (est != null && est.totalBlocks() > 0) {

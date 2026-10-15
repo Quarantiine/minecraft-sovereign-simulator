@@ -3006,8 +3006,8 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 		MinionRole role = this.getRole() == MinionRole.AUTO ? this.getAdaptiveRole() : this.getRole();
 
-		// 0. Active role enforcement: disarm any weapon that violates the minion's active role (Auto minions never disarm)
-		if (this.getRole() != MinionRole.AUTO) {
+		// 0. Active role enforcement: disarm any weapon that violates the minion's active role (Auto minions and actively building minions never disarm)
+		if (this.getRole() != MinionRole.AUTO && !this.isActivelyBuilding()) {
 			ItemStack heldMainhand = this.getEquippedStack(EquipmentSlot.MAINHAND);
 			if (!heldMainhand.isEmpty() && !canRoleAutoEquipMainhand(role, heldMainhand)) {
 				ItemStack remainder = this.inventory.addStack(heldMainhand);

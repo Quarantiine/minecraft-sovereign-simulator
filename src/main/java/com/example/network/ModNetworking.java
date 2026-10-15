@@ -60,6 +60,7 @@ public class ModNetworking {
 		PayloadTypeRegistry.playC2S().register(RequestResourceEstimationPayload.ID, RequestResourceEstimationPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(UpdateTargetFilterPayload.ID, UpdateTargetFilterPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playC2S().register(UpdateMinionCombatPolicyPayload.ID, UpdateMinionCombatPolicyPayload.PACKET_CODEC);
+		PayloadTypeRegistry.playC2S().register(ModifyBarrierZonePayload.ID, ModifyBarrierZonePayload.PACKET_CODEC);
 
 		// S2C Payloads for active blueprint wireframe and patrol route synchronization
 		PayloadTypeRegistry.playS2C().register(SyncConstructionSessionPayload.ID, SyncConstructionSessionPayload.PACKET_CODEC);
@@ -68,6 +69,7 @@ public class ModNetworking {
 		PayloadTypeRegistry.playS2C().register(SyncCustomBlueprintsPayload.ID, SyncCustomBlueprintsPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playS2C().register(SyncResourceEstimationPayload.ID, SyncResourceEstimationPayload.PACKET_CODEC);
 		PayloadTypeRegistry.playS2C().register(SyncTargetFilterPayload.ID, SyncTargetFilterPayload.PACKET_CODEC);
+		PayloadTypeRegistry.playS2C().register(SyncBarrierZonesPayload.ID, SyncBarrierZonesPayload.PACKET_CODEC);
 	}
 
 	/**
@@ -146,6 +148,10 @@ public class ModNetworking {
 		ServerPlayNetworking.registerGlobalReceiver(UpdateTargetFilterPayload.ID, (payload, context) -> {
 			ServerPlayerEntity player = context.player();
 			context.server().execute(() -> handleUpdateTargetFilter(player, payload));
+		});
+		ServerPlayNetworking.registerGlobalReceiver(ModifyBarrierZonePayload.ID, (payload, context) -> {
+			ServerPlayerEntity player = context.player();
+			context.server().execute(() -> handleModifyBarrierZone(player, payload));
 		});
 	}
 
@@ -1206,5 +1212,105 @@ public class ModNetworking {
 			entries
 		);
 		ServerPlayNetworking.send(player, syncPayload);
+	}
+
+	private static void handleModifyBarrierZone(ServerPlayerEntity player, ModifyBarrierZonePayload payload) {
+		if (player == null || payload == null || !(player.getWorld() instanceof ServerWorld world)) {
+			return;
+		}
+		com.example.barrier.BarrierManager manager = com.example.barrier.BarrierManager.getInstance();
+		switch (payload.action()) {
+			case ADD_NODE -> {
+				if (payload.pos() != null) {
+					com.example.barrier.BarrierZone zone = manager.addNodeToActiveZone(player.getUuid(), payload.pos());
+					manager.syncToPlayer(player);
+					int count = zone != null ? zone.getNodeCount() : 1;
+					world.playSound(null, payload.pos().getX(), payload.pos().getY(), payload.pos().getZ(),
+						SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 1.2F, 1.0F + (count * 0.05F));
+					world.spawnParticles(ParticleTypes.ENCHANT, payload.pos().getX() + 0.5D, payload.pos().getY() + 1.0D, payload.pos().getZ() + 0.5D, 12, 0.2D, 0.2D, 0.2D, 0.1D);
+					player.sendMessage(Text.literal("§6✦ Sovereign Barrier Node #" + count + " set at [" + payload.pos().toShortString() + "] §7(Left-Click or GUI to Seal)"), true);
+				}
+			}
+			case REMOVE_LAST_NODE -> {
+				BlockPos removed = manager.removeLastNodeFromActiveZone(player.getUuid());
+				manager.syncToPlayer(player);
+				if (removed != null) {
+					world.playSound(null, removed.getX(), removed.getY(), removed.getZ(),
+						SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0F, 0.8F);
+					player.sendMessage(Text.literal("§c✦ Removed last barrier node"), true);
+				}
+			}
+			case REMOVE_NODE -> {
+				if (payload.pos() != null) {
+					boolean removed = manager.removeNodeFromAnyZone(player.getUuid(), payload.zoneId(), payload.pos());
+					manager.syncToPlayer(player);
+					if (removed) {
+						world.playSound(null, payload.pos().getX(), payload.pos().getY(), payload.pos().getZ(),
+							SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0F, 0.8F);
+						player.sendMessage(Text.literal("§c✦ Removed barrier node at [" + payload.pos().toShortString() + "]"), true);
+					}
+				}
+			}
+			case CLEAR_ACTIVE -> {
+				manager.clearActiveZone(player.getUuid());
+				manager.syncToPlayer(player);
+				world.playSound(null, player.getX(), player.getY(), player.getZ(),
+					SoundEvents.BLOCK_BEACON_DEACTIVATE, SoundCategory.PLAYERS, 0.8F, 1.2F);
+				player.sendMessage(Text.literal("§c✦ Cleared active barrier nodes"), true);
+			}
+			case SEAL_ZONE -> {
+				com.example.barrier.BarrierZone sealed = manager.sealActiveZone(
+					player.getUuid(), payload.zoneId(), payload.name(), payload.minY(), payload.maxY()
+				);
+				manager.syncToPlayer(player);
+				if (sealed != null) {
+					world.playSound(null, player.getX(), player.getY(), player.getZ(),
+						SoundEvents.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 1.2F, 1.5F);
+					for (BlockPos p : sealed.getNodes()) {
+						world.spawnParticles(ParticleTypes.TOTEM_OF_UNDYING, p.getX() + 0.5D, p.getY() + 1.0D, p.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.05D);
+					}
+					player.sendMessage(Text.literal("§6✦ " + sealed.getName() + " Sealed! (" + sealed.getNodeCount() + " boundary nodes, Y: " + sealed.getMinY() + " → " + sealed.getMaxY() + ") - Territory Protected from Harvesting!§r"), true);
+				}
+			}
+			case EXPAND_ZONE -> {
+				com.example.barrier.BarrierZone expanded = manager.expandZone(player.getUuid(), payload.zoneId(), payload.pos());
+				manager.syncToPlayer(player);
+				if (expanded != null) {
+					world.playSound(null, payload.pos().getX(), payload.pos().getY(), payload.pos().getZ(),
+						SoundEvents.BLOCK_ENCHANTMENT_TABLE_USE, SoundCategory.PLAYERS, 1.2F, 1.3F);
+					world.spawnParticles(ParticleTypes.HAPPY_VILLAGER, payload.pos().getX() + 0.5D, payload.pos().getY() + 1.0D, payload.pos().getZ() + 0.5D, 10, 0.2D, 0.2D, 0.2D, 0.05D);
+					player.sendMessage(Text.literal("§6✦ Expanded " + expanded.getName() + " with new perimeter node at [" + payload.pos().toShortString() + "]!§r"), true);
+				}
+			}
+			case DELETE_ZONE -> {
+				boolean deleted = manager.deleteZone(player.getUuid(), payload.zoneId());
+				manager.syncToPlayer(player);
+				if (deleted) {
+					world.playSound(null, player.getX(), player.getY(), player.getZ(),
+						SoundEvents.BLOCK_BEACON_DEACTIVATE, SoundCategory.PLAYERS, 1.0F, 0.9F);
+					player.sendMessage(Text.literal("§c✦ Deleted Sovereign Barrier #" + payload.zoneId()), true);
+				}
+			}
+			case RESUME_ZONE -> {
+				com.example.barrier.BarrierZone active = manager.resumeZoneForEditing(player.getUuid(), payload.zoneId(), payload.pos());
+				manager.syncToPlayer(player);
+				if (active != null) {
+					world.playSound(null, player.getX(), player.getY(), player.getZ(),
+						SoundEvents.BLOCK_ENCHANTMENT_TABLE_USE, SoundCategory.PLAYERS, 1.2F, 1.2F);
+					player.sendMessage(Text.literal("§6✦ Expanded " + active.getName() + " with new perimeter point (connected to nearest node). Left-click to Seal!§r"), true);
+				}
+			}
+			case RENAME_ZONE -> {
+				com.example.barrier.BarrierZone zone = manager.getZone(player.getUuid(), payload.zoneId());
+				if (zone != null && payload.name() != null && !payload.name().isBlank()) {
+					zone.setName(payload.name().trim());
+					manager.markDirty();
+					manager.syncToPlayer(player);
+					world.playSound(null, player.getX(), player.getY(), player.getZ(),
+						SoundEvents.BLOCK_ANVIL_USE, SoundCategory.PLAYERS, 0.8F, 1.2F);
+					player.sendMessage(Text.literal("§6✦ Renamed Barrier #" + zone.getId() + " to '" + zone.getName() + "'§r"), true);
+				}
+			}
+		}
 	}
 }

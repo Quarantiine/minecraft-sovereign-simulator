@@ -167,6 +167,51 @@ public class CommandScepterItem extends Item {
 	public static Runnable BUILD_CLICK_CONSUMER = null;
 
 	@FunctionalInterface
+	public interface BarrierNodeAppender {
+		int addNode(BlockPos pos);
+	}
+
+	@FunctionalInterface
+	public interface BarrierZoneSealer {
+		boolean seal();
+	}
+
+	@FunctionalInterface
+	public interface BarrierResetter {
+		void clear();
+	}
+
+	@FunctionalInterface
+	public interface BarrierModalOpener {
+		void openBarrierModal(PlayerEntity player, Hand hand, ItemStack stack);
+	}
+
+	public static BarrierNodeAppender BARRIER_NODE_APPENDER = null;
+	public static BarrierZoneSealer BARRIER_ZONE_SEALER = null;
+	public static BarrierResetter BARRIER_RESETTER = null;
+	public static BarrierModalOpener BARRIER_MODAL_OPENER = null;
+
+	@FunctionalInterface
+	public interface BarrierRemover {
+		boolean removeBarrierAt(BlockPos targetPos, BlockPos clickedPos);
+	}
+
+	@FunctionalInterface
+	public interface BarrierCloser {
+		boolean tryCloseLoop(BlockPos targetPos, BlockPos clickedPos);
+	}
+
+	@FunctionalInterface
+	public interface BarrierResumer {
+		boolean tryResumeAt(BlockPos targetPos, BlockPos clickedPos);
+	}
+
+	public static BarrierRemover BARRIER_REMOVER = null;
+	public static BarrierCloser BARRIER_CLOSER = null;
+	public static BarrierResumer BARRIER_RESUMER = null;
+	public static java.util.function.IntSupplier BARRIER_PENDING_COUNT = null;
+
+	@FunctionalInterface
 	public interface ClientTargetResolver {
 		BlockHitResult getTarget(PlayerEntity player);
 	}
@@ -1323,11 +1368,58 @@ public class CommandScepterItem extends Item {
 	}
 
 	public static int handleBuildClick(PlayerEntity player, World world, ItemStack stack, BlockPos pos, boolean isSneaking) {
+		return handleBuildClick(player, world, stack, pos, pos, isSneaking);
+	}
+
+	public static int handleBuildClick(PlayerEntity player, World world, ItemStack stack, BlockPos targetPos, BlockPos clickedPos, boolean isSneaking) {
 		if (stack == null || stack.isEmpty()) return 0;
+		if (getBuildingMode(stack) == BuildingMode.BARRIER) {
+			if (world != null && world.isClient()) {
+				if (isSneaking) {
+					if (BARRIER_RESETTER != null) {
+						BARRIER_RESETTER.clear();
+						if (player != null) {
+							player.sendMessage(Text.literal("§c✦ Cleared active barrier drafting nodes§r"), true);
+							player.playSound(SoundEvents.BLOCK_BEACON_DEACTIVATE, 0.8F, 1.2F);
+						}
+					}
+					return 0;
+				}
+
+				long now = System.currentTimeMillis();
+				if (now - lastBuildClickTimestamp < BUILD_CLICK_DEBOUNCE_MS) {
+					return 0;
+				}
+				lastBuildClickTimestamp = now;
+
+				// 1. If currently drafting and left-clicking a valid close target (Point 1 or intermediate) -> Close loop and open Seal Modal!
+				if (BARRIER_CLOSER != null && BARRIER_CLOSER.tryCloseLoop(targetPos, clickedPos)) {
+					if (BARRIER_MODAL_OPENER != null) {
+						BARRIER_MODAL_OPENER.openBarrierModal(player, Hand.MAIN_HAND, stack);
+					}
+					return 0;
+				}
+
+				// 2. If idle (no pending nodes) and left-clicking an existing confirmed node -> Start new barrier extension!
+				if (BARRIER_RESUMER != null && BARRIER_RESUMER.tryResumeAt(targetPos, clickedPos)) {
+					return 0;
+				}
+
+				// 3. Normal left-click in BARRIER mode adds a node to the open perimeter
+				if (BARRIER_NODE_APPENDER != null && targetPos != null) {
+					int nodeCount = BARRIER_NODE_APPENDER.addNode(targetPos);
+					player.sendMessage(Text.literal("§6✦ Barrier Point #" + nodeCount + " set at [" + targetPos.toShortString() + "] §7(Left-click Point 1 or Right-click ground to Seal | Right-click waypoint to Remove)"), true);
+					world.playSound(player, targetPos, SoundEvents.BLOCK_AMETHYST_BLOCK_HIT, SoundCategory.PLAYERS, 0.8F, 1.2F);
+				}
+			}
+			return 0;
+		}
+
 		if (isSneaking) {
 			handleBuildReset(player, world, stack);
 			return 0;
 		}
+		BlockPos pos = targetPos != null ? targetPos : clickedPos;
 		if (pos == null) return 0;
 
 		long now = System.currentTimeMillis();
@@ -1368,6 +1460,14 @@ public class CommandScepterItem extends Item {
 	}
 
 	public static void handleBuildReset(PlayerEntity player, World world, ItemStack stack) {
+		if (getBuildingMode(stack) == BuildingMode.BARRIER) {
+			if (world != null && world.isClient() && BARRIER_RESETTER != null) {
+				try {
+					BARRIER_RESETTER.clear();
+				} catch (Throwable ignored) {}
+			}
+			return;
+		}
 		if (BUILD_CORNER_RESETTER != null) {
 			try {
 				BUILD_CORNER_RESETTER.resetCorners();
@@ -2480,8 +2580,8 @@ public class CommandScepterItem extends Item {
 			return;
 		}
 
-		// Active only in BUILD mode (and strictly for BLUEPRINT mode, not AREA fill mode)
-		if (getMode(stack) != CommandMode.BUILD || getBuildingMode(stack) == BuildingMode.AREA) {
+		// Active only in BUILD mode (and strictly for BLUEPRINT mode, not AREA or BARRIER mode)
+		if (getMode(stack) != CommandMode.BUILD || getBuildingMode(stack) != BuildingMode.BLUEPRINT) {
 			return;
 		}
 
@@ -2653,6 +2753,31 @@ public class CommandScepterItem extends Item {
 		// BUILD Mode: Anchor construction session at clicked block face or open confirm modal (AREA)
 		if (mode == CommandMode.BUILD) {
 			BuildingMode buildingMode = getBuildingMode(stack);
+			if (buildingMode == BuildingMode.BARRIER) {
+				BlockPos targetPos = world.getBlockState(clickedPos).isReplaceable()
+					? clickedPos
+					: (side != null ? clickedPos.offset(side) : clickedPos.up());
+
+				if (world.isClient()) {
+					long now = System.currentTimeMillis();
+					if (now - lastBuildClickTimestamp < BUILD_CLICK_DEBOUNCE_MS) {
+						return ActionResult.SUCCESS;
+					}
+					lastBuildClickTimestamp = now;
+
+					// 1. Right-click on a barrier waypoint (or its beam) -> Remove it!
+					if (BARRIER_REMOVER != null && BARRIER_REMOVER.removeBarrierAt(targetPos, clickedPos)) {
+						return ActionResult.SUCCESS;
+					}
+
+					// 2. Right-click on non-waypoint ground -> Open Seal modal ONLY if at least 2 waypoints are placed!
+					int count = BARRIER_PENDING_COUNT != null ? BARRIER_PENDING_COUNT.getAsInt() : 0;
+					if (count >= 2 && BARRIER_MODAL_OPENER != null) {
+						BARRIER_MODAL_OPENER.openBarrierModal(player, context.getHand(), stack);
+					}
+				}
+				return ActionResult.success(world.isClient());
+			}
 			if (buildingMode == BuildingMode.AREA || getBuildPos1(stack) != null || getBuildPos2(stack) != null) {
 				if (world.isClient() && BUILD_MODAL_OPENER != null) {
 					BlockPos p1 = getBuildPos1(stack);
@@ -2907,6 +3032,32 @@ public class CommandScepterItem extends Item {
 				BlockPos p1 = getMinePos1(stack);
 				BlockPos p2 = getMinePos2(stack);
 				MINE_MODAL_OPENER.openMineModal(player, hand, stack, p1, p2);
+			}
+			return TypedActionResult.success(stack, world.isClient());
+		}
+
+		if (mode == CommandMode.BUILD && getBuildingMode(stack) == BuildingMode.BARRIER) {
+			if (world.isClient()) {
+				BlockHitResult tacticalHit = CLIENT_TARGET_RESOLVER != null ? CLIENT_TARGET_RESOLVER.getTarget(player) : null;
+				BlockPos targetPos = null;
+				BlockPos clickedPos = null;
+				if (tacticalHit != null && tacticalHit.getType() == HitResult.Type.BLOCK) {
+					clickedPos = tacticalHit.getBlockPos();
+					targetPos = (world.getBlockState(clickedPos).isReplaceable())
+						? clickedPos
+						: (tacticalHit.getSide() != null ? clickedPos.offset(tacticalHit.getSide()) : clickedPos.up());
+				}
+
+				// 1. Right-click on a barrier waypoint (or its beam in air/from camera) -> Remove it!
+				if (BARRIER_REMOVER != null && BARRIER_REMOVER.removeBarrierAt(targetPos, clickedPos)) {
+					return TypedActionResult.success(stack, world.isClient());
+				}
+
+				// 2. Right-click on non-waypoint air / ground -> Open Seal modal ONLY if at least 2 waypoints are placed!
+				int count = BARRIER_PENDING_COUNT != null ? BARRIER_PENDING_COUNT.getAsInt() : 0;
+				if (count >= 2 && BARRIER_MODAL_OPENER != null) {
+					BARRIER_MODAL_OPENER.openBarrierModal(player, hand, stack);
+				}
 			}
 			return TypedActionResult.success(stack, world.isClient());
 		}
@@ -4098,6 +4249,9 @@ public class CommandScepterItem extends Item {
 					int sz = Math.abs(p1.getZ() - p2.getZ()) + 1;
 					tooltip.add(Text.literal("§7Fill Volume: §e" + sx + "x" + sy + "x" + sz + " §8(" + (sx * sy * sz) + " blocks)"));
 				}
+			} else if (buildingMode == BuildingMode.BARRIER) {
+				tooltip.add(Text.literal("§7Barrier: §6Harvest Protection"));
+				tooltip.add(Text.literal("§8Left-Click: Add/Extend | Right-Click: Remove/Seal"));
 			} else {
 				String bpId = getBlueprintId(stack);
 				StructureBlueprint bp = BlueprintRegistry.get(bpId).orElse(null);

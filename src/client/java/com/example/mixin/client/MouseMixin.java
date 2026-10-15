@@ -1,5 +1,6 @@
 package com.example.mixin.client;
 
+import com.example.client.renderer.ClientBarrierTracker;
 import com.example.client.renderer.ClientBuildCaptureTracker;
 import com.example.client.renderer.ClientDesignCaptureTracker;
 import com.example.client.renderer.ClientMiningCaptureTracker;

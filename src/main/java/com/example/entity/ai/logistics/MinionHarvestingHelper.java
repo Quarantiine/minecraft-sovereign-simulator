@@ -768,6 +768,9 @@ public final class MinionHarvestingHelper {
 			if (!logState.isIn(BlockTags.LOGS)) {
 				break;
 			}
+			if (isProtectedBlock(world, current, null, minion.getOwnerUuid())) {
+				break;
+			}
 			if (treeSapling == null) {
 				treeSapling = getSaplingFromLog(logState);
 			}
@@ -886,6 +889,11 @@ public final class MinionHarvestingHelper {
 
 		// 2. Multi-session protection: Any active construction session on the server
 		if (com.example.construction.ConstructionManager.getInstance().isPositionInAnyActiveSession(pos)) {
+			return true;
+		}
+
+		// 2b. Player Barrier Zone / Sovereign Ward: Never scoop water from protected base perimeters
+		if (com.example.barrier.BarrierManager.getInstance().isPositionProtected(world, pos, session != null ? session.getOwnerUuid() : null)) {
 			return true;
 		}
 
@@ -1170,6 +1178,17 @@ public final class MinionHarvestingHelper {
 		ConstructionSession session,
 		UUID ownerUuid
 	) {
+		if (pos == null) return false;
+
+		// Sovereign Ward / Barrier Zone: Strictly protect blocks inside player perimeters from accidental harvesting
+		if (com.example.barrier.BarrierManager.getInstance().isPositionProtected(world, pos, ownerUuid)) {
+			return true;
+		}
+
+		if (world == null) {
+			return false;
+		}
+
 		BlockState state = world.getBlockState(pos);
 
 		// Bedrock and indestructible blocks

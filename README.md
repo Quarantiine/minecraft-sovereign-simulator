@@ -4,7 +4,7 @@
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-645%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-738%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -139,34 +139,63 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 - **Dual-Tier Panic Retreat**:
   - Press **`R`** to immediately recall active squad members within 64m.
   - Press **`Shift + R`** for an army-wide **Emergency Citadel Call** (128m), sounding war horns and tolling fortress bells to sprint all stationed units to the commander's defense.
-- **Survival Progression & Crafting Recipes**:
-  - **Sovereign Command Scepter**: Crafted with 2 Gold Ingots, 1 Amethyst Shard, and 2 Blaze Rods (or Sticks) in a crafting table.
-  - **Minion Spawn Egg**: Crafted shapelessly with 1 Egg, 1 Amethyst Shard, 1 Emerald, and 1 Gold Ingot.
-  - **Tactical Ordnance**: Craft TNT Sticks (TNT + Stick) and cryogenic Frost Grenades (Ice / Snowball + Stick).
-  - **Vanilla Recipe Book Integration**: Native recipe advancements automatically unlock these blueprints in your crafting table recipe book the moment you pick up their constituent ingredients (Amethyst Shards, Gold Ingots, Emeralds, Gunpowder, or Snowballs).
-  - **Enthrallment in Survival**: Alternatively, switch the scepter to `RECRUIT` mode and right-click living vanilla mobs (zombies, skeletons, villagers, etc.) to transfigure them into minion thralls!
+- **Sovereign Barrier Mode & Protective Territory Perimeters (`BuildingMode.BARRIER`)**:
+  - Establish custom multi-node polygonal defense perimeters (`Barrier 1..N`) around villages, structures, and farms.
+  - **Zero Accidental Harvesting**: Builder minions strictly protect interior zones against accidental timber harvesting and stone quarrying, planting saplings and harvesting timber strictly outside sealed perimeters.
+  - **Unified Controls**: Left-click places consecutive waypoints, extends existing barriers, or snaps the circuit closed on Point 1 to seal. Right-click targets and removes individual waypoints, or opens the Confirm Seal modal when clicking non-waypoints/air (only once $\ge 2$ waypoints exist).
+  - **Uncluttered Clean Interior**: Village interiors and courtyards remain 100% open and unobstructed with zero central pillars, boxes, or middle text.
+  - **Command Hub Dashboard**: Manage, rename (`[ ✎ ]`), or one-click delete (`[ ✕ ]`) sealed barriers with persistent world storage (`data/sovereign_barrier_zones.dat`).
+
+---
+
+### Survival Progression & Crafting Recipes
+
+- **Sovereign Command Scepter**: Crafted with 2 Gold Ingots, 1 Amethyst Shard, and 2 Blaze Rods (or Sticks) in a crafting table.
+- **Minion Spawn Egg**: Crafted shapelessly with 1 Egg, 1 Amethyst Shard, 1 Emerald, and 1 Gold Ingot.
+- **Tactical Ordnance**: Craft TNT Sticks (TNT + Stick) and cryogenic Frost Grenades (Ice / Snowball + Stick).
+- **Vanilla Recipe Book Integration**: Native recipe advancements automatically unlock these blueprints in your crafting table recipe book the moment you pick up their constituent ingredients (Amethyst Shards, Gold Ingots, Emeralds, Gunpowder, or Snowballs).
+- **Enthrallment in Survival**: Alternatively, switch the scepter to `RECRUIT` mode and right-click living vanilla mobs (zombies, skeletons, villagers, etc.) to transfigure them into minion thralls!
 
 ---
 
 ### Tactical Controls Cheat Sheet
 
-| Key / Action           | Context            | Tactical Function                                                                                                                                    |
-| :--------------------- | :----------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`V` Key**            | Scepter in Hand    | Opens the **Command Hub GUI** (squad channels, modes, patrol dashboard, blueprints, target filter).                                                  |
-| **`R` Key**            | Scepter in `BUILD` | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°).                                                                       |
-| **`R` Key**            | Other Modes        | **Squad Retreat**: Recalls selected active squad minions within 64m.                                                                                 |
-| **`Shift + R`**        | Scepter in Hand    | **Citadel Call**: Army-wide emergency alarm (128m) recalling all units and unbinding patrols.                                                        |
-| **Left-Click**         | Scepter in `BUILD` | **Normal Hit / Break** (`BLUEPRINT`) / **Pos1 & Pos2** (`AREA`).                                                    |
-| **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                                                                  |
-| **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 5$ blocks high permitted.                                                        |
-| **`Ctrl` + Scroll**    | `DESIGN` / `MINE` / `BUILD` | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).                                                   |
-| **Right-Click (Hold)** | `FOLLOW` / `STAY`  | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault (preserves hold position, patrol routes, and roaming). |
-| **Shift + Left-Click** | Minion Target      | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.                                                     |
-| **Sneak + Left-Click** | `DESIGN` / `MINE` / `BUILD` | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.                                                               |
-| **Sneak (Hold Shift)** | Leading Minions    | **Tactical Squad Sneak**: Minions crouch in sync; hides nametags and all overhead HUD badges.                                                        |
-| **`Tab` / `F` Key**    | In 3D Explorer     | **Maximize Viewport**: Toggles full-width $404 \times 194$ px 3D inspection view.                                                                    |
-| **Right-Click Drag**   | In 3D Explorer     | **Camera Pan**: Translates 3D model horizontally and vertically.                                                                                     |
-| **`▲` / `▼` Slicer**   | In 3D Explorer     | **Architectural Floor Slicer**: Steps through floors to inspect interior room layouts.                                                               |
+#### 🧭 Core Navigation & Interface
+
+| Key / Action           | Context            | Tactical Function                                                                                   |
+| :--------------------- | :----------------- | :-------------------------------------------------------------------------------------------------- |
+| **`V` Key**            | Scepter in Hand    | Opens the **Command Hub GUI** (squad channels, modes, patrol dashboard, blueprints, target filter). |
+| **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                 |
+| **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 5$ blocks high permitted.       |
+| **Sneak (Hold Shift)** | Leading Minions    | **Tactical Squad Sneak**: Minions crouch in sync; hides nametags and all overhead HUD badges.       |
+
+#### ⚔️ Squad & Tactical Combat Directives
+
+| Key / Action           | Context           | Tactical Function                                                                                             |
+| :--------------------- | :---------------- | :------------------------------------------------------------------------------------------------------------ |
+| **Right-Click (Hold)** | `FOLLOW` / `STAY` | Charges the **Banner of Courage (90° Sector)**; release to launch a synchronized Mass Assault across enemies. |
+| **`R` Key**            | Other Modes       | **Squad Retreat**: Recalls selected active squad minions within 64m.                                          |
+| **`Shift + R`**        | Scepter in Hand   | **Citadel Call**: Army-wide emergency alarm (128m) recalling all units and unbinding patrols.                 |
+| **Shift + Left-Click** | Minion Target     | **Designate Squad Leader**: Assigns all currently selected minions to escort the clicked leader.              |
+
+#### 🏗️ Construction, Area & Barrier Modes
+
+| Key / Action           | Context                 | Tactical Function                                                                                         |
+| :--------------------- | :---------------------- | :-------------------------------------------------------------------------------------------------------- |
+| **Left-Click**         | Scepter in `BUILD`      | **Hit / Break** (`BLUEPRINT`) / **Pos1 & Pos2** (`AREA`) / **Place Node & Close Loop** (`BARRIER`).       |
+| **Right-Click**        | `BUILD (BARRIER)`       | **Remove Node / Seal**: Removes clicked node; clicking non-waypoint/air opens Seal modal ($\ge 2$ nodes). |
+| **Shift + Left-Click** | `BUILD (BARRIER)`       | **Reset Barrier Draft**: Clears all unsealed barrier drafting nodes.                                      |
+| **`R` Key**            | Scepter in `BUILD`      | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°).                            |
+| **`Ctrl` + Scroll**    | `DESIGN`/`MINE`/`BUILD` | Real-time in-world 3D boundary height adjustment (hold `Shift` for $\pm 5$ fast stepping).                |
+| **Sneak + Left-Click** | `DESIGN`/`MINE`/`BUILD` | Clears both `Pos1` and `Pos2` selection corners, restarting spatial targeting cleanly.                    |
+
+#### 📐 3D Architectural Blueprint Explorer
+
+| Key / Action         | Context        | Tactical Function                                                                      |
+| :------------------- | :------------- | :------------------------------------------------------------------------------------- |
+| **`Tab` / `F` Key**  | In 3D Explorer | **Maximize Viewport**: Toggles full-width $404 \times 194$ px 3D inspection view.      |
+| **Right-Click Drag** | In 3D Explorer | **Camera Pan**: Translates 3D model horizontally and vertically.                       |
+| **`▲` / `▼` Slicer** | In 3D Explorer | **Architectural Floor Slicer**: Steps through floors to inspect interior room layouts. |
 
 > 📖 For the exhaustive controls manual, see [**COMMANDS.md**](COMMANDS.md).
 
@@ -196,6 +225,7 @@ The mod follows an event-driven, server-authoritative architecture built on Fabr
 ```
 src/main/java/com/example/
 ├── ExampleMod.java                   # Mod initialization, lifecycle events, item registration
+├── barrier/                          # Sovereign barrier manager, polygon raycasting & persistence
 ├── block/                            # Custom blocks and interactive multiblock stations
 ├── blueprint/                        # Spatial blueprint capture, CustomBlueprintManager & StructureBlueprint
 ├── construction/
@@ -217,8 +247,8 @@ src/main/java/com/example/
 
 src/client/java/com/example/client/
 ├── ExampleModClient.java             # Client entrypoint, keybinding registration & render tick events
-├── gui/                              # Screens (Command Hub, Minion GUI, Route Editor, Modals)
-└── renderer/                         # 3D world renderers (holographic ghost grids, lasers, badges)
+├── gui/                              # Screens (Command Hub, Minion GUI, Route Editor, Barrier Modals)
+└── renderer/                         # 3D world renderers (holographic ghost grids, barrier forcefield, lasers, badges)
 ```
 
 ---
@@ -251,7 +281,7 @@ All builds and runtime tasks are managed via the included Gradle wrapper (`./gra
 # Launch a standalone dedicated server for network/multiplayer debugging
 ./gradlew runServer
 
-# Run the complete automated test suite (639 tests)
+# Run the complete automated test suite (738 tests)
 ./gradlew test
 
 # Compile and package the production mod JAR (outputs to build/libs/)
@@ -299,6 +329,7 @@ We maintain an extensive automated unit and invariant test suite located in `src
 - **Entity & AI Goals**: `SentinelHealGoalTest`, `SentinelSentrySenseTest`, `BuilderNoCombatTest`, `MinionFormationAndEquipTest`, `MinionSquadAndRoleTest`
 - **Logistics & Harvesting**: `MinionLogisticsAndHarvestingTest`, `MinionAntiJitterAndLevitationSafetyTest`
 - **Construction & Dismantling**: `StructureDismantlingTest`, `MiningChainingEgressTest`, `BedrockAndCeilingSafeguardTest`, `SpatialBlueprintCaptureAndSortingTest`
+- **Sovereign Barriers & Defense**: `BarrierZoneTest`
 - **Blueprint UI & Palette Remapping**: `BlueprintPaletteRemapModalTest`, `BlueprintCaptureModalScreenTest`, `GuiBlurRemovalTest`
 - **Ordnance & Physics**: `FrostGrenadeTest`
 - **Recipes & Multi-Version Compatibility**: `ModRecipeJsonValidationTest`, `CommandScepterTooltipAndComponentsTest`, `FabricVersionPredicateTest`

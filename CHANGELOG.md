@@ -6,13 +6,86 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
-## [1.1.1] - 2026-10-14
+## [1.1.1] - 2026-10-15
 
-### 🔨 Area Fill / Volumetric Construction, Water Logistics & Builder Minion Survival Crafting
+### 🛡️ Sovereign Barrier Defense, Area Fill Volumetric Construction & Protective Autonomous Logistics
 
 ### Added
 
+#### 🛡️ Sovereign Barrier Mode (`BuildingMode.BARRIER`, `BarrierZone`, `BarrierManager`)
+
+- **Dedicated BUILD Sub-Mode: Barrier**:
+  - Added `BuildingMode.BARRIER` alongside `BLUEPRINT` and `AREA` modes.
+  - Cycled seamlessly in the Command Scepter GUI (`BLUEPRINT` -> `AREA` -> `BARRIER` -> `BLUEPRINT`) or right-clicked with the Command Scepter.
+  - Allows commanders to establish protective perimeters around villages, bases, structures, and farms.
+- **Clear Defensive Purpose: Minion Harvesting Protection**:
+  - **Zero Accidental Harvesting**: Minions will **never** quarry stone, fell trees, scoop water, or break blocks inside any protected barrier zone by accident.
+  - **Automated Agro-Forestry Plants Outside Barriers**: When builder minions require timber for blueprint construction, `findPlantingPosition` filters candidate spots through `isProtectedBlock`. Builder minions strictly plant saplings and fell trees **outside** sealed barrier perimeters in the wild, leaving village grounds and decorative trees inside the perimeter untouched.
+  - **Other Minion Modes Completely Unaffected**:
+    - **Follow Mode**: Minions walk, run, and cross barrier perimeters freely alongside their commander without physical obstruction.
+    - **Hold Mode**: Minions hold positions normally anywhere inside or outside the barrier.
+    - **Patrol (Pathway) Mode**: Minions patrol routes, guard gates, and follow waypoints inside, along, or across barrier borders without restriction.
+    - **Combat / Defense**: Minions engage hostiles, fire arrows, and heal allies across barrier zones seamlessly.
+  - **Explicit Task Exceptions**: Minions can only break/modify blocks inside barrier perimeters if explicitly commanded by the player via:
+    - **Mining Mode** (Direct or Area mining tasks).
+    - **Blueprint Construction** (explicit structural task placement).
+    - **Area Fill Mode** (explicit volumetric fill tasks).
+- **Dynamic Multi-Node Perimeters (Barrier 1, 2, 3.. N)**:
+  - Unlike rigid 2-point rectangular boxes, Barrier mode supports an arbitrary sequence of $N$ boundary points (`Barrier 1, 2, 3... N`) to hug organic village borders, hills, rivers, and walls.
+  - **Point-in-Polygon (Jordan Curve) Containment**: Evaluates interior territory using ray-casting algorithms on the horizontal X/Z plane with 1-block perimeter edge tolerance.
+- **Ping-Pong Open Chain Drafting & Real-Time Ghost Tether ("Ping-Pong Ghost View")**:
+  - **Open Polyline Drafting**: Perimeters remain as an open sequential path ($1 \rightarrow 2 \rightarrow 3\dots$) while building, eliminating awkward premature lines cutting across courtyards.
+  - **Real-Time Crosshair Ghost Tether**: A golden vector line tethers dynamically from the last placed node to the player's crosshair, previewing the next perimeter wall before clicking.
+  - **Snap-to-Close Loop Closure**: Aiming at or left-clicking **Point #1** (or intermediate points) snaps the circuit closed with a vibrant pulsing emerald beacon (`§a✦ [ Left-Click to Close & Seal ] ✦`) and immediately pops up the Seal Modal.
+  - **Independent Barrier Creation**: Placing points on fresh ground always creates a brand-new independent barrier without being swallowed by nearby existing barriers.
+  - **Explicit Extension**: Left-clicking an existing sealed barrier waypoint starts or resumes a barrier extension directly from that node.
+- **Generous 256-Block Vertical Protection by Default**:
+  - Default vertical expansion (`DEFAULT_VERTICAL_EXPANSION_UP = 256`, `DEFAULT_VERTICAL_EXPANSION_DOWN = 64`), giving full coverage from deep underground/bedrock up to 256 blocks high automatically.
+- **Uncluttered Clean Interior (Perimeter-Only Boundary Visualization)**:
+  - **100% Clean Interior**: Removed all center monuments, middle laser lines, ground boxes, center titles, and sky crests from inside sealed barriers. Village courtyards and base interiors remain completely unobstructed and pristine.
+  - **Perimeter-Only Wireframe**: Confirmed barriers render strictly via their outer wireframe boundaries (`RenderLayer.getLines()`) and hovering billboard tags above boundary waypoints (`[ Barrier 1 #1 ]`, `[ Barrier 1 #2 ]`, etc.).
+  - **Vertex Buffer Flushing**: Explicit `immediate.draw()` at the end of `WorldRenderEvents.AFTER_TRANSLUCENT` flushes all waypoint tags and boundary wireframes cleanly to the GPU without fog or clipping artifacts.
+  - **Persistent Perimeter Visibility**: Confirmed sealed barrier borders render cleanly whenever holding the Command Scepter in any mode.
+- **Unified Barrier Mode Controls**:
+  - **Left-Click (Primary Action)**:
+    - Left-clicking solid ground/blocks adds a perimeter waypoint to the active draft.
+    - Left-clicking an existing confirmed waypoint starts or resumes a barrier extension directly anchored at that node.
+    - Left-clicking any waypoint (Point 1 or intermediate) while drafting snaps the circuit closed and immediately opens the Seal Modal.
+    - Shift + Left-Click resets and clears all unsealed drafting points.
+  - **Right-Click (Removal & Modal Action)**:
+    - Right-clicking on a targeted barrier waypoint (pending or confirmed) removes **only that specific clicked node**.
+    - Right-clicking on **anything else** (regular ground terrain, interior land, solid blocks, or open air) opens the **Confirm Sovereign Barrier Modal** **strictly when at least 2 waypoints have been placed down**. If 0 or 1 waypoints exist, clicking non-waypoints does nothing until the second waypoint is placed down.
+    - Shift + Right-Click opens the Command Hub GUI.
+- **Defunct Barrier Automatic Cleanup in World & GUI**:
+  - Automatically deletes any sealed barrier zone from `BarrierManager` and `ClientBarrierTracker` when its waypoint count drops below 2 after removing nodes.
+  - Filtered `getConfirmedZones()`, `loadFromPersistentState()`, and `CommandScepterScreen.updateBarrierButtons()` so defunct 1-node barrier ghosts never show up in the Sovereign Barrier list in the GUI.
+- **Custom Barrier Naming & Command Scepter Barrier Dashboard**:
+  - **Name Input Field in Seal Modal**: Added interactive `TextFieldWidget` in `BarrierConfirmModalScreen` allowing commanders to name each barrier upon sealing (e.g. `Main Base`, `Oak Farm`, `Castle Courtyard`).
+  - **Barrier Dashboard in Scepter GUI**: In `BUILD (BARRIER)` mode, displays a paginated list of all sealed barriers with name, waypoint count, and height specs.
+  - **One-Click Deletion (`[ ✕ ]`)**: Permanently removes the entire barrier and all its nodes in one click, without needing to walk around and remove each node individually.
+  - **Rename & Inspect Modal (`[ ✎ ]`)**: Added `BarrierEditModalScreen` to rename any existing barrier or inspect its perimeter metrics.
+  - **Network Synchronization**: Added `RENAME_ZONE` action to `ModifyBarrierZonePayload` and server handling in `ModNetworking`.
+- **Top-of-Block Barrier Placement**:
+  - Barrier nodes are computed using `world.getBlockState(clickedPos).isReplaceable() ? clickedPos : clickedPos.offset(side)`, placing nodes directly on top of solid terrain rather than inside blocks.
+- **Targeted Single-Node Barrier Removal**:
+  - Right-clicking on an individual barrier node/waypoint (or targeting the floating beacon hologram beam) removes **only that specific clicked node** from the barrier perimeter.
+  - All other connected barrier waypoints remain intact, preserving the overall perimeter shape.
+- **Reliable Modal Opening on Land & High Altitude**:
+  - Eliminated broad fuzzy distance tolerances and restricted open-air raycasting strictly to un-targeted clicks within standard interaction reach ($\le 6.0$ blocks) using tight AABB intersection.
+  - Right-clicking regular terrain, interior land, or open space from any height (including $100+$ blocks aloft) reliably opens the **Confirm Sovereign Barrier** modal screen without inadvertently deleting pending perimeter nodes.
+- **Render Thread Safety for Modal Opening**:
+  - Ensured all modal openers in `ExampleModClient` and `CommandScepterItem` dispatch safely on the Minecraft client render thread via `client.execute(...)` and guard with `world.isClient()`, resolving Fabric Screen API `Ticking screen` crashes.
+- **World Persistence & Server Lifecycle (`BarrierPersistentState`, `BarrierManager`)**:
+  - Barrier zones persist across world restarts and dimension loads via `data/sovereign_barrier_zones.dat`.
+  - Automatically loads and synchronizes with clients on player connection.
+- **Command Scepter & GUI Controls (`CommandScepterScreen`, `CommandScepterItem`)**:
+  - Replaced the right-hand blueprint catalog panel in Barrier mode with barrier metrics, ceiling height, and defensive purpose description.
+  - Corrected the Building sub-mode toggle button text from `"Blue"` to `"Build"` (`§b🏛 Build`).
+  - Command Hub GUI features dedicated `§6✦ Seal` and `§c⌫ Reset` buttons, dynamic banner status, and updated tooltips.
+  - Full support for setting and sealing barrier nodes from the sky using the Tactical Build Camera.
+
 #### 📦 Chests or Inventory Only Rule & Structure-Protected World Harvesting (128m Village Range)
+
 - **Chests or Inventory Only for Non-World Resources (`MinionHarvestingHelper.isNaturallyOccurringWorldResource`, `MinionBuildGoal`)**:
   - Enforced the rule that **any block or non-block that cannot be found naturally in the world** (e.g. wood planks, stairs, slabs, fences, gates, doors, trapdoors, stone bricks, polished/smooth stone, cut sandstone, terracotta, concrete, glass, wool, carpets, lanterns, torches, workstations, beds, metal ingots) is strictly **Chests or Inventory Only**.
   - If a required non-world block or non-block is not in the minion's inventory, cannot be found in nearby containers, and cannot be crafted from base ingredients already in containers or inventory, minions will **never** attempt to break blocks from the world or dismantle builds; they cleanly trigger `handleResourceDeficiency`.
@@ -32,6 +105,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **BOM & Modal Alignment**: Updated Bill of Materials calculations in `ModNetworking`, `CommandScepterItem`, and `BlueprintResourceEstimatorModalScreen` to scan across the full 128m village range.
 
 #### 💀 Minion Skull & Mob Head Interaction, Inventory Access & 3D Rendering
+
 - **Client Prediction & Direct UUID Ownership Validation (`MinionEntity.isOwner`)**:
   - Fixed an issue where players were unable to check a minion's inventory or interact with tamed minions wearing a wither skeleton skull, helmet, or armor in singleplayer or offline sessions.
   - Added direct UUID equality checks (`ownerUuid.equals(entity.getUuid())`) that evaluate reliably across both client and server, preventing reference resolution failures in `ClientWorld`.
@@ -48,10 +122,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Minions equipped with wither skeleton skulls, mob heads, or carved pumpkins now visually render the head in full 3D in both the in-game world and the central 3D preview of `MinionScreen`.
 
 #### 🧱 Connectable Block Alignment & Clipping Resolution (`Block.postProcessState`, `MinionBuildGoal`)
+
 - Resolved an issue where fences, glass panes, and walls placed by builder minions appeared with open gaps and did not visually connect/clip to adjacent solid blocks.
 - Added `updateConnectableNeighbors` invoking `Block.postProcessState` to immediately recalculate connection properties (`north`, `south`, `east`, `west`) whenever connectable blocks or their adjacent neighbors are placed in the world.
 
 #### 💧 Water & Fluid Source Block Construction Logistics
+
 - **Water Bucket Material Mapping (`BlueprintBlock.getRequiredItem`, `StructureBlueprint.Builder.build`)**:
   - Blueprint water source blocks (`Blocks.WATER`) now properly resolve to `Items.WATER_BUCKET` instead of returning `Items.AIR`.
   - Lava source blocks (`Blocks.LAVA`) resolve to `Items.LAVA_BUCKET`.
@@ -80,6 +156,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Allows builder minions constructing high aqueducts, watchtowers, or rooftop fountains to safely reach ground-level rivers, ponds, and aquifers below without stalling water logistics.
 
 #### 📦 Nearby Chest & Container-Inclusive Readiness Percentage & BOM Logistics
+
 - **Nearby Container Inventory Aggregation (`MinionHarvestingHelper.countItemsInNearbyContainers`)**:
   - Construction readiness calculations now fully evaluate items stored in nearby container block entities (chests, barrels, trapped chests, shulker boxes, dispensers, droppers) within 32 blocks of the player or session anchor.
   - Recognizes that while the player's personal bag and minion thralls may be temporarily empty, builder minions autonomously scavenge required materials from nearby base chests/depots to complete construction tasks without player intervention.
@@ -97,6 +174,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Blueprint catalog tooltips in Command Hub GUI display `Nearby Chests Contributing: M`.
 
 #### ⛏️ Mining & Dismantle Fluid Mechanics & Water Source Removal
+
 - **Liquid Block Tool Immunity (`ConstructionSession`, `MinionBuildGoal.executeDismantleWork`)**:
   - In both Survival and Creative modes, minions mining or dismantling structures strictly ignore water, lava, and any fluids (`isLiquid()` / `FluidBlock`).
   - Minions will never swing tools at water/lava or attempt to clear fluids with pickaxes.
@@ -112,6 +190,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Natural seeping fluids or ocean aquifers no longer prevent dismantle sessions from reaching 100% completion.
 
 #### 🛡️ Safe Solid Ground Positioning & Aquatic Builder Safeguards
+
 - **Aquatic Construction Drowning Safeguard (`MinionEntity.damage`)**:
   - Builder minions actively engaged in construction tasks or arcane levitation are granted drowning damage immunity (`DamageTypes.DROWN`) and replenish air supply.
   - Guarantees minions building deep fountains, harbor foundations, underwater tunnels, or flooded moats will never suffocate underwater during work.
@@ -122,6 +201,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Structure egress (`finishBuildingEgress`) and task goal termination (`MinionBuildGoal.stop`) preserve active arcane levitation if over fluids until the minion is safely centered above solid ground.
 
 #### ✨ Area Fill Mode Particle Cleanup
+
 - **Blueprint Perimeter Particle Suppression (`CommandScepterItem.inventoryTick`)**:
   - Suppressed idle ground perimeter bounding particles when holding the scepter in `BUILD (AREA)` mode, preventing blueprint outlines from cluttering the screen while using Area Fill.
 - **Corner Selection Particle Removal (`CommandScepterItem.handleBuildPos1`, `handleBuildPos2`)**:
@@ -230,6 +310,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Safe Overflow Item Drops (`giveOrDropItem`)**: When felling logs or quarrying stone with a completely full backpack, surplus items are safely spawned in the world at the minion's feet rather than being voided.
   - **Multi-Session Task & Volume Protection (`isPositionInAnyActiveSession`)**: Blocks at any coordinate designated by an active blueprint task or volume across any session on the server are strictly protected from harvesting.
   - **Zero Build Cannibalization**: If no natural living trees exist in the area, builders strictly rely on agro-forestry (planting and bone-mealing saplings into full trees) rather than taking logs from buildings.
+
+### Changed & Fixed
+
+#### 🎯 Barrier Mode Control Scheme: Left-Click to Place/Extend/Seal, Right-Click to Remove/Modal (`CommandScepterItem`, `ExampleMod`, `ExampleModClient`, `BarrierHologramRenderer`)
+
+- **Full Control Assignment for Barrier Mode**:
+  - **Left-Click (Primary Action)**: Sets sequential boundary points (`Point 1, 2, 3... N`) on targeted ground blocks; left-clicking an existing confirmed waypoint initiates a new barrier extension anchored directly at that waypoint; left-clicking Point 1 or any waypoint snaps the perimeter loop closed and opens `BarrierConfirmModalScreen`.
+  - **Right-Click (Removal & Modal Trigger)**: Right-clicking any existing or pending waypoint instantly deletes only that specific node; right-clicking regular terrain, solid blocks, or open air opens the Confirm modal strictly when $\ge 2$ waypoints exist.
+- **Dynamic Holographic HUD & Action Bar Feedback**:
+  - Hovering over any valid close target displays: `§a✦ [ Left-Click to Close & Seal ] ✦`.
+  - Hovering over existing confirmed waypoints while idle highlights the node in amber and displays: `§6✦ [ Left-Click: Extend | Right-Click: Remove ] ✦`.
+  - Action bar messages updated: `§6✦ Barrier Point #N set at [x, y, z] §7(Left-click any waypoint to Seal | Right-click to Remove)`.
+- **Start Extension from Any Specific Clicked Waypoint**:
+  - Left-clicking any waypoint (Waypoint 1, 2, or 3) of an existing confirmed barrier while idle initiates a new barrier extension directly anchored at that specific clicked waypoint (`ClientBarrierTracker.startExtensionFrom`).
+  - Begins Point 1 at the clicked waypoint with the interactive golden ghost tether attached.
+- **Universal Loop Closure on Created or Existing Waypoints**:
+  - Commanders can close and seal their new extension barrier using **any barrier point created in the draft** (Point 1 or intermediate points) or **any waypoint that already existed** in the world across any confirmed barrier (`ClientBarrierTracker.findCloseTarget`).
+- **Fixed Waypoint Closure Bug**:
+  - Replaced ambiguous branching with a unified `BARRIER_CLOSER` workflow: left-clicking any valid close target seamlessly completes the circuit polygon and immediately opens the `BarrierConfirmModalScreen` with all drafted nodes intact.
+  - When closing onto an existing confirmed waypoint from another barrier, that waypoint is automatically appended to complete the continuous perimeter.
+
+#### 🛡️ Uncluttered Barrier Interior & Clean Territory Rendering (Zero Center Monuments/Pillars)
+
+- Completely removed all center monuments, middle laser lines, ground boxes, center titles, and sky crests from inside sealed barriers (`BarrierHologramRenderer`). Village courtyards and base interiors remain 100% clean and unobstructed.
+- Boundary visualization is strictly perimeter-based using outer wireframes and hovering waypoint badges.
+
+#### 🛡️ Barrier Mode Ceiling Options Removal (`BarrierConfirmModalScreen`, `MouseMixin`, `ExampleModClient`)
+
+- Removed ceiling adjustment buttons (`[-5]`, `[-1]`, `[+1]`, `[+5]`), ceiling row labels, and scroll/hotkey adjustments exclusively from **Barrier Mode**, as barriers already automatically cover a 256-block vertical protection span from bedrock into the high sky by default.
+- Reduced the `BarrierConfirmModalScreen` window height from 168 to 160 for a clean, streamlined confirmation dialog focused on custom barrier naming and perimeter metrics.
+- Vertical height adjustments and keyboard/scroll shortcuts (`Ctrl` + Scroll, `[` / `]`, `PageUp` / `PageDown`) remain 100% active and unaffected for **Design Mode** (`CommandMode.DESIGN`), **Area Mining** (`MiningMode.AREA`), and **Area Fill Construction** (`BuildingMode.AREA`).
+
+#### 🛡️ Barrier Hologram Two-Pass Sequential Rendering Fix (`BarrierHologramRenderer`)
+
+- Fixed client crash (`IllegalStateException: Not building!`) when placing barrier waypoints or previewing ghost tether lines with the Command Scepter in `BUILD (BARRIER)` mode.
+- Interleaving `textRenderer.draw(...)` calls for waypoint badges between `WorldRenderer.drawBox` and `drawVectorLine` prematurely terminated the active `RenderLayer.getLines()` `BufferBuilder`.
+- Decoupled `BarrierHologramRenderer.render` into two strict sequential passes:
+  - **Pass 1 (Lines & Wireframes)**: Renders all sealed wireframe polygons, pending open polylines, emerald snap indicator boxes, and real-time crosshair ping-pong ghost tether lines in a single continuous `RenderLayer.getLines()` buffer before executing a clean flush.
+  - **Pass 2 (Text & Billboards)**: Renders all floating corner badges (`[ Point 1 • Start ]`), emerald snap prompts (`[ Left-Click to Close & Seal ]`), and waypoint billboard tags cleanly via `TextRenderer`.
+
+#### 📐 Barrier Confirm Modal Layout & Text Fit Fix (`BarrierConfirmModalScreen`)
+
+- Expanded modal card width to 340px and formatted perimeter metrics and bulleted defensive purpose text into concise, cleanly wrapped lines.
+- Completely resolved text clipping and run-off on the right border, providing comfortable margins and symmetrically aligned bottom action buttons (`[✦ Seal]`, `[✕ Cancel]`, `[⌫ Remove]`).
+
+#### 💀 Survival Resource Origin Contract & Free Item Conjuration Fix (`MinionBuildGoal`, `MinionEntity`)
+
+- Fixed an issue where builder minions in Survival mode could build blocks (such as skeleton skulls, mob heads, or rare blocks) without possessing the required materials.
+- In Creative mode, minions equip visual block previews in their main hand; in Survival mode, `previewStack` is strictly bypassed and main hands retain held weapons, preventing role-enforcement loops from disarming preview items into backpack slots.
+- Protected active builder minions from inventory stashing (`!this.isActivelyBuilding()`).
+- Added explicit material item resolutions for wall-variant blocks in `BlueprintBlock.getRequiredItem`: `SKELETON_WALL_SKULL`, `WITHER_SKELETON_WALL_SKULL`, `PLAYER_WALL_HEAD`, `ZOMBIE_WALL_HEAD`, `CREEPER_WALL_HEAD`, `PIGLIN_WALL_HEAD`, `DRAGON_WALL_HEAD`, wall torches, wall hanging signs, wall signs, wall banners, and wall coral fans to prevent falling back to `Items.AIR`.
+- Cleaned up Area Fill blueprint generation to resolve exact block items via `BlueprintBlock.getRequiredItem()`, preventing unmapped blocks from defaulting to cobblestone.
+
+#### 🔇 Audio De-Spam & Deficiency Notification Throttling (`MinionBuildGoal.handleResourceDeficiency`)
+
+- **Removed Annoying Villager Grunt Loop**: Removed `SoundEvents.ENTITY_VILLAGER_NO` from the resource deficiency trigger.
+- **Global Dispenser Fail Sound Throttling**: Softened `SoundEvents.BLOCK_DISPENSER_FAIL` volume (0.5F) and throttled it to play at most once every 5 seconds (100 ticks) globally across the entire village (`DEFICIENCY_SOUND_COOLDOWN_TICKS = 100L`), eliminating repetitive click sounds.
+- **Throttled Action Bar Alerts**: Deficiency alerts in the action bar are now throttled to once every 5 seconds per minion.
+- **Increased Failure Retry Backoff**: Raised task failure retry cooldown from 10 ticks (0.5s) to 60 ticks (3.0s), allowing builder minions to rest smoothly rather than spamming pathfinder queries when waiting for materials.
 
 ---
 
@@ -432,6 +571,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 #### 🪵 Connectable Block Seamless Clipping & Bidirectional Neighbor Updates (`MinionBuildGoal`, `ConstructionSession`)
+
 - **Seamless Fence, Pane, Wall, and Stair Snapping**:
   - Fixed an issue where fences, glass panes, and iron bars placed by builder minions did not clip to adjacent solid blocks or neighboring connectable blocks, leaving an unnatural visual air gap.
   - Builder minions now execute `Block.postProcessState(targetState, serverWorld, targetPos)` prior to placing any connectable block (`HorizontalConnectingBlock` including fences, glass panes, iron bars; `WallBlock`; `StairsBlock`; `FenceGateBlock`; `ConnectingBlock`; `RedstoneWireBlock`; `TripwireBlock`). Connectable blocks immediately query their 6-directional neighbors and connect seamlessly upon world placement.

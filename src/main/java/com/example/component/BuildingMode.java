@@ -14,11 +14,13 @@ import net.minecraft.util.function.ValueLists;
  * <ul>
  * <li><b>BLUEPRINT</b> (id 0, Aqua): Place and construct architectural blueprints from catalog.</li>
  * <li><b>AREA</b> (id 1, Dark Aqua): Custom 3D volumetric fill construction with block picker modal.</li>
+ * <li><b>BARRIER</b> (id 2, Gold): Protects territory from minion harvesting.</li>
  * </ul>
  */
 public enum BuildingMode implements StringIdentifiable {
 	BLUEPRINT(0, "blueprint", "Blueprint / Structure", "§b", Formatting.AQUA),
-	AREA(1, "area", "Area Fill / Volumetric", "§3", Formatting.DARK_AQUA);
+	AREA(1, "area", "Area Fill / Volumetric", "§3", Formatting.DARK_AQUA),
+	BARRIER(2, "barrier", "Barrier", "§6", Formatting.GOLD);
 
 	public static final Codec<BuildingMode> CODEC = StringIdentifiable.createCodec(BuildingMode::values);
 

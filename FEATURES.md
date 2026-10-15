@@ -74,6 +74,13 @@ This document provides a comprehensive technical breakdown of all gameplay featu
     - [28.1 Synchronized Commander Sneaking & Squad Posture](#281-synchronized-commander-sneaking--squad-posture)
     - [28.2 Complete Name Tag & Overhead Badge Stealth Suppression](#282-complete-name-tag--overhead-badge-stealth-suppression)
     - [28.3 Stealth Creep Pacing](#283-stealth-creep-pacing)
+29. [Sovereign Barrier Mode & Protective Defense Perimeters](#29-sovereign-barrier-mode--protective-defense-perimeters)
+    - [29.1 Defensive Purpose & Autonomous Harvesting Immunity](#291-defensive-purpose--autonomous-harvesting-immunity)
+    - [29.2 Polygonal Multi-Node Boundaries & Point-in-Polygon Raycasting](#292-polygonal-multi-node-boundaries--point-in-polygon-raycasting)
+    - [29.3 Unified Barrier Mode Controls](#293-unified-barrier-mode-controls)
+    - [29.4 100% Uncluttered Clean Interior (Zero Center Monuments/Pillars)](#294-100-uncluttered-clean-interior-zero-center-monumentspillars)
+    - [29.5 Barrier Dashboard, Dynamic Naming & Defunct Barrier Purging](#295-barrier-dashboard-dynamic-naming--defunct-barrier-purging)
+    - [29.6 World Save Persistence & Network Synchronization](#296-world-save-persistence--network-synchronization)
 
 ---
 
@@ -578,26 +585,33 @@ Opened via **Sneak + Right-Click** directly on an owned minion. Features an expa
 
 ## 6. Multiblock Construction & Blueprint Engine
 
-### 6.1 Dual Operational Sub-Modes: BLUEPRINT vs. AREA Building
+### 6.1 Three Operational Sub-Modes: BLUEPRINT, AREA & BARRIER Building
 
-The **`BUILD`** operational mode features two complementary construction paradigms designed with **perfect architectural symmetry to `MINE` mode's `DIRECT` vs. `AREA` duality**:
+The **`BUILD`** operational mode features three complementary sub-modes supporting pre-fabricated blueprint placement, custom volumetric area construction, and sovereign territory defense:
 
 ```
-                                  [BUILD Operating Mode]
-                                            │
-                    ┌───────────────────────┴───────────────────────┐
-                    ▼                                               ▼
-         [BLUEPRINT Sub-Mode]                            [AREA Sub-Mode]
-   • Multiblock structure placement                • Volumetric area filling & solid construction
-   • Armed from player custom blueprint catalog    • Arbitrary block selection (Stone, Bricks, etc.)
-   • Rotatable 3D holograms (0°, 90°, 180°, 270°)  • Sequential Left-Clicks: Pos1 ➔ Pos2
-   • 96m crosshair reach aerial placement          • Real-time height adjustment (Ctrl + Scroll)
-   • Multi-tier material Bill of Materials (BOM)   • Cyan/Aqua ghost grid bounding wireframe
-   • Persistent blueprint chaining                 • Dedicated Confirmation Modal Screen
+                                              [BUILD Operating Mode]
+                                                        │
+                      ┌─────────────────────────────────┼─────────────────────────────────┐
+                      ▼                                 ▼                                 ▼
+            [BLUEPRINT Sub-Mode]                 [AREA Sub-Mode]                  [BARRIER Sub-Mode]
+      • Multiblock structure placement     • Volumetric area filling & solid • Polygonal defense perimeters
+      • Armed from blueprint catalog       • Arbitrary block selection       • Zero accidental harvesting
+      • Rotatable 3D holograms             • Sequential Left-Clicks: Pos1➔Pos2 • Multi-node points: 1..N
+      • 96m aerial crosshair placement     • Real-time height (Ctrl+Scroll)  • Left-Click place/extend/seal
+      • Multi-tier material BOM modal      • Cyan/Aqua ghost grid wireframe  • Right-Click remove/modal
+      • Persistent blueprint chaining      • Dedicated Confirmation Modal    • 100% clean, open interior
 ```
 
-- **Seamless Sub-Mode Cycling**: Commanders toggle between `BLUEPRINT` and `AREA` building modes directly within the Command Hub GUI (`CommandScepterScreen`) via the `[ 🏛 Blue ]` vs `[ ◫ Area ]` selector buttons, or by cycling building sub-modes on the Command Scepter (`CommandScepterItem.cycleBuildingMode()`).
+- **Seamless Sub-Mode Cycling**: Commanders cycle between `BLUEPRINT`, `AREA`, and `BARRIER` building modes directly within the Command Hub GUI (`CommandScepterScreen`) via the `[ 🏛 Build ]` / `[ ◫ Area ]` / `[ 🛡 Barrier ]` selector buttons, or by cycling building sub-modes on the Command Scepter (`CommandScepterItem.cycleBuildingMode()`).
 - **NBT Component Backing**: Synchronized across client and server via the `BUILDING_MODE` item component (`ModDataComponents.BUILDING_MODE`), preserving active sub-mode state across weapon swaps, deaths, and world restarts.
+- **Complete Wall-Variant Block Item Mapping (`BlueprintBlock.getRequiredItem`)**:
+  - Automatically translates wall-mounted variant blocks into their corresponding inventory item counterparts, preventing fallbacks to `Items.AIR`:
+    - `WALL_TORCH` $\to$ `Items.TORCH`, `SOUL_WALL_TORCH` $\to$ `Items.SOUL_TORCH`, `REDSTONE_WALL_TORCH` $\to$ `Items.REDSTONE_TORCH`
+    - Wall Hanging Signs & Wall Signs $\to$ corresponding Hanging Sign / Sign item stacks
+    - Wall Banners $\to$ corresponding Banner items
+    - Wall Coral Fans $\to$ corresponding Coral Fan items
+    - Mob Wall Skulls/Heads (`SKELETON_WALL_SKULL`, `WITHER_SKELETON_WALL_SKULL`, `PLAYER_WALL_HEAD`, `ZOMBIE_WALL_HEAD`, `CREEPER_WALL_HEAD`, `PIGLIN_WALL_HEAD`, `DRAGON_WALL_HEAD`) $\to$ corresponding skull/head items.
 
 ### 6.2 Configurable 3D Area Boundary & Sequential Corner Invariants
 
@@ -1255,6 +1269,13 @@ The commander's active game mode dynamically dictates minion logistics, resource
     - _Indoor-to-Outdoor Transition_: When an indoor minion has no line-of-sight to an exterior/roof hover station and cannot pathfind directly on foot, it automatically locates the nearest exterior exit doorway or open-sky perimeter waypoint (`findStructureExitWaypoint`). It walks out the door on the ground, automatically opens closed doors in its path (`autoOpenNearbyDoors`), and immediately engages Arcane Levitation to fly up to the roof station as soon as it reaches the open air.
     - _Outdoor-to-Indoor Transition_: When hovering in the air or on the roof and assigned an interior task (furniture, bed, workstation), the minion smoothly glides down outside to the entrance doorstep, disengages levitation, and walks through the doorway into the room.
     - _Emergency Arcane Phase Egress_: If a minion becomes trapped inside a completely sealed room with no doors or openings for 35+ ticks, it executes an Arcane Phase teleport to the outside ground with portal particles and teleport sound, guaranteeing minions are never permanently entombed.
+
+### Resource Deficiency Alert Throttling & Audio De-Spam (`MinionBuildGoal.handleResourceDeficiency`)
+
+- **Elimination of Repetitive Villager Sounds**: Completely removed `SoundEvents.ENTITY_VILLAGER_NO` from the missing-material handling pipeline to eliminate annoying auditory grunting loops when supplies run out.
+- **Global Dispenser Fail Audio Throttling**: Softened `SoundEvents.BLOCK_DISPENSER_FAIL` volume to `0.5F` and throttled audio to play at most once every 5 seconds (100 ticks) across the entire village (`DEFICIENCY_SOUND_COOLDOWN_TICKS = 100L`).
+- **Throttled Action Bar Feedback**: Visual deficiency alerts (`§c⚠ Builder lacks required material: X`) are throttled to once every 5 seconds per minion.
+- **Extended Failure Retry Backoff**: Raised task failure retry backoff from 10 ticks (0.5s) to 60 ticks (3.0s), allowing builder minions to rest smoothly rather than spamming pathfinder queries when waiting for materials.
 
 ---
 
@@ -2223,3 +2244,90 @@ Deficient items (`delta < 0`) are dynamically tagged using `MinionHarvestingHelp
 
 - **Matching Crouch Speed**: `MinionFormationFollowGoal` and `MinionFollowLeaderGoal` reduce cruising speed to `0.65D` (stealth creep) when sneaking, perfectly matching the commander's crouching pace without jostling or overrunning the leader.
 - **Dynamic Catch-Up March**: If sneaking minions fall farther than 8 blocks behind their station (`distToOwnerSq > 64.0D`), they temporarily march at `1.15D` to close the gap while remaining crouched, seamlessly dropping back to `0.65D` upon rejoining formation.
+
+---
+
+## 29. Sovereign Barrier Mode & Protective Defense Perimeters
+
+The **Sovereign Barrier Mode** (`BuildingMode.BARRIER`) is a defensive territory governance system allowing commanders to establish polygonal boundaries (`BarrierZone`) around villages, bases, farmlands, and player-constructed architecture. Sealed barrier zones protect interior terrain and flora from autonomous minion harvesting while preserving full tactical mobility:
+
+```
+                                            [BUILD (BARRIER) Mode]
+                                                      │
+                    ┌─────────────────────────────────┴─────────────────────────────────┐
+                    ▼                                                                   ▼
+       [Left-Click: Primary Action]                                        [Right-Click: Secondary Action]
+ • Ground / Blocks: Place Point 1..N                                 • Targeted Waypoint: Remove clicked node
+ • Confirmed Waypoint: Extend barrier                                • Non-Waypoint / Air: Open Seal Modal
+ • Snap to Point 1: Close loop & Seal                                  (Strictly requires ≥ 2 waypoints)
+ • Shift + Left-Click: Reset Draft                                   • Shift + Right-Click: Open Command Hub
+```
+
+### 29.1 Defensive Purpose & Autonomous Harvesting Immunity
+
+- **Zero Accidental Harvesting**:
+  - Builder minions in Survival mode will **never** fell trees, quarry natural stone, scoop water, or break blocks inside any protected barrier zone during autonomous resource gathering.
+  - Prior to selecting candidate blocks for felling or mining, `MinionHarvestingHelper` checks `BarrierManager.isProtectedBlock(world, pos)`. If the target position falls within any confirmed barrier perimeter, it is rejected immediately.
+- **Automated Agro-Forestry Plants Outside Barriers**:
+  - When builder minions require timber for blueprint construction, `findPlantingPosition` filters candidate spots through `isProtectedBlock`.
+  - Builder minions strictly plant saplings and fell trees **outside** sealed barrier perimeters in the wild, leaving village grounds, decorative trees, and public parks inside the perimeter untouched.
+- **Unrestricted Tactical Mobility & Combat**:
+  - **Follow Mode**: Minions walk, run, and cross barrier perimeters freely alongside their commander without physical obstruction.
+  - **Hold Mode**: Minions hold positions normally anywhere inside or outside the barrier.
+  - **Patrol (Pathway) Mode**: Minions patrol routes, guard gates, and follow waypoints inside, along, or across barrier borders without restriction.
+  - **Combat / Defense**: Minions engage hostiles, fire arrows, and heal allies across barrier zones seamlessly.
+- **Explicit Task Exceptions**: Minions can only modify blocks inside barrier perimeters if explicitly commanded by the player via **Mining Mode** (`MINE`), **Blueprint Construction**, or **Area Fill Mode** (`AREA`).
+
+### 29.2 Polygonal Multi-Node Boundaries & Point-in-Polygon Raycasting
+
+- **Arbitrary $N$-Point Polygons**:
+  - Unlike rigid 2-point rectangular boxes, Barrier mode supports an arbitrary sequence of $N$ boundary points (`Point 1, 2, 3... N`) to hug organic village borders, hills, rivers, and walls.
+- **Point-in-Polygon (Jordan Curve) Containment (`BarrierZone.containsBlockPos`)**:
+  - Interior containment is evaluated using horizontal ray-casting on the X/Z plane:
+    - Counts ray-edge intersections along the positive X direction from the query point.
+    - An odd intersection count indicates an interior point.
+    - Includes a 1-block perimeter edge tolerance so boundary walls are fully protected.
+- **Generous 256-Block Vertical Coverage**:
+  - Perimeters automatically span from deep underground/bedrock (`minY = clickedY - 64`) up to 256 blocks above (`maxY = clickedY + 256`), providing comprehensive vertical protection by default.
+
+### 29.3 Unified Barrier Mode Controls
+
+- **Left-Click (Primary Action: Place / Extend / Seal)**:
+  - **Set Sequential Waypoints**: Left-clicking solid ground/blocks adds a perimeter waypoint (`Point 1, 2, 3... N`) to the active draft. Nodes are anchored directly on top of the clicked block face (`world.getBlockState(clickedPos).isReplaceable() ? clickedPos : clickedPos.offset(side)`).
+  - **Dynamic Crosshair Ghost Tether**: A golden vector line tethers dynamically from the last placed node to your crosshair, previewing the next perimeter wall before clicking.
+  - **Extend Existing Barriers**: Left-clicking an existing confirmed waypoint while idle initiates a new barrier extension anchored directly at that node (`ClientBarrierTracker.startExtensionFrom`).
+  - **Close & Seal Perimeter**: Left-clicking Point 1 or any waypoint while drafting snaps the circuit closed with a vibrant pulsing emerald beacon (`§a✦ [ Left-Click to Close & Seal ] ✦`) and immediately opens the `BarrierConfirmModalScreen`.
+  - **Shift + Left-Click (Reset)**: Clears all unsealed draft waypoints.
+- **Right-Click (Removal & Modal Trigger)**:
+  - **Remove Specific Node**: Right-clicking any targeted barrier waypoint (pending or confirmed) deletes **only that specific clicked node**, preserving all other connected waypoints.
+  - **Open Seal Modal**: Right-clicking on **anything else** (regular ground terrain, interior land, solid blocks, or open air) opens the **Confirm Sovereign Barrier Modal** **strictly when at least 2 waypoints have been placed down**. If 0 or 1 waypoints exist, right-clicking non-waypoints does nothing until the second waypoint is placed down.
+  - **Shift + Right-Click**: Opens the Command Hub GUI.
+
+### 29.4 100% Uncluttered Clean Interior (Zero Center Monuments/Pillars)
+
+- **Pure Outer Perimeter Visualization (`BarrierHologramRenderer`)**:
+  - Sealed barriers visualize exclusively along their outer perimeter wireframe (`RenderLayer.getLines()`) and hovering billboard tags above boundary waypoints (`[ Barrier 1 #1 ]`, `[ Barrier 1 #2 ]`, etc.).
+  - Two strict sequential rendering passes: Pass 1 renders all lines and wireframes in a continuous buffer; Pass 2 renders waypoint billboard badges and text via `TextRenderer`.
+- **Zero Middle Obstructions**:
+  - Completely free of central pillars, laser lines, center ground boxes, center titles, or sky crests.
+  - Village squares, streets, and courtyards remain completely open, unobstructed, and aesthetically pristine.
+
+### 29.5 Barrier Dashboard, Dynamic Naming & Defunct Barrier Purging
+
+- **Naming Input Field (`BarrierConfirmModalScreen`)**:
+  - The confirmation dialog includes an interactive text field to name each barrier upon sealing (e.g. `Main Citadel`, `Oak Orchard`, `Castle Courtyard`).
+- **Barrier Dashboard in Command Hub (`CommandScepterScreen`)**:
+  - In `BUILD (BARRIER)` mode, the GUI displays a paginated list of all confirmed barriers with their names, waypoint counts, and coverage specs.
+  - **One-Click Deletion (`[ ✕ ]`)**: Permanently removes the entire barrier and all its nodes in one click.
+  - **Rename Modal (`[ ✎ ]`)**: Opens `BarrierEditModalScreen` to rename any existing barrier or inspect its perimeter metrics.
+- **Defunct Barrier Automatic Cleanup**:
+  - If a barrier's waypoint count drops below 2 after removing nodes, it is automatically purged from `BarrierManager` and `ClientBarrierTracker`, preventing ghost 1-node barriers from persisting in the world or GUI.
+
+### 29.6 World Save Persistence & Network Synchronization
+
+- **Persistent State (`BarrierPersistentState`)**:
+  - Barrier zones persist across world restarts and dimension transfers via `data/sovereign_barrier_zones.dat`.
+  - Automatically loads and synchronizes with clients on player connection.
+- **Fabric Networking API Synchronization**:
+  - `SyncBarrierZonesPayload`: S2C packet streaming all confirmed barrier zones to connecting clients.
+  - `ModifyBarrierZonePayload`: C2S packet handling zone creation, removal, and renaming (`RENAME_ZONE`, `REMOVE_ZONE`).

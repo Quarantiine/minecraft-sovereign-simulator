@@ -74,11 +74,22 @@ public class ModClientNetworking {
 			(payload, context) -> context.client().execute(() -> com.example.client.targeting.ClientTargetFilterTracker.setDisabled(payload.disabledTypes()))
 		);
 
+		ClientPlayNetworking.registerGlobalReceiver(
+			com.example.network.SyncBarrierZonesPayload.ID,
+			(payload, context) -> context.client().execute(() -> {
+				com.example.client.renderer.ClientBarrierTracker.setConfirmedZones(payload.zones());
+				if (context.client().currentScreen instanceof com.example.client.gui.CommandScepterScreen screen) {
+					screen.refreshButtonLabels();
+				}
+			})
+		);
+
 		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			com.example.client.renderer.ClientPatrolRouteTracker.clear();
 			com.example.blueprint.BlueprintRegistry.clearCustomBlueprints();
 			com.example.client.resource.ClientResourceEstimatorTracker.clear();
 			com.example.client.targeting.ClientTargetFilterTracker.clear();
+			com.example.client.renderer.ClientBarrierTracker.clear();
 		});
 	}
 
