@@ -10,17 +10,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### 🎯 Mining Curation: Selective Block Filtering & In-World Excavation Focus
 
-### 📢 Overview & Player Highlights (GitHub Release Notes)
-
-Welcome to **v1.2.1**! This update gives you complete precision over what your minions mine, allows miners to dig independently in parallel without waiting around, drains flooded quarries, and smooths out building placement:
-
-- 🎯 **Selective Mining (Block Curation)**: You can now pick and choose exactly which blocks your minions will mine! Want to strip-mine only diamonds, coal, and iron while leaving the surrounding stone and dirt untouched? Or harvest only logs and leaves from a forest? Click **`[ 🎯 Curate Blocks ]`** in the mining confirmation window to pick your targets. In-world highlight grids will only show up on the blocks you chose!
-- 💧 **Water, Lava & Clutter Clearing**: Minions now automatically scoop up water and lava inside your mining areas using buckets (even crafting buckets from iron ingots if needed) so your quarries don't stay flooded. They also clear away grass, flowers, and torches. In building mode, builders will also scoop away water puddles before placing solid structure blocks.
-- ⚡ **Continuous Parallel Mining**: Minions digging in different spots now dig downward immediately at their own pace! They no longer freeze or wait idle for other minions to finish an entire horizontal layer across the quarry.
-- 🏗️ **Seamless Blueprint Placement**: Fixed an issue where right-clicking near the ground to place a blueprint would accidentally trigger an Area Fill warning message. Blueprints now place smoothly and instantly wherever you click.
-- 📦 **Smart Multi-Job Staging**: You can queue up mining areas, blueprints, and area fills right on top of each other (like clearing a hill and dropping a castle blueprint onto the exact same spot). Minions finish the excavation first, then seamlessly start building without interruptions.
-- 🛏️ **Sleeping In Beds Works!**: Fixed the vanilla bug where beds placed by minions or captured from worlds claimed "This bed is occupied". You can now sleep in constructed beds immediately!
-
 ### Added
 
 #### 🎯 Selective Mining Curation Modal (`MiningCurationModalScreen`)
@@ -83,11 +72,13 @@ Welcome to **v1.2.1**! This update gives you complete precision over what your m
 ### Fixed
 
 #### 🛡️ Barrier Visual Suppression Outside of Barrier Mode
+
 - **Strict Visual Isolation for Sovereign Barriers**:
   - Resolved an issue where sealed barrier wireframes and floating billboard tags (`[ Sovereign Barrier #1 ]`) remained visible in the world whenever the Command Scepter was held in other modes (such as `MINE`, `PATROL`, `ASSAULT`, `RALLY`, `DESIGN`, or `BUILD` with `BLUEPRINT` / `AREA` sub-modes).
   - Added an early return guard in `BarrierHologramRenderer` that checks `(mode == CommandMode.BUILD && bMode == BuildingMode.BARRIER)`. If the player is not actively in Barrier mode, all barrier rendering (wireframes, laser columns, ghost lines, hover boxes, and waypoint tags) is completely suppressed, keeping the commander's view clean and distraction-free.
 
 #### 🛏️ BedBlock Sleeping Fix: Sanitized Occupied State & Paired Multiblock Completion
+
 - **Eliminated False "Bed is Occupied" Block**:
   - Resolved vanilla Minecraft's `BedBlock.OCCUPIED` bug where beds captured from existing worlds (e.g. village houses) or placed by minions retained `OCCUPIED=true`.
   - Vanilla Minecraft's `BedBlock.onUse` checks `(Boolean)state.get(OCCUPIED)` and immediately rejects the player with `"This bed is occupied"`.
@@ -96,6 +87,7 @@ Welcome to **v1.2.1**! This update gives you complete precision over what your m
   - Upgraded `ConstructionSession.completeTask()` to auto-complete the corresponding other bed half (head or foot) whenever either half is completed by a minion, matching `DoorBlock` behavior in both `BUILD` and `DISMANTLE` modes.
 
 #### ⛏️ Non-Destructive Job Queueing: Sequential FIFO Execution & Overlapping Job Gating
+
 - **Strict Overlapping Job Gating (`isBlockedByOverlappingOlderSession`)**:
   - Implemented `isBlockedByOverlappingOlderSession()` in `ConstructionManager` and enforced it in `ConstructionSession.claimNextTask()`.
   - When multiple jobs (quarry mining areas, building blueprints, volumetric area fills) overlap geometrically in 3D space, minions strictly finish the older active job 100% as a whole before ANY minion touches or claims tasks from the newer overlapping job.
@@ -117,7 +109,6 @@ Welcome to **v1.2.1**! This update gives you complete precision over what your m
 - **Uncluttered Active Mining Visuals (Zero Interior Ghost Grid Clutter)**:
   - Addressed player feedback regarding in-world grid visuals: after confirming a mining quarry, the client displays only the clean outer bounding box wireframe outline (`renderMiningBoundingBox`).
   - Interior 1×1×1 block ghost grid wireframes (`renderMiningGhostGrid`) are now displayed strictly during the drafting/selection and curation stages so players can preview targeted blocks, and are completely suppressed once confirmed so the world and mining site remain completely visible, clean, and free of grid clutter while minions are working.
-
 
 ---
 
