@@ -2,9 +2,13 @@ package com.example.client.renderer;
 
 import com.example.network.SyncConstructionSessionPayload;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
 /**
@@ -22,8 +26,22 @@ public class ClientConstructionTracker {
 		boolean isDismantle,
 		int sizeX,
 		int sizeY,
-		int sizeZ
+		int sizeZ,
+		Set<Identifier> curatedBlockIds
 	) {
+		public ActiveSessionClientData(
+			UUID sessionId,
+			BlockPos anchorPos,
+			String blueprintId,
+			int rotation,
+			boolean isDismantle,
+			int sizeX,
+			int sizeY,
+			int sizeZ
+		) {
+			this(sessionId, anchorPos, blueprintId, rotation, isDismantle, sizeX, sizeY, sizeZ, Collections.emptySet());
+		}
+
 		public ActiveSessionClientData(
 			UUID sessionId,
 			BlockPos anchorPos,
@@ -31,7 +49,14 @@ public class ClientConstructionTracker {
 			int rotation,
 			boolean isDismantle
 		) {
-			this(sessionId, anchorPos, blueprintId, rotation, isDismantle, 0, 0, 0);
+			this(sessionId, anchorPos, blueprintId, rotation, isDismantle, 0, 0, 0, Collections.emptySet());
+		}
+
+		public boolean isBlockCurated(Identifier id) {
+			if (curatedBlockIds == null || curatedBlockIds.isEmpty()) {
+				return true;
+			}
+			return curatedBlockIds.contains(id);
 		}
 	}
 
@@ -39,6 +64,9 @@ public class ClientConstructionTracker {
 
 	public static void addSession(SyncConstructionSessionPayload payload) {
 		if (payload == null) return;
+		Set<Identifier> curated = payload.curatedBlockIds() != null && !payload.curatedBlockIds().isEmpty()
+			? new LinkedHashSet<>(payload.curatedBlockIds())
+			: Collections.emptySet();
 		ACTIVE_SESSIONS.put(
 			payload.sessionId(),
 			new ActiveSessionClientData(
@@ -49,7 +77,8 @@ public class ClientConstructionTracker {
 				payload.isDismantle(),
 				payload.sizeX(),
 				payload.sizeY(),
-				payload.sizeZ()
+				payload.sizeZ(),
+				curated
 			)
 		);
 	}

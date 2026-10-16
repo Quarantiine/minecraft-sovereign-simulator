@@ -73,6 +73,9 @@ public class BarrierHologramRenderer {
 		CommandMode mode = CommandScepterItem.getMode(scepterStack);
 		BuildingMode bMode = CommandScepterItem.getBuildingMode(scepterStack);
 		boolean isBarrierMode = (mode == CommandMode.BUILD && bMode == BuildingMode.BARRIER);
+		if (!isBarrierMode) {
+			return;
+		}
 
 		Vec3d cameraPos = camera.getPos();
 		VertexConsumerProvider consumers = context.consumers();

@@ -44,6 +44,8 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockBox;
@@ -208,7 +210,7 @@ public class BlueprintHologramRenderer {
 					renderStructureHologram(matrices, buffer, sessionData.anchorPos(), rotatedBp, 0.0F, 0.85F, 1.0F, 0.85F, true, client.world, false);
 				}
 			} else if (sessionData.isDismantle() && sessionData.sizeX() > 0 && sessionData.sizeY() > 0 && sessionData.sizeZ() > 0) {
-				// Persistent fiery quarry wireframe & ghost grid for active area mining sessions
+				// Persistent fiery quarry wireframe outline & ghost grid for active area mining sessions
 				int minX = sessionData.anchorPos().getX();
 				int minY = sessionData.anchorPos().getY();
 				int minZ = sessionData.anchorPos().getZ();
@@ -217,7 +219,7 @@ public class BlueprintHologramRenderer {
 				int maxZ = minZ + sessionData.sizeZ() - 1;
 				Box quarryBox = new Box(minX, minY, minZ, maxX + 1.0D, maxY + 1.0D, maxZ + 1.0D);
 				renderMiningBoundingBox(matrices, buffer, quarryBox, 1.0F, 0.45F, 0.05F, 0.85F, sessionData.anchorPos(), new BlockPos(maxX, maxY, maxZ));
-				renderMiningGhostGrid(matrices, buffer, client.world, minX, minY, minZ, maxX, maxY, maxZ, 1.0F);
+				renderMiningGhostGrid(matrices, buffer, client.world, minX, minY, minZ, maxX, maxY, maxZ, 1.0F, sessionData.curatedBlockIds());
 			} else if (!sessionData.isDismantle() && sessionData.sizeX() > 0 && sessionData.sizeY() > 0 && sessionData.sizeZ() > 0) {
 				// Persistent cyan/aqua wireframe & ghost grid for active area construction sessions
 				int minX = sessionData.anchorPos().getX();
@@ -551,6 +553,22 @@ public class BlueprintHologramRenderer {
 		int maxZ,
 		float alphaMultiplier
 	) {
+		renderMiningGhostGrid(matrices, buffer, world, minX, minY, minZ, maxX, maxY, maxZ, alphaMultiplier, ClientMiningCaptureTracker.getCuratedBlockIds());
+	}
+
+	public static void renderMiningGhostGrid(
+		MatrixStack matrices,
+		VertexConsumer buffer,
+		net.minecraft.world.World world,
+		int minX,
+		int minY,
+		int minZ,
+		int maxX,
+		int maxY,
+		int maxZ,
+		float alphaMultiplier,
+		java.util.Set<Identifier> curatedBlockIds
+	) {
 		if (world == null) {
 			return;
 		}
@@ -583,6 +601,23 @@ public class BlueprintHologramRenderer {
 					}
 
 					Block blk = state.getBlock();
+					Identifier blockId = Registries.BLOCK.getId(blk);
+					if (curatedBlockIds != null && !curatedBlockIds.isEmpty()) {
+						if (!curatedBlockIds.contains(blockId)) {
+							continue;
+						}
+					} else if (!ClientMiningCaptureTracker.isBlockCurated(blockId)) {
+						continue;
+					}
+
+					// 💧 WATER & 🌋 LAVA FLUID SOURCES: Semantic Aqua/Cyan and Fiery Red Grids
+					if (blk == Blocks.WATER) {
+						WorldRenderer.drawBox(matrices, buffer, new Box(x, y, z, x + 1.0D, y + 1.0D, z + 1.0D), 0.20F, 0.70F, 1.0F, 0.50F * alphaMultiplier);
+						continue;
+					} else if (blk == Blocks.LAVA) {
+						WorldRenderer.drawBox(matrices, buffer, new Box(x, y, z, x + 1.0D, y + 1.0D, z + 1.0D), 1.0F, 0.25F, 0.05F, 0.60F * alphaMultiplier);
+						continue;
+					}
 
 					// 💎 VALUABLE ORES & MINERALS: Brilliant Glowing Gold/Amber
 					if (blk == Blocks.COAL_ORE || blk == Blocks.DEEPSLATE_COAL_ORE ||

@@ -1,9 +1,13 @@
 package com.example.client.renderer;
 
 import com.example.item.custom.CommandScepterItem;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -23,6 +27,29 @@ public class ClientMiningCaptureTracker {
 	private static BlockPos pos1 = null;
 	private static BlockPos pos2 = null;
 	private static Integer initialBaseY = null;
+	private static final Set<Identifier> curatedBlockIds = new LinkedHashSet<>();
+
+	public static synchronized Set<Identifier> getCuratedBlockIds() {
+		return Collections.unmodifiableSet(curatedBlockIds);
+	}
+
+	public static synchronized void setCuratedBlockIds(Set<Identifier> ids) {
+		curatedBlockIds.clear();
+		if (ids != null) {
+			curatedBlockIds.addAll(ids);
+		}
+	}
+
+	public static synchronized boolean hasCuratedBlocks() {
+		return !curatedBlockIds.isEmpty();
+	}
+
+	public static synchronized boolean isBlockCurated(Identifier id) {
+		if (curatedBlockIds.isEmpty()) {
+			return true;
+		}
+		return curatedBlockIds.contains(id);
+	}
 
 	public static synchronized void setPos1(BlockPos pos) {
 		pos1 = pos != null ? pos.toImmutable() : null;
@@ -75,6 +102,7 @@ public class ClientMiningCaptureTracker {
 		pos1 = null;
 		pos2 = null;
 		initialBaseY = null;
+		curatedBlockIds.clear();
 		try {
 			MinecraftClient mc = MinecraftClient.getInstance();
 			if (mc != null && mc.player != null) {
@@ -114,6 +142,7 @@ public class ClientMiningCaptureTracker {
 			pos1 = pos.toImmutable();
 			pos2 = null;
 			initialBaseY = pos.getY();
+			curatedBlockIds.clear();
 			syncWithHeldScepter();
 			return 1;
 		} else if (pos2 == null) {
@@ -129,6 +158,7 @@ public class ClientMiningCaptureTracker {
 			pos1 = pos.toImmutable();
 			pos2 = null;
 			initialBaseY = pos.getY();
+			curatedBlockIds.clear();
 			syncWithHeldScepter();
 			return 1;
 		}
@@ -219,7 +249,10 @@ public class ClientMiningCaptureTracker {
 							if (state != null && !state.isAir()) {
 								float hardness = state.getHardness(mc.world, m);
 								if (hardness >= 0.0F) {
-									count++;
+									Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(state.getBlock());
+									if (isBlockCurated(blockId)) {
+										count++;
+									}
 								}
 							}
 						}

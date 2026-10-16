@@ -298,13 +298,17 @@ public class CommandScepterBuildingModeTest {
 			"handleAnchorConstruction must strictly verify BLUEPRINT mode before executing build placement"
 		);
 
-		// 2. CommandScepterItem useOnBlock suppresses executeBuildPlacement when in AREA mode or corners are set
+		// 2. CommandScepterItem useOnBlock strictly intercepts right-clicks when in AREA mode
 		File itemFile = new File("src/main/java/com/example/item/custom/CommandScepterItem.java");
 		Assertions.assertTrue(itemFile.exists());
 		String itemContent = Files.readString(itemFile.toPath());
 		Assertions.assertTrue(
+			itemContent.contains("if (buildingMode == BuildingMode.AREA)"),
+			"CommandScepterItem.useOnBlock must strictly intercept right-clicks in AREA mode and not intercept BLUEPRINT mode"
+		);
+		Assertions.assertFalse(
 			itemContent.contains("if (buildingMode == BuildingMode.AREA || getBuildPos1(stack) != null || getBuildPos2(stack) != null)"),
-			"CommandScepterItem.useOnBlock must intercept right-clicks in AREA mode to open modal and prevent blueprint placement"
+			"CommandScepterItem.useOnBlock must not block blueprint placement due to leftover pos1/pos2 coordinates"
 		);
 
 		// 3. CommandScepterScreen syncs buildingMode and miningMode to server
@@ -447,6 +451,62 @@ public class CommandScepterBuildingModeTest {
 			clientContent.contains("ClientBuildCaptureTracker.cycleFacing()") &&
 			clientContent.contains("ClientBuildCaptureTracker.toggleInvertedHalf()"),
 			"ExampleModClient must support in-world R and Shift+R keys for Area Fill orientation cycling"
+		);
+	}
+
+	@Test
+	@DisplayName("Blueprint placement is never blocked by leftover pos1/pos2 coordinates from prior Area Fill")
+	void testBlueprintPlacementNotBlockedByLeftoverCorners() throws Exception {
+		File itemFile = new File("src/main/java/com/example/item/custom/CommandScepterItem.java");
+		Assertions.assertTrue(itemFile.exists());
+		String itemContent = Files.readString(itemFile.toPath());
+
+		// In useOnBlock: strictly check buildingMode == BuildingMode.AREA
+		Assertions.assertTrue(
+			itemContent.contains("if (buildingMode == BuildingMode.AREA) {\n\t\t\t\tif (world.isClient() && BUILD_MODAL_OPENER != null)"),
+			"useOnBlock must only open Build Modal if buildingMode is strictly AREA"
+		);
+
+		// In use(): strictly check buildingMode == BuildingMode.AREA
+		Assertions.assertTrue(
+			itemContent.contains("if (mode == CommandMode.BUILD && getBuildingMode(stack) == BuildingMode.AREA)"),
+			"use() must only open Build Modal if buildingMode is strictly AREA"
+		);
+
+		// Must not contain any check for getBuildPos1 != null in the modal routing conditions
+		Assertions.assertFalse(
+			itemContent.contains("buildingMode == BuildingMode.AREA || getBuildPos1(stack) != null"),
+			"Modal routing must not check getBuildPos1 != null"
+		);
+		Assertions.assertFalse(
+			itemContent.contains("getBuildingMode(stack) == BuildingMode.AREA || getBuildPos1(stack) != null"),
+			"use() modal routing must not check getBuildPos1 != null"
+		);
+	}
+
+	@Test
+	@DisplayName("ConstructionSession dismantling allows independent column vertical progression without whole-layer stalling")
+	void testColumnBasedDismantleProgressionContract() throws Exception {
+		File sessionFile = new File("src/main/java/com/example/construction/ConstructionSession.java");
+		Assertions.assertTrue(sessionFile.exists());
+		String sessionContent = Files.readString(sessionFile.toPath());
+
+		// Rule 3 in isDismantleTaskReady must check the same vertical column (X and Z) instead of global layer lock
+		Assertions.assertTrue(
+			sessionContent.contains("other.getWorldPos().getX() == targetPos.getX()"),
+			"isDismantleTaskReady Rule 3 must check column X match"
+		);
+		Assertions.assertTrue(
+			sessionContent.contains("other.getWorldPos().getZ() == targetPos.getZ()"),
+			"isDismantleTaskReady Rule 3 must check column Z match"
+		);
+		Assertions.assertTrue(
+			sessionContent.contains("other.getWorldPos().getY() > targetPos.getY()"),
+			"isDismantleTaskReady Rule 3 must check overhead Y clearance in the same column"
+		);
+		Assertions.assertFalse(
+			sessionContent.contains("other.getBlueprintBlock().getEffectiveY() > targetEffectiveY && (world"),
+			"isDismantleTaskReady Rule 3 must not enforce a global whole-layer stall across differing columns"
 		);
 	}
 }

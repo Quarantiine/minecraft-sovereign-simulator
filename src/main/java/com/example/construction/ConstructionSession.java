@@ -15,6 +15,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ConnectingBlock;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceGateBlock;
 import net.minecraft.block.HorizontalConnectingBlock;
@@ -27,9 +28,11 @@ import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 
 /**
@@ -66,6 +69,7 @@ public class ConstructionSession {
 	private final SessionMode mode;
 	private final List<ConstructionTask> tasks;
 	private final BlockBox worldBoundingBox;
+	private final Set<Identifier> curatedBlockIds;
 
 	private SessionStatus status = SessionStatus.ACTIVE;
 	private int completedCount = 0;
@@ -118,20 +122,6 @@ public class ConstructionSession {
 		this(ownerUuid, dimension, anchorPos, blueprint, creative, currentTick, mode, null);
 	}
 
-	/**
-	 * Creates a new ConstructionSession anchored at the specified world coordinate with an explicit session mode
-	 * and world reference for terrain inspection. Indestructible blocks (hardness < 0.0F or Blocks.BEDROCK)
-	 * are strictly filtered out during DISMANTLE mode so minions never dismantle or break them.
-	 *
-	 * @param ownerUuid   UUID of the player who initiated construction.
-	 * @param dimension   World dimension key where construction is located.
-	 * @param anchorPos   The world origin block position for this structure.
-	 * @param blueprint   The structure blueprint to construct or dismantle.
-	 * @param creative    True if free instant placement/breaking, false for survival inventory constraints.
-	 * @param currentTick Current server tick count at session creation.
-	 * @param mode        The operational mode: BUILD (bottom-up) or DISMANTLE (top-down reverse topological).
-	 * @param world       Optional server world context for block hardness inspection.
-	 */
 	public ConstructionSession(
 		UUID ownerUuid,
 		RegistryKey<World> dimension,
@@ -142,6 +132,34 @@ public class ConstructionSession {
 		SessionMode mode,
 		World world
 	) {
+		this(ownerUuid, dimension, anchorPos, blueprint, creative, currentTick, mode, world, Collections.emptySet());
+	}
+
+	/**
+	 * Creates a new ConstructionSession anchored at the specified world coordinate with an explicit session mode,
+	 * world reference for terrain inspection, and an optional curated set of target block identifiers for selective dismantling.
+	 *
+	 * @param ownerUuid       UUID of the player who initiated construction.
+	 * @param dimension       World dimension key where construction is located.
+	 * @param anchorPos       The world origin block position for this structure.
+	 * @param blueprint       The structure blueprint to construct or dismantle.
+	 * @param creative        True if free instant placement/breaking, false for survival inventory constraints.
+	 * @param currentTick     Current server tick count at session creation.
+	 * @param mode            The operational mode: BUILD (bottom-up) or DISMANTLE (top-down reverse topological).
+	 * @param world           Optional server world context for block hardness inspection.
+	 * @param curatedBlockIds Optional curated set of block identifiers to dismantle (empty = all non-air blocks).
+	 */
+	public ConstructionSession(
+		UUID ownerUuid,
+		RegistryKey<World> dimension,
+		BlockPos anchorPos,
+		StructureBlueprint blueprint,
+		boolean creative,
+		long currentTick,
+		SessionMode mode,
+		World world,
+		Set<Identifier> curatedBlockIds
+	) {
 		this.id = UUID.randomUUID();
 		this.ownerUuid = Objects.requireNonNull(ownerUuid, "ownerUuid cannot be null");
 		this.dimension = Objects.requireNonNull(dimension, "dimension cannot be null");
@@ -151,6 +169,9 @@ public class ConstructionSession {
 		this.createdTick = currentTick;
 		this.lastActivityTick = currentTick;
 		this.mode = mode != null ? mode : SessionMode.BUILD;
+		this.curatedBlockIds = (curatedBlockIds != null && !curatedBlockIds.isEmpty())
+			? Collections.unmodifiableSet(new java.util.LinkedHashSet<>(curatedBlockIds))
+			: Collections.emptySet();
 
 		// Calculate world-space bounding box
 		BlockBox localBox = blueprint.getBoundingBox();
@@ -166,8 +187,8 @@ public class ConstructionSession {
 		List<ConstructionTask> taskList = new ArrayList<>();
 		if (this.mode == SessionMode.DISMANTLE && world != null) {
 			// In DISMANTLE mode with active world:
-			// Scan the entire selected/highlighted 3D area for real non-air blocks.
-			// Miners must mine EVERYTHING in the selected area, but NEVER mine air!
+			// Scan the entire selected/highlighted 3D area for real non-air blocks matching curated filter.
+			// Miners must mine EVERYTHING matching the curation, but NEVER mine air!
 			Map<BlockPos, BlockState> blocksToMine = new java.util.LinkedHashMap<>();
 
 			// 1. Scan the full worldBoundingBox from top to bottom (highest Y to lowest Y)
@@ -177,7 +198,19 @@ public class ConstructionSession {
 						BlockPos pos = new BlockPos(x, y, z);
 						BlockState state = world.getBlockState(pos);
 						if (!state.isAir() && !isIndestructible(state, world, pos)) {
-							blocksToMine.put(pos, state);
+							if (isFluid(state) && !state.getFluidState().isStill()) {
+								continue;
+							}
+							try {
+								Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(state.getBlock());
+								if (this.curatedBlockIds.isEmpty() || (blockId != null && this.curatedBlockIds.contains(blockId))) {
+									blocksToMine.put(pos, state);
+								}
+							} catch (Throwable ignored) {
+								if (this.curatedBlockIds.isEmpty()) {
+									blocksToMine.put(pos, state);
+								}
+							}
 						}
 					}
 				}
@@ -188,7 +221,19 @@ public class ConstructionSession {
 				BlockPos pos = this.anchorPos.add(bpBlock.offset().getX(), bpBlock.offset().getY(), bpBlock.offset().getZ());
 				BlockState state = world.getBlockState(pos);
 				if (!state.isAir() && !isIndestructible(state, world, pos)) {
-					blocksToMine.putIfAbsent(pos, state);
+					if (isFluid(state) && !state.getFluidState().isStill()) {
+						continue;
+					}
+					try {
+						Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(state.getBlock());
+						if (this.curatedBlockIds.isEmpty() || (blockId != null && this.curatedBlockIds.contains(blockId))) {
+							blocksToMine.putIfAbsent(pos, state);
+						}
+					} catch (Throwable ignored) {
+						if (this.curatedBlockIds.isEmpty()) {
+							blocksToMine.putIfAbsent(pos, state);
+						}
+					}
 				}
 			}
 
@@ -217,7 +262,18 @@ public class ConstructionSession {
 				Collections.reverse(blueprintBlocks);
 				blueprintBlocks.removeIf(bpBlock -> {
 					BlockPos targetPos = this.anchorPos.add(bpBlock.offset().getX(), bpBlock.offset().getY(), bpBlock.offset().getZ());
-					return isIndestructible(bpBlock.state(), world, targetPos);
+					if (isIndestructible(bpBlock.state(), world, targetPos)) {
+						return true;
+					}
+					if (!this.curatedBlockIds.isEmpty() && bpBlock.state() != null && bpBlock.state().getBlock() != null) {
+						try {
+							Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(bpBlock.state().getBlock());
+							if (blockId != null) {
+								return !this.curatedBlockIds.contains(blockId);
+							}
+						} catch (Throwable ignored) {}
+					}
+					return false;
 				});
 			}
 			for (int i = 0; i < blueprintBlocks.size(); i++) {
@@ -358,13 +414,22 @@ public class ConstructionSession {
 				for (int z = this.worldBoundingBox.getMinZ(); z <= this.worldBoundingBox.getMaxZ(); z++) {
 					BlockPos pos = new BlockPos(x, y, z);
 					BlockState state = world.getBlockState(pos);
-					if (!state.isAir() && !isFluid(state) && !isIndestructible(state, world, pos)) {
-						return true;
+					if (!state.isAir() && !isIndestructible(state, world, pos)) {
+						boolean isIgnoredFluid = isFluid(state) && (!state.getFluidState().isStill() || (!this.curatedBlockIds.isEmpty() && !this.curatedBlockIds.contains(net.minecraft.registry.Registries.BLOCK.getId(state.getBlock()))));
+						if (!isFluid(state) || !isIgnoredFluid) {
+							if (this.curatedBlockIds.isEmpty() || this.curatedBlockIds.contains(net.minecraft.registry.Registries.BLOCK.getId(state.getBlock()))) {
+								return true;
+							}
+						}
 					}
 				}
 			}
 		}
 		return false;
+	}
+
+	public Set<Identifier> getCuratedBlockIds() {
+		return this.curatedBlockIds;
 	}
 
 	public long getCreatedTick() {
@@ -385,6 +450,10 @@ public class ConstructionSession {
 	 */
 	public synchronized ConstructionTask claimNextTask(UUID minionUuid, long currentTick, World world) {
 		if (this.status != SessionStatus.ACTIVE) {
+			return null;
+		}
+
+		if (ConstructionManager.getInstance().isBlockedByOverlappingOlderSession(this)) {
 			return null;
 		}
 
@@ -410,7 +479,8 @@ public class ConstructionSession {
 						}
 						BlockState worldState = world.getBlockState(targetPos);
 						boolean isFlowing = isFluid(worldState) && !worldState.getFluidState().isStill();
-						if (worldState.isAir() || isFlowing || isIndestructible(worldState, world, targetPos)) {
+						boolean isNotCurated = !this.curatedBlockIds.isEmpty() && !this.curatedBlockIds.contains(net.minecraft.registry.Registries.BLOCK.getId(worldState.getBlock()));
+						if (worldState.isAir() || isFlowing || isIndestructible(worldState, world, targetPos) || isNotCurated) {
 							task.complete();
 							this.completedCount++;
 							if (this.completedCount >= this.tasks.size() || !hasRemainingBlocksInWorld(world)) {
@@ -631,16 +701,18 @@ public class ConstructionSession {
 		if (state == null) {
 			return false;
 		}
-		if (state.isOf(Blocks.BEDROCK)) {
-			return true;
-		}
+		try {
+			if (state.isOf(Blocks.BEDROCK)) {
+				return true;
+			}
+		} catch (Throwable ignored) {}
 		try {
 			if (world != null && pos != null) {
 				return state.getHardness(world, pos) < 0.0F;
 			}
 			return state.getBlock().getHardness() < 0.0F;
-		} catch (Exception e) {
-			return state.isOf(Blocks.BEDROCK);
+		} catch (Throwable e) {
+			return false;
 		}
 	}
 
@@ -697,10 +769,15 @@ public class ConstructionSession {
 			BlockPos abovePos = targetPos.up();
 			for (ConstructionTask other : this.tasks) {
 				if (!other.isCompleted() && !other.getBlueprintBlock().isHanging() && other.getWorldPos().equals(abovePos)) {
-					if (world != null && (world.getBlockState(abovePos).isAir() || isFluid(world.getBlockState(abovePos)) || isIndestructible(world, abovePos))) {
-						other.complete();
-						this.completedCount++;
-						continue;
+					if (world != null) {
+						BlockState aboveState = world.getBlockState(abovePos);
+						boolean isFlowingAbove = isFluid(world.getBlockState(abovePos)) && !aboveState.getFluidState().isStill();
+						boolean isNotCuratedAbove = !this.curatedBlockIds.isEmpty() && !this.curatedBlockIds.contains(net.minecraft.registry.Registries.BLOCK.getId(aboveState.getBlock()));
+						if (aboveState.isAir() || isFlowingAbove || isIndestructible(world, abovePos) || isNotCuratedAbove) {
+							other.complete();
+							this.completedCount++;
+							continue;
+						}
 					}
 					return false;
 				}
@@ -712,24 +789,34 @@ public class ConstructionSession {
 		BlockPos belowPos = targetPos.down();
 		for (ConstructionTask other : this.tasks) {
 			if (!other.isCompleted() && other.getBlueprintBlock().isHanging() && other.getWorldPos().equals(belowPos)) {
-				if (world != null && (world.getBlockState(belowPos).isAir() || isFluid(world.getBlockState(belowPos)) || isIndestructible(world, belowPos))) {
-					other.complete();
-					this.completedCount++;
-					continue;
+				if (world != null) {
+					BlockState belowState = world.getBlockState(belowPos);
+					boolean isFlowingBelow = isFluid(world.getBlockState(belowPos)) && !belowState.getFluidState().isStill();
+					boolean isNotCuratedBelow = !this.curatedBlockIds.isEmpty() && !this.curatedBlockIds.contains(net.minecraft.registry.Registries.BLOCK.getId(belowState.getBlock()));
+					if (belowState.isAir() || isFlowingBelow || isIndestructible(world, belowPos) || isNotCuratedBelow) {
+						other.complete();
+						this.completedCount++;
+						continue;
+					}
 				}
 				return false;
 			}
 		}
 
-		// 3. Enforce top-down reverse topological progression across the structure:
-		// Any unfinished tasks at strictly higher effective Y levels must be completed first.
+		// 3. Enforce top-down column clearance:
+		// Any unfinished tasks directly above in the same vertical column must be completed first.
+		// Minions working in independent columns do not stall waiting for peers to finish the entire layer.
 		int targetEffectiveY = bpBlock.getEffectiveY();
 		for (ConstructionTask other : this.tasks) {
-			if (!other.isCompleted() && other.getBlueprintBlock().getEffectiveY() > targetEffectiveY) {
+			if (!other.isCompleted()
+					&& other.getWorldPos().getX() == targetPos.getX()
+					&& other.getWorldPos().getZ() == targetPos.getZ()
+					&& other.getWorldPos().getY() > targetPos.getY()) {
 				if (world != null) {
 					BlockState otherState = world.getBlockState(other.getWorldPos());
 					boolean isFlowingOther = isFluid(otherState) && !otherState.getFluidState().isStill();
-					if (otherState.isAir() || isFlowingOther || isIndestructible(world, other.getWorldPos())) {
+					boolean isNotCuratedOther = !this.curatedBlockIds.isEmpty() && !this.curatedBlockIds.contains(net.minecraft.registry.Registries.BLOCK.getId(otherState.getBlock()));
+					if (otherState.isAir() || isFlowingOther || isIndestructible(world, other.getWorldPos()) || isNotCuratedOther) {
 						other.complete();
 						this.completedCount++;
 						continue;
@@ -745,10 +832,15 @@ public class ConstructionSession {
 				if (!other.isCompleted() && other.getBlueprintBlock().isHanging()
 						&& other.getBlueprintBlock().getEffectiveY() == targetEffectiveY) {
 					if (other.getWorldPos().getX() == targetPos.getX() && other.getWorldPos().getZ() == targetPos.getZ()) {
-						if (world != null && (world.getBlockState(other.getWorldPos()).isAir() || isFluid(world.getBlockState(other.getWorldPos())) || isIndestructible(world, other.getWorldPos()))) {
-							other.complete();
-							this.completedCount++;
-							continue;
+						if (world != null) {
+							BlockState otherPosState = world.getBlockState(other.getWorldPos());
+							boolean isFlowingOtherPos = isFluid(world.getBlockState(other.getWorldPos())) && !otherPosState.getFluidState().isStill();
+							boolean isNotCuratedOtherPos = !this.curatedBlockIds.isEmpty() && !this.curatedBlockIds.contains(net.minecraft.registry.Registries.BLOCK.getId(otherPosState.getBlock()));
+							if (otherPosState.isAir() || isFlowingOtherPos || isIndestructible(world, other.getWorldPos()) || isNotCuratedOtherPos) {
+								other.complete();
+								this.completedCount++;
+								continue;
+							}
 						}
 						return false;
 					}
@@ -805,6 +897,23 @@ public class ConstructionSession {
 					if (!other.isCompleted() && other.getWorldPos().equals(upperPos)) {
 						BlockState otherState = other.getBlueprintBlock().state();
 						if (otherState.getBlock() instanceof DoorBlock && otherState.contains(DoorBlock.HALF) && otherState.get(DoorBlock.HALF) == DoubleBlockHalf.UPPER) {
+							other.complete();
+							this.completedCount++;
+							break;
+						}
+					}
+				}
+			}
+
+			// If completing a bed part, auto-complete the corresponding other bed part task
+			if (state.getBlock() instanceof BedBlock && state.contains(BedBlock.PART)) {
+				Direction facing = state.get(BedBlock.FACING);
+				net.minecraft.block.enums.BedPart part = state.get(BedBlock.PART);
+				BlockPos otherPos = (part == net.minecraft.block.enums.BedPart.FOOT) ? task.getWorldPos().offset(facing) : task.getWorldPos().offset(facing.getOpposite());
+				for (ConstructionTask other : this.tasks) {
+					if (!other.isCompleted() && other.getWorldPos().equals(otherPos)) {
+						BlockState otherState = other.getBlueprintBlock().state();
+						if (otherState.getBlock() instanceof BedBlock) {
 							other.complete();
 							this.completedCount++;
 							break;

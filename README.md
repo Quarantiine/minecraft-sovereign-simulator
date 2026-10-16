@@ -4,7 +4,7 @@
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-738%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-775%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -105,6 +105,14 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - Multiple builders seamlessly collaborate on the same blueprint. When a minion is distant, offline, or stalled past lease grace thresholds, peers automatically take over its claimed block task.
   - The moment another minion completes or steals a task, the original claimant immediately forgets the task and acquires the next available block, eliminating idle loops and build deadlocks.
   - Scepter blueprint placement persistence ensures repeated stamping of blueprints never auto-cycles the catalog.
+- **Non-Destructive Job Queueing & Multi-Site Coexistence**:
+  - Stage mining areas, structure blueprints, and volumetric area fills concurrently across the kingdom, even on overlapping coordinates (e.g., excavating a hillside and immediately dropping a castle blueprint onto the exact site).
+  - Staging new jobs never cancels or aborts ongoing operations. All placed holographic wireframes render simultaneously, and minions execute jobs sequentially in strict FIFO order (100% finish before starting the next).
+- **Selective Mining Curation & In-World Grid Focus**:
+  - Granular block whitelisting and blacklisting via `[ 🎯 Curate Blocks ]` in `MiningCurationModalScreen` with live search and bulk actions.
+  - Blocks marked "Don't Mine" are dynamically excluded from in-world fiery ghost grid highlighting, focusing visuals exclusively on selected excavation targets.
+- **3D Bounding Box Proximity Metric**:
+  - Worker operational range is evaluated against true 3D bounding boxes, keeping deep underground mining quarries (even down to $Y = -60$) reliably connected with surface workers without out-of-range dropouts.
 - **Global Target Filtering, Instant Search & Named Presets**:
   - Press `[ 🎯 Targets ]` in the Command Hub GUI (`V`) to customize rules of engagement for all hostile mobs.
   - Features an instant search bar to find mobs by name or ID path, plus title-only saved presets (`All Hostiles`, `Creeper Safe`, `Undead Only`, `Raiders`, `None (Passive)`, and player custom presets saved to JSON).
@@ -295,7 +303,7 @@ All builds and runtime tasks are managed via the included Gradle wrapper (`./gra
 To bump the version, commit, build, and publish a GitHub release with the compiled mod `.jar` in a single command:
 
 ```bash
-VERSION="1.2.0"
+VERSION="1.2.1"
 TITLE="v${VERSION} - Title"
 NOTES="Description here..."
 

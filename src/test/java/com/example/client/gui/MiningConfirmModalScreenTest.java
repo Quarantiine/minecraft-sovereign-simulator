@@ -141,10 +141,36 @@ public class MiningConfirmModalScreenTest {
 	@DisplayName("Modal constants and pause behavior")
 	void testModalConstantsAndPause() {
 		Assertions.assertEquals(300, MiningConfirmModalScreen.WINDOW_WIDTH);
-		Assertions.assertEquals(170, MiningConfirmModalScreen.WINDOW_HEIGHT);
+		Assertions.assertEquals(196, MiningConfirmModalScreen.WINDOW_HEIGHT);
 
 		MiningConfirmModalScreen modal = new MiningConfirmModalScreen();
 		Assertions.assertFalse(modal.shouldPause(), "Mining confirm modal must not pause singleplayer game");
+	}
+
+	@Test
+	@DisplayName("Modal curation state management and callback")
+	void testModalCurationState() {
+		BlockPos p1 = new BlockPos(0, 0, 0);
+		BlockPos p2 = new BlockPos(4, 4, 4);
+		MiningConfirmModalScreen modal = new MiningConfirmModalScreen(p1, p2, null, null);
+
+		Assertions.assertTrue(modal.getCuratedBlockIds().isEmpty(), "Default curated block IDs should be empty (all blocks)");
+
+		net.minecraft.util.Identifier stone = net.minecraft.util.Identifier.of("minecraft", "stone");
+		net.minecraft.util.Identifier dirt = net.minecraft.util.Identifier.of("minecraft", "dirt");
+
+		java.util.Set<net.minecraft.util.Identifier> chosen = new java.util.LinkedHashSet<>();
+		chosen.add(stone);
+		chosen.add(dirt);
+
+		modal.onCurationApplied(chosen);
+		Assertions.assertEquals(2, modal.getCuratedBlockIds().size());
+		Assertions.assertTrue(modal.getCuratedBlockIds().contains(stone));
+		Assertions.assertTrue(modal.getCuratedBlockIds().contains(dirt));
+
+		modal.setCuratedBlockIds(java.util.Collections.singleton(stone));
+		Assertions.assertEquals(1, modal.getCuratedBlockIds().size());
+		Assertions.assertTrue(modal.getCuratedBlockIds().contains(stone));
 	}
 
 	@Test

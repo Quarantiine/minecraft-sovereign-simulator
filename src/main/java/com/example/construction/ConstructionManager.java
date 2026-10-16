@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.Identifier;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import com.example.network.SyncConstructionSessionPayload;
 import com.example.network.EndConstructionSessionPayload;
@@ -177,7 +178,8 @@ public class ConstructionManager {
 		ServerWorld world,
 		BlockPos pos1,
 		BlockPos pos2,
-		PlayerEntity owner
+		PlayerEntity owner,
+		java.util.List<Identifier> curatedBlockIds
 	) {
 		Objects.requireNonNull(world, "world cannot be null");
 		Objects.requireNonNull(pos1, "pos1 cannot be null");
@@ -201,16 +203,30 @@ public class ConstructionManager {
 		String name = "Mining Area (" + sizeX + "x" + sizeY + "x" + sizeZ + ")";
 		String desc = "Custom Area Mining from [" + minX + "," + minY + "," + minZ + "] to [" + maxX + "," + maxY + "," + maxZ + "]";
 
+		Set<Identifier> allowedBlockIds = (curatedBlockIds != null && !curatedBlockIds.isEmpty())
+			? new java.util.LinkedHashSet<>(curatedBlockIds)
+			: java.util.Collections.emptySet();
+
 		StructureBlueprint areaBlueprint = StructureBlueprint.createAreaBlueprint(
 			world,
 			pos1,
 			pos2,
 			id,
 			name,
-			desc
+			desc,
+			allowedBlockIds
 		);
 
-		return startSession(world, anchorPos, areaBlueprint, owner, ConstructionSession.SessionMode.DISMANTLE);
+		return startSession(world, anchorPos, areaBlueprint, owner, ConstructionSession.SessionMode.DISMANTLE, allowedBlockIds);
+	}
+
+	public ConstructionSession startAreaDismantleSession(
+		ServerWorld world,
+		BlockPos pos1,
+		BlockPos pos2,
+		PlayerEntity owner
+	) {
+		return startAreaDismantleSession(world, pos1, pos2, owner, java.util.Collections.emptyList());
 	}
 
 	public ConstructionSession startAreaBuildSession(
@@ -273,6 +289,17 @@ public class ConstructionManager {
 		PlayerEntity owner,
 		ConstructionSession.SessionMode mode
 	) {
+		return startSession(world, anchorPos, blueprint, owner, mode, java.util.Collections.emptySet());
+	}
+
+	public ConstructionSession startSession(
+		ServerWorld world,
+		BlockPos anchorPos,
+		StructureBlueprint blueprint,
+		PlayerEntity owner,
+		ConstructionSession.SessionMode mode,
+		Set<Identifier> curatedBlockIds
+	) {
 		Objects.requireNonNull(world, "world cannot be null");
 		Objects.requireNonNull(anchorPos, "anchorPos cannot be null");
 		Objects.requireNonNull(blueprint, "blueprint cannot be null");
@@ -280,9 +307,9 @@ public class ConstructionManager {
 
 		BlockPos immutableAnchor = anchorPos.toImmutable();
 
-		// Check if an active session already exists at this exact anchor or overlapping bounding box
+		// Only replace an active session if it shares the exact same anchor and operational mode
 		ConstructionSession existing = this.sessionsByAnchor.get(immutableAnchor);
-		if (existing != null && existing.isActive()) {
+		if (existing != null && existing.isActive() && existing.getMode() == mode) {
 			existing.cancel();
 			removeSession(existing);
 			EndConstructionSessionPayload endPayload = new EndConstructionSessionPayload(existing.getId());
@@ -291,12 +318,10 @@ public class ConstructionManager {
 			}
 		}
 
-		// Cancel any previous session from the same owner that overlaps the new blueprint bounds
-		BlockBox newBox = blueprint.getBoundingBox().offset(immutableAnchor.getX(), immutableAnchor.getY(), immutableAnchor.getZ());
 		List<ConstructionSession> ownerSessions = this.sessionsByOwner.get(owner.getUuid());
 		if (ownerSessions != null) {
 			for (ConstructionSession s : new ArrayList<>(ownerSessions)) {
-				if (s.isActive() && (s.getAnchorPos().equals(immutableAnchor) || s.getWorldBoundingBox().intersects(newBox))) {
+				if (s.isActive() && s.getAnchorPos().equals(immutableAnchor) && s.getMode() == mode) {
 					s.cancel();
 					removeSession(s);
 					EndConstructionSessionPayload endPayload = new EndConstructionSessionPayload(s.getId());
@@ -316,7 +341,8 @@ public class ConstructionManager {
 			creative,
 			world.getTime(),
 			mode,
-			world
+			world,
+			curatedBlockIds
 		);
 
 		this.activeSessions.put(session.getId(), session);
@@ -332,7 +358,8 @@ public class ConstructionManager {
 			session.isDismantle(),
 			blueprint.getSizeX(),
 			blueprint.getSizeY(),
-			blueprint.getSizeZ()
+			blueprint.getSizeZ(),
+			new java.util.ArrayList<>(session.getCuratedBlockIds())
 		);
 		for (ServerPlayerEntity p : world.getPlayers()) {
 			ServerPlayNetworking.send(p, syncPayload);
@@ -454,7 +481,7 @@ public class ConstructionManager {
 
 		BlockPos anchor = session.getAnchorPos();
 		BlockBox box = session.getWorldBoundingBox();
-		if (box != null) {
+		if (box != null && !session.isDismantle()) {
 			this.constructedStructureBounds.add(box);
 		}
 
@@ -956,7 +983,9 @@ public class ConstructionManager {
 
 	private void removeSession(ConstructionSession session) {
 		this.activeSessions.remove(session.getId());
-		this.sessionsByAnchor.remove(session.getAnchorPos());
+		if (this.sessionsByAnchor.get(session.getAnchorPos()) == session) {
+			this.sessionsByAnchor.remove(session.getAnchorPos());
+		}
 		List<ConstructionSession> ownerList = this.sessionsByOwner.get(session.getOwnerUuid());
 		if (ownerList != null) {
 			ownerList.remove(session);
@@ -977,7 +1006,19 @@ public class ConstructionManager {
 	 * Looks up an active session anchored at the specified world coordinate.
 	 */
 	public Optional<ConstructionSession> getSessionAt(BlockPos anchorPos) {
-		return Optional.ofNullable(this.sessionsByAnchor.get(anchorPos));
+		if (anchorPos == null) {
+			return Optional.empty();
+		}
+		ConstructionSession direct = this.sessionsByAnchor.get(anchorPos);
+		if (direct != null && direct.isActive()) {
+			return Optional.of(direct);
+		}
+		for (ConstructionSession session : this.activeSessions.values()) {
+			if (session.isActive() && session.getAnchorPos().equals(anchorPos)) {
+				return Optional.of(session);
+			}
+		}
+		return Optional.ofNullable(direct);
 	}
 
 	/**
@@ -1044,6 +1085,30 @@ public class ConstructionManager {
 	}
 
 	/**
+	 * Calculates the squared distance from a position to the nearest point of a session,
+	 * inspecting both its anchor position and its 3D world bounding box.
+	 *
+	 * @param pos     The target coordinates.
+	 * @param session The construction session.
+	 * @return Minimum squared distance from pos to the session.
+	 */
+	public static double getSquaredDistanceToSession(BlockPos pos, ConstructionSession session) {
+		if (pos == null || session == null) {
+			return Double.MAX_VALUE;
+		}
+		double distToAnchorSq = pos.getSquaredDistance(session.getAnchorPos());
+		BlockBox box = session.getWorldBoundingBox();
+		if (box == null) {
+			return distToAnchorSq;
+		}
+		int clampedX = Math.max(box.getMinX(), Math.min(pos.getX(), box.getMaxX()));
+		int clampedY = Math.max(box.getMinY(), Math.min(pos.getY(), box.getMaxY()));
+		int clampedZ = Math.max(box.getMinZ(), Math.min(pos.getZ(), box.getMaxZ()));
+		double distToBoxSq = pos.getSquaredDistance(clampedX, clampedY, clampedZ);
+		return Math.min(distToAnchorSq, distToBoxSq);
+	}
+
+	/**
 	 * Finds the nearest active construction or deconstruction session owned by the minion's master
 	 * within the specified range, filtering by minion role compatibility.
 	 *
@@ -1052,6 +1117,51 @@ public class ConstructionManager {
 	 * @param ownerUuid   Master player's UUID.
 	 * @param maxDistance Maximum search distance in blocks.
 	 * @param role        The requesting minion's role, or null for any session.
+	 * @return Optional containing nearest active session, or empty if none in range.
+	 */
+	/**
+	 * Checks if the given session is blocked by an older active session that overlaps its 3D bounding box.
+	 * Guarantees that overlapping jobs finish completely as a whole without partial or interleaving execution.
+	 *
+	 * @param session Candidate session to evaluate.
+	 * @return True if an older active session belonging to the same owner intersects this session's bounds.
+	 */
+	public boolean isBlockedByOverlappingOlderSession(ConstructionSession session) {
+		if (session == null || !session.isActive()) {
+			return false;
+		}
+		List<ConstructionSession> ownerSessions = this.sessionsByOwner.get(session.getOwnerUuid());
+		if (ownerSessions == null || ownerSessions.size() <= 1) {
+			return false;
+		}
+		BlockBox thisBox = session.getWorldBoundingBox();
+		if (thisBox == null) {
+			return false;
+		}
+		for (ConstructionSession older : ownerSessions) {
+			if (older != session && older.isActive() && older.getDimension().equals(session.getDimension())) {
+				boolean isOlder = older.getCreatedTick() < session.getCreatedTick()
+					|| (older.getCreatedTick() == session.getCreatedTick() && older.getId().compareTo(session.getId()) < 0);
+				if (isOlder) {
+					BlockBox olderBox = older.getWorldBoundingBox();
+					if (olderBox != null && thisBox.intersects(olderBox)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Finds the nearest active construction or deconstruction session owned by the minion's master
+	 * within the specified range, filtering by minion role compatibility.
+	 *
+	 * @param world       Current server world.
+	 * @param minionPos   Current minion coordinates.
+	 * @param ownerUuid   Master player's UUID.
+	 * @param maxDistance Maximum search distance in blocks.
+	 * @param role        Minion role (BUILDER participates in both construction and dismantling).
 	 * @return Optional containing nearest active session, or empty if none in range.
 	 */
 	public Optional<ConstructionSession> findNearestSessionForMinion(
@@ -1086,7 +1196,11 @@ public class ConstructionManager {
 			if (role != null && role != MinionRole.BUILDER) {
 				continue;
 			}
-			double distSq = minionPos.getSquaredDistance(session.getAnchorPos());
+			// Guarantees overlapping jobs finish as a whole: skip if blocked by an older active overlapping job
+			if (isBlockedByOverlappingOlderSession(session)) {
+				continue;
+			}
+			double distSq = getSquaredDistanceToSession(minionPos, session);
 			if (distSq <= maxDistSq) {
 				long sessionCreated = session.getCreatedTick();
 				if (sessionCreated < earliestTick) {
@@ -1191,16 +1305,7 @@ public class ConstructionManager {
 				continue;
 			}
 
-			// Check anchor distance
-			if (pos.getSquaredDistance(session.getAnchorPos()) <= maxDistSq) {
-				return true;
-			}
-
-			// Check bounding box expanded by maxDistance
-			BlockBox box = session.getWorldBoundingBox();
-			if (pos.getX() >= box.getMinX() - maxDistance && pos.getX() <= box.getMaxX() + maxDistance
-					&& pos.getY() >= box.getMinY() - maxDistance && pos.getY() <= box.getMaxY() + maxDistance
-					&& pos.getZ() >= box.getMinZ() - maxDistance && pos.getZ() <= box.getMaxZ() + maxDistance) {
+			if (getSquaredDistanceToSession(pos, session) <= maxDistSq) {
 				return true;
 			}
 		}
@@ -1363,6 +1468,32 @@ public class ConstructionManager {
 					}
 				}
 				iter.remove();
+			}
+		}
+	}
+
+	/**
+	 * Synchronizes all active construction and dismantle sessions to a newly connected or respawned player.
+	 *
+	 * @param player The connecting or respawning player entity.
+	 */
+	public void syncToPlayer(ServerPlayerEntity player) {
+		if (player == null || player.getServerWorld() == null) return;
+		for (ConstructionSession session : this.activeSessions.values()) {
+			if (session.isActive() && Objects.equals(session.getDimension(), player.getServerWorld().getRegistryKey())) {
+				StructureBlueprint blueprint = session.getBlueprint();
+				SyncConstructionSessionPayload syncPayload = new SyncConstructionSessionPayload(
+					session.getId(),
+					session.getAnchorPos(),
+					blueprint.getId(),
+					blueprint.getRotationIndex(),
+					session.isDismantle(),
+					blueprint.getSizeX(),
+					blueprint.getSizeY(),
+					blueprint.getSizeZ(),
+					new java.util.ArrayList<>(session.getCuratedBlockIds())
+				);
+				ServerPlayNetworking.send(player, syncPayload);
 			}
 		}
 	}

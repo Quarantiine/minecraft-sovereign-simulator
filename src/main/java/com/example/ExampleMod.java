@@ -78,6 +78,7 @@ public class ExampleMod implements ModInitializer {
 			com.example.blueprint.CustomBlueprintManager.getInstance().syncToPlayer(handler.getPlayer());
 			com.example.targeting.MinionTargetFilterManager.getInstance().syncToPlayer(handler.getPlayer());
 			com.example.barrier.BarrierManager.getInstance().syncToPlayer(handler.getPlayer());
+			com.example.construction.ConstructionManager.getInstance().syncToPlayer(handler.getPlayer());
 		});
 
 		// Register server tick event to update construction sessions and holograms

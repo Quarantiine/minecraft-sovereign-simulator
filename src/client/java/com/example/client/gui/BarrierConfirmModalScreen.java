@@ -13,12 +13,16 @@ import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Client modal GUI screen prompting the commander to confirm, inspect, adjust height,
+ * Client modal GUI screen prompting the commander to confirm, inspect, adjust
+ * height,
  * or cancel/remove the multi-node Sovereign Barrier perimeter before sealing.
  *
- * <p>Explains what the barrier is for:
- * Protects bases, villages, and structures from minion harvesting. Minions will never break blocks,
- * chop trees, mine stone, or scoop water inside this perimeter unless explicitly ordered.
+ * <p>
+ * Explains what the barrier is for:
+ * Protects bases, villages, and structures from minion harvesting. Minions will
+ * never break blocks,
+ * chop trees, mine stone, or scoop water inside this perimeter unless
+ * explicitly ordered.
  */
 public class BarrierConfirmModalScreen extends Screen {
 
@@ -60,13 +64,12 @@ public class BarrierConfirmModalScreen extends Screen {
 		// Name input field
 		int nextNum = ClientBarrierTracker.getConfirmedZones().size() + 1;
 		this.nameField = new net.minecraft.client.gui.widget.TextFieldWidget(
-			this.textRenderer,
-			startX + 60,
-			startY + 44,
-			264,
-			18,
-			Text.literal("Barrier Name")
-		);
+				this.textRenderer,
+				startX + 60,
+				startY + 44,
+				264,
+				18,
+				Text.literal("Barrier Name"));
 		this.nameField.setMaxLength(32);
 		this.nameField.setText("Sovereign Barrier #" + nextNum);
 		this.addSelectableChild(this.nameField);
@@ -76,21 +79,21 @@ public class BarrierConfirmModalScreen extends Screen {
 		int btnWidth = 96;
 
 		this.sealButton = ButtonWidget.builder(Text.literal("§6✦ Seal"), b -> sealBarrier())
-			.dimensions(startX + 16, bottomY, btnWidth, 20)
-			.tooltip(Tooltip.of(Text.literal("§6✦ Seal Barrier\n§7Locks perimeter to protect from minion harvesting.")))
-			.build();
+				.dimensions(startX + 16, bottomY, btnWidth, 20)
+				.tooltip(Tooltip.of(Text.literal("§6✦ Seal Barrier\n§7Locks perimeter to protect from minion harvesting.")))
+				.build();
 		this.addDrawableChild(this.sealButton);
 
 		this.cancelButton = ButtonWidget.builder(Text.literal("§7✕ Cancel"), b -> cancelModal())
-			.dimensions(startX + 122, bottomY, btnWidth, 20)
-			.tooltip(Tooltip.of(Text.literal("§7✕ Cancel Modal\n§7Keeps placed points so you can continue adding more.")))
-			.build();
+				.dimensions(startX + 122, bottomY, btnWidth, 20)
+				.tooltip(Tooltip.of(Text.literal("§7✕ Cancel Modal\n§7Keeps placed points so you can continue adding more.")))
+				.build();
 		this.addDrawableChild(this.cancelButton);
 
 		this.removeButton = ButtonWidget.builder(Text.literal("§c⌫ Remove"), b -> removeAllPending())
-			.dimensions(startX + 228, bottomY, btnWidth, 20)
-			.tooltip(Tooltip.of(Text.literal("§c⌫ Remove All Points\n§7Clears all unsealed points placed down.")))
-			.build();
+				.dimensions(startX + 228, bottomY, btnWidth, 20)
+				.tooltip(Tooltip.of(Text.literal("§c⌫ Remove All Points\n§7Clears all unsealed points placed down.")))
+				.build();
 		this.addDrawableChild(this.removeButton);
 
 		updateSealButtonState();
@@ -109,7 +112,8 @@ public class BarrierConfirmModalScreen extends Screen {
 		}
 		boolean sealed = ClientBarrierTracker.seal(customName);
 		if (sealed && this.client != null && this.client.player != null) {
-			this.client.player.sendMessage(Text.literal("§6✦ Barrier '" + customName + "' sealed! Territory protected from minion harvesting.§r"), true);
+			this.client.player.sendMessage(
+					Text.literal("§6✦ Barrier '" + customName + "' sealed! Territory protected from minion harvesting.§r"), true);
 			this.client.player.playSound(SoundEvents.BLOCK_BEACON_ACTIVATE, 1.2F, 1.5F);
 		}
 		this.close();
@@ -117,7 +121,9 @@ public class BarrierConfirmModalScreen extends Screen {
 
 	public void cancelModal() {
 		if (this.client != null && this.client.player != null) {
-			this.client.player.sendMessage(Text.literal("§7✦ Barrier draft retained. Left-click to place more points or close on any waypoint to Seal.§r"), true);
+			this.client.player.sendMessage(
+					Text.literal("§7✦ Barrier draft retained. Left-click to place more points or close on any waypoint to Seal.§r"),
+					true);
 			this.client.player.playSound(SoundEvents.UI_BUTTON_CLICK.value(), 0.6F, 1.0F);
 		}
 		this.close();
@@ -147,12 +153,11 @@ public class BarrierConfirmModalScreen extends Screen {
 
 		// Modal title
 		context.drawCenteredTextWithShadow(
-			this.textRenderer,
-			Text.literal("§6✦ Confirm Sovereign Barrier ✦"),
-			startX + WINDOW_WIDTH / 2,
-			startY + 6,
-			0xFFD700
-		);
+				this.textRenderer,
+				Text.literal("§6✦ Confirm Sovereign Barrier ✦"),
+				startX + WINDOW_WIDTH / 2,
+				startY + 6,
+				0xFFD700);
 
 		int nodeCount = ClientBarrierTracker.getPendingNodeCount();
 		int minY = ClientBarrierTracker.getMinY();
@@ -160,7 +165,8 @@ public class BarrierConfirmModalScreen extends Screen {
 		int height = maxY - minY + 1;
 
 		// Perimeter metrics - clean and compact
-		String pointsStr = "§6Perimeter: §f" + nodeCount + " Nodes   §8|   §eHeight: §f" + height + "b   §8(Y: " + minY + " → " + maxY + ")";
+		String pointsStr = "§6Perimeter: §f" + nodeCount + " Nodes   §8|   §eHeight: §f" + height + "b   §8(Y: " + minY
+				+ " → " + maxY + ")";
 		context.drawTextWithShadow(this.textRenderer, Text.literal(pointsStr), startX + 16, startY + 29, 0xFFA500);
 
 		// Name input row label
@@ -171,9 +177,13 @@ public class BarrierConfirmModalScreen extends Screen {
 
 		// Clean bulleted description that fits well within margins
 		int descY = startY + 68;
-		context.drawTextWithShadow(this.textRenderer, Text.literal("§7Protects base & village territory from minion harvesting."), startX + 16, descY, 0xDDDDDD);
-		context.drawTextWithShadow(this.textRenderer, Text.literal("§8• Minions will never break blocks, chop trees, or quarry stone inside."), startX + 16, descY + 13, 0x888888);
-		context.drawTextWithShadow(this.textRenderer, Text.literal("§8• Follow, hold, patrol routes, and combat remain fully active."), startX + 16, descY + 25, 0x888888);
+		context.drawTextWithShadow(this.textRenderer,
+				Text.literal("§7Protects base & village territory from minion harvesting."), startX + 16, descY, 0xDDDDDD);
+		context.drawTextWithShadow(this.textRenderer,
+				Text.literal("§8• Minions will never break blocks or quarry stone inside."), startX + 16, descY + 13, 0x888888);
+		context.drawTextWithShadow(this.textRenderer,
+				Text.literal("§8• Follow, hold, patrol routes, and combat remain fully active."), startX + 16, descY + 25,
+				0x888888);
 
 		super.render(context, mouseX, mouseY, delta);
 	}

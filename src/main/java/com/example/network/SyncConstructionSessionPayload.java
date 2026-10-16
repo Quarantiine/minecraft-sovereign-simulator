@@ -31,8 +31,22 @@ public record SyncConstructionSessionPayload(
 	boolean isDismantle,
 	int sizeX,
 	int sizeY,
-	int sizeZ
+	int sizeZ,
+	java.util.List<Identifier> curatedBlockIds
 ) implements CustomPayload {
+
+	public SyncConstructionSessionPayload(
+		UUID sessionId,
+		BlockPos anchorPos,
+		String blueprintId,
+		int rotation,
+		boolean isDismantle,
+		int sizeX,
+		int sizeY,
+		int sizeZ
+	) {
+		this(sessionId, anchorPos, blueprintId, rotation, isDismantle, sizeX, sizeY, sizeZ, java.util.List.of());
+	}
 
 	public SyncConstructionSessionPayload(
 		UUID sessionId,
@@ -41,7 +55,15 @@ public record SyncConstructionSessionPayload(
 		int rotation,
 		boolean isDismantle
 	) {
-		this(sessionId, anchorPos, blueprintId, rotation, isDismantle, 0, 0, 0);
+		this(sessionId, anchorPos, blueprintId, rotation, isDismantle, 0, 0, 0, java.util.List.of());
+	}
+
+	public SyncConstructionSessionPayload {
+		if (curatedBlockIds == null) {
+			curatedBlockIds = java.util.List.of();
+		} else {
+			curatedBlockIds = java.util.List.copyOf(curatedBlockIds);
+		}
 	}
 
 	public static final CustomPayload.Id<SyncConstructionSessionPayload> ID = new CustomPayload.Id<>(
@@ -59,6 +81,7 @@ public record SyncConstructionSessionPayload(
 			PacketCodecs.INTEGER.encode(buf, payload.sizeX());
 			PacketCodecs.INTEGER.encode(buf, payload.sizeY());
 			PacketCodecs.INTEGER.encode(buf, payload.sizeZ());
+			Identifier.PACKET_CODEC.collect(PacketCodecs.toList()).encode(buf, payload.curatedBlockIds());
 		}
 
 		@Override
@@ -71,7 +94,8 @@ public record SyncConstructionSessionPayload(
 				PacketCodecs.BOOL.decode(buf),
 				PacketCodecs.INTEGER.decode(buf),
 				PacketCodecs.INTEGER.decode(buf),
-				PacketCodecs.INTEGER.decode(buf)
+				PacketCodecs.INTEGER.decode(buf),
+				Identifier.PACKET_CODEC.collect(PacketCodecs.toList()).decode(buf)
 			);
 		}
 	};

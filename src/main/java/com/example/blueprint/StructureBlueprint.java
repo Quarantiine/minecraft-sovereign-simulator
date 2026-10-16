@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.DoorBlock;
@@ -487,6 +488,17 @@ public class StructureBlueprint {
 	 * @param id          Unique blueprint identifier.
 	 * @param name        User-facing blueprint display name.
 	 * @param description User-facing blueprint description.
+	/**
+	 * Creates a dynamic spatial area blueprint representing the real-world destructible terrain
+	 * enclosed within [pos1, pos2], optionally curated to include only specific block types.
+	 *
+	 * @param world           World context to read blocks from.
+	 * @param pos1            Corner 1 of the spatial volume.
+	 * @param pos2            Corner 2 of the spatial volume.
+	 * @param id              Optional blueprint identifier.
+	 * @param name            Optional blueprint display name.
+	 * @param description     Optional blueprint description.
+	 * @param allowedBlockIds Optional curated set of block identifiers to include (empty or null = include all).
 	 * @return StructureBlueprint spanning the specified area box.
 	 */
 	public static StructureBlueprint createAreaBlueprint(
@@ -495,7 +507,8 @@ public class StructureBlueprint {
 		BlockPos pos2,
 		String id,
 		String name,
-		String description
+		String description,
+		java.util.Set<Identifier> allowedBlockIds
 	) {
 		Objects.requireNonNull(pos1, "pos1 cannot be null");
 		Objects.requireNonNull(pos2, "pos2 cannot be null");
@@ -518,8 +531,11 @@ public class StructureBlueprint {
 		List<BlueprintBlock> rawBlocks = (world != null) ? captureBlocks(world, pos1, pos2) : Collections.emptyList();
 		List<BlueprintBlock> blocks = new ArrayList<>();
 		for (BlueprintBlock b : rawBlocks) {
-			if (b.state() != null && !b.state().isLiquid() && !(b.state().getBlock() instanceof net.minecraft.block.FluidBlock) && b.state().getFluidState().isEmpty()) {
-				blocks.add(b);
+			if (b.state() != null && !b.state().isAir()) {
+				Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(b.state().getBlock());
+				if (allowedBlockIds == null || allowedBlockIds.isEmpty() || allowedBlockIds.contains(blockId)) {
+					blocks.add(b);
+				}
 			}
 		}
 		Map<Item, Integer> req = new LinkedHashMap<>();
@@ -544,6 +560,17 @@ public class StructureBlueprint {
 			box,
 			BlockRotation.NONE
 		);
+	}
+
+	public static StructureBlueprint createAreaBlueprint(
+		net.minecraft.world.BlockView world,
+		BlockPos pos1,
+		BlockPos pos2,
+		String id,
+		String name,
+		String description
+	) {
+		return createAreaBlueprint(world, pos1, pos2, id, name, description, java.util.Collections.emptySet());
 	}
 
 	/**
@@ -734,6 +761,9 @@ public class StructureBlueprint {
 							} catch (Throwable ignored) {
 							}
 						}
+						if (state != null && state.getBlock() instanceof BedBlock && state.contains(BedBlock.OCCUPIED) && state.get(BedBlock.OCCUPIED)) {
+							state = state.with(BedBlock.OCCUPIED, false);
+						}
 						BlockPos normalizedOffset = new BlockPos(x - minX, y - minY, z - minZ);
 						captured.add(new BlueprintBlock(normalizedOffset, state));
 					}
@@ -775,6 +805,9 @@ public class StructureBlueprint {
 				}
 			}
 		} catch (Throwable ignored) {
+		}
+		if (targetState.getBlock() instanceof BedBlock && targetState.contains(BedBlock.OCCUPIED)) {
+			targetState = targetState.with(BedBlock.OCCUPIED, false);
 		}
 		return targetState;
 	}

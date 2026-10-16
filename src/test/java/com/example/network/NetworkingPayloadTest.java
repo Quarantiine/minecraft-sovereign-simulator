@@ -10,6 +10,7 @@ import io.netty.buffer.Unpooled;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.network.RegistryByteBuf;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -566,6 +567,29 @@ public class NetworkingPayloadTest {
 			buf.release();
 		}
 
+		// Curated block IDs roundtrip
+		Identifier oakLog = Identifier.of("minecraft", "oak_log");
+		Identifier oakLeaves = Identifier.of("minecraft", "oak_leaves");
+		StartMiningAreaPayload curatedPayload = new StartMiningAreaPayload(pos1, pos2, List.of(oakLog, oakLeaves));
+		Assertions.assertEquals(2, curatedPayload.curatedBlockIds().size());
+		Assertions.assertTrue(curatedPayload.curatedBlockIds().contains(oakLog));
+		Assertions.assertTrue(curatedPayload.curatedBlockIds().contains(oakLeaves));
+
+		RegistryByteBuf curatedBuf = new RegistryByteBuf(Unpooled.buffer(), null);
+		try {
+			StartMiningAreaPayload.PACKET_CODEC.encode(curatedBuf, curatedPayload);
+			Assertions.assertTrue(curatedBuf.readableBytes() > 0);
+
+			StartMiningAreaPayload decodedCurated = StartMiningAreaPayload.PACKET_CODEC.decode(curatedBuf);
+			Assertions.assertEquals(curatedPayload, decodedCurated);
+			Assertions.assertEquals(2, decodedCurated.curatedBlockIds().size());
+			Assertions.assertEquals(oakLog, decodedCurated.curatedBlockIds().get(0));
+			Assertions.assertEquals(oakLeaves, decodedCurated.curatedBlockIds().get(1));
+			Assertions.assertEquals(0, curatedBuf.readableBytes());
+		} finally {
+			curatedBuf.release();
+		}
+
 		// Extreme/negative coordinates roundtrip (e.g. subterranean Y = -64 to Y = 320)
 		BlockPos deepPos1 = new BlockPos(-1500, -64, -3000);
 		BlockPos skyPos2 = new BlockPos(2000, 319, 4500);
@@ -580,6 +604,7 @@ public class NetworkingPayloadTest {
 			Assertions.assertEquals(deepPayload, decodedDeep);
 			Assertions.assertEquals(deepPos1, decodedDeep.pos1());
 			Assertions.assertEquals(skyPos2, decodedDeep.pos2());
+			Assertions.assertTrue(decodedDeep.curatedBlockIds().isEmpty());
 			Assertions.assertEquals(0, deepBuf.readableBytes());
 		} finally {
 			deepBuf.release();
@@ -705,9 +730,37 @@ public class NetworkingPayloadTest {
 			Assertions.assertEquals(16, decoded.sizeX());
 			Assertions.assertEquals(8, decoded.sizeY());
 			Assertions.assertEquals(16, decoded.sizeZ());
+			Assertions.assertTrue(decoded.curatedBlockIds().isEmpty());
 			Assertions.assertEquals(0, buf.readableBytes());
 		} finally {
 			buf.release();
+		}
+
+		// Curated block list packet codec roundtrip
+		SyncConstructionSessionPayload curatedPayload = new SyncConstructionSessionPayload(
+			sessionId,
+			anchorPos,
+			"mining_area_12345",
+			0,
+			true,
+			16,
+			8,
+			16,
+			java.util.List.of(Identifier.of("minecraft", "iron_ore"), Identifier.of("minecraft", "coal_ore"))
+		);
+		Assertions.assertEquals(2, curatedPayload.curatedBlockIds().size());
+		RegistryByteBuf curatedBuf = new RegistryByteBuf(Unpooled.buffer(), null);
+		try {
+			SyncConstructionSessionPayload.PACKET_CODEC.encode(curatedBuf, curatedPayload);
+			Assertions.assertTrue(curatedBuf.readableBytes() > 0);
+			SyncConstructionSessionPayload decodedCurated = SyncConstructionSessionPayload.PACKET_CODEC.decode(curatedBuf);
+			Assertions.assertEquals(curatedPayload, decodedCurated);
+			Assertions.assertEquals(2, decodedCurated.curatedBlockIds().size());
+			Assertions.assertTrue(decodedCurated.curatedBlockIds().contains(Identifier.of("minecraft", "iron_ore")));
+			Assertions.assertTrue(decodedCurated.curatedBlockIds().contains(Identifier.of("minecraft", "coal_ore")));
+			Assertions.assertEquals(0, curatedBuf.readableBytes());
+		} finally {
+			curatedBuf.release();
 		}
 	}
 

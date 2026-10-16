@@ -312,7 +312,7 @@ public class MinionBuildGoal extends Goal {
 			}
 		}
 
-		if (this.currentTask == null || this.currentSession == null || !this.currentSession.isActive()) {
+		if (this.currentTask == null || this.currentTask.isCompleted() || this.currentSession == null || !this.currentSession.isActive()) {
 			if (tryClaimTaskOrChainNextSession(serverWorld)) {
 				return;
 			}
@@ -330,45 +330,47 @@ public class MinionBuildGoal extends Goal {
 			// For BUILD sessions: phase through walls to get outside the completed structure.
 			// For DISMANTLE (mining) sessions: skip wall-phasing — go straight to gentle descent.
 			// Underground miners would otherwise try to phase toward a "perimeter" that is solid rock.
-			boolean hasChainedSession = false;
-			if (this.minion.getOwnerUuid() != null) {
-				hasChainedSession = ConstructionManager.getInstance().findNearestSessionForMinion(
-					serverWorld, this.minion.getBlockPos(), this.minion.getOwnerUuid(), 128.0D, this.minion.getEffectiveRole()
-				).filter(ConstructionSession::isActive).isPresent();
-			}
-			if (!hasChainedSession && this.currentSession != null && !this.currentSession.isDismantle()
-					&& !this.minion.isExitingBuilding()) {
-				BlockBox sessionBox = this.currentSession.getWorldBoundingBox();
-				BlockPos sessionAnchor = this.currentSession.getAnchorPos();
-				if (sessionBox != null && sessionAnchor != null && this.minion.isInsideStructure(sessionBox)) {
-					this.minion.startEgressFromStructure(sessionBox, sessionAnchor, null);
+			if (this.currentSession == null || !this.currentSession.isActive()) {
+				boolean hasChainedSession = false;
+				if (this.minion.getOwnerUuid() != null) {
+					hasChainedSession = ConstructionManager.getInstance().findNearestSessionForMinion(
+						serverWorld, this.minion.getBlockPos(), this.minion.getOwnerUuid(), 128.0D, this.minion.getEffectiveRole()
+					).filter(ConstructionSession::isActive).isPresent();
 				}
-			}
+				if (!hasChainedSession && this.currentSession != null && !this.currentSession.isDismantle()
+						&& !this.minion.isExitingBuilding()) {
+					BlockBox sessionBox = this.currentSession.getWorldBoundingBox();
+					BlockPos sessionAnchor = this.currentSession.getAnchorPos();
+					if (sessionBox != null && sessionAnchor != null && this.minion.isInsideStructure(sessionBox)) {
+						this.minion.startEgressFromStructure(sessionBox, sessionAnchor, null);
+					}
+				}
 
-			this.minion.setActivelyBuilding(false);
-			restoreHeldWeapon();
-			// Tasks finished and still levitating: consult active destination for builders, or gently glide down to ground
-			if (this.minion.isArcaneLevitating() && !this.minion.isExitingBuilding()) {
-				// Evaluate target destination invariant
-				Vec3d activeDest = this.minion.resolveActiveTargetDestination();
-				// Both builders and miners gently glide straight down to solid ground upon task completion
-				BlockPos feet = this.minion.getBlockPos();
-				BlockPos below = feet.down();
-				BlockState belowState = serverWorld.getBlockState(below);
-				boolean overSolid = this.minion.isOnGround()
-						|| belowState.isSolidBlock(serverWorld, below)
-						|| this.minion.hasSolidGroundBeneath(serverWorld);
-				if (!overSolid && feet.getY() > serverWorld.getBottomY()) {
-					this.minion.setVelocity(0.0D, -0.22D, 0.0D);
-					this.minion.velocityModified = true;
-				} else {
-					this.minion.setArcaneLevitating(false);
-					this.minion.setNoGravity(false);
-					this.minion.setVelocity(0.0D, 0.0D, 0.0D);
-					this.minion.velocityModified = true;
-					this.minion.unstuckIfInSolidWall(serverWorld);
+				this.minion.setActivelyBuilding(false);
+				restoreHeldWeapon();
+				// Tasks finished and still levitating: consult active destination for builders, or gently glide down to ground
+				if (this.minion.isArcaneLevitating() && !this.minion.isExitingBuilding()) {
+					// Evaluate target destination invariant
+					Vec3d activeDest = this.minion.resolveActiveTargetDestination();
+					// Both builders and miners gently glide straight down to solid ground upon task completion
+					BlockPos feet = this.minion.getBlockPos();
+					BlockPos below = feet.down();
+					BlockState belowState = serverWorld.getBlockState(below);
+					boolean overSolid = this.minion.isOnGround()
+							|| belowState.isSolidBlock(serverWorld, below)
+							|| this.minion.hasSolidGroundBeneath(serverWorld);
+					if (!overSolid && feet.getY() > serverWorld.getBottomY()) {
+						this.minion.setVelocity(0.0D, -0.22D, 0.0D);
+						this.minion.velocityModified = true;
+					} else {
+						this.minion.setArcaneLevitating(false);
+						this.minion.setNoGravity(false);
+						this.minion.setVelocity(0.0D, 0.0D, 0.0D);
+						this.minion.velocityModified = true;
+						this.minion.unstuckIfInSolidWall(serverWorld);
+					}
+					this.minion.tickGentleDescent(serverWorld);
 				}
-				this.minion.tickGentleDescent(serverWorld);
 			}
 			return;
 		}
@@ -769,6 +771,12 @@ public class MinionBuildGoal extends Goal {
 			// Self-intersection nudging: ensure minion is not entombed inside targetPos before placement
 			nudgeMinionAwayFromTargetBlock(serverWorld, targetPos);
 
+			// Pre-clearing existing obstacles (water, lava, fluids) at target block before placement
+			BlockState currentWorldState = serverWorld.getBlockState(targetPos);
+			if (!targetState.isOf(Blocks.WATER) && (currentWorldState.isOf(Blocks.WATER) || !currentWorldState.getFluidState().isEmpty())) {
+				removeFluidSource(serverWorld, targetPos, currentWorldState, currentWorldState.isOf(Blocks.WATER));
+			}
+
 			// Zero-drop pre-clearing in creative mode
 			if (this.currentSession.isCreative()) {
 				cleanPreExistingObstacles(serverWorld, targetPos);
@@ -808,6 +816,12 @@ public class MinionBuildGoal extends Goal {
 				}
 				net.minecraft.block.enums.BedPart otherPart = (part == net.minecraft.block.enums.BedPart.FOOT) ? net.minecraft.block.enums.BedPart.HEAD : net.minecraft.block.enums.BedPart.FOOT;
 				BlockState otherState = targetState.with(BedBlock.PART, otherPart);
+				if (targetState.contains(BedBlock.OCCUPIED)) {
+					targetState = targetState.with(BedBlock.OCCUPIED, false);
+				}
+				if (otherState.contains(BedBlock.OCCUPIED)) {
+					otherState = otherState.with(BedBlock.OCCUPIED, false);
+				}
 				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_LISTENERS);
 				serverWorld.setBlockState(otherPos, otherState, Block.NOTIFY_ALL);
 			} else if (targetState.getBlock() instanceof TallPlantBlock) {
@@ -1871,25 +1885,9 @@ public class MinionBuildGoal extends Goal {
 		boolean isFlowingFluid = isFluid && !isStillWater && !isStillLava;
 
 		if (alreadyAir || isFlowingFluid) {
-			this.currentSession.completeTask(this.currentTask, serverWorld);
-			this.workTicks = 0;
-			this.ticksNavigating = 0;
-			this.stallCollisionTicks = 0;
-			this.groundNavigationForced = false;
-			this.hoverStationVec = null;
-
-			if (!tryClaimTaskOrChainNextSession(serverWorld)) {
-				this.currentTask = null;
-				this.hoverStationVec = null;
-				if (!this.minion.isArcaneLevitating()) {
-					restoreHeldWeapon();
-				}
+			if (isFlowingFluid) {
+				serverWorld.setBlockState(targetPos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 			}
-			return;
-		}
-
-		if (isStillWater || isStillLava) {
-			removeFluidSource(serverWorld, targetPos, currentState, isStillWater);
 			this.currentSession.completeTask(this.currentTask, serverWorld);
 			this.workTicks = 0;
 			this.ticksNavigating = 0;
@@ -1911,6 +1909,57 @@ public class MinionBuildGoal extends Goal {
 		if (isIndestructibleBlock(currentState, serverWorld, targetPos)) {
 			this.currentSession.completeTask(this.currentTask, serverWorld);
 			this.workTicks = 0;
+			this.ticksNavigating = 0;
+			this.stallCollisionTicks = 0;
+			this.groundNavigationForced = false;
+			this.hoverStationVec = null;
+			if (!tryClaimTaskOrChainNextSession(serverWorld)) {
+				this.currentTask = null;
+				this.hoverStationVec = null;
+				if (!this.minion.isArcaneLevitating()) {
+					restoreHeldWeapon();
+				}
+			}
+			return;
+		}
+
+		// Strict safeguard: Never break blocks that are not in the curated whitelist!
+		if (this.currentSession.getCuratedBlockIds() != null && !this.currentSession.getCuratedBlockIds().isEmpty()) {
+			net.minecraft.util.Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(currentState.getBlock());
+			if (!this.currentSession.getCuratedBlockIds().contains(blockId)) {
+				this.currentSession.completeTask(this.currentTask, serverWorld);
+				this.workTicks = 0;
+				this.ticksNavigating = 0;
+				this.stallCollisionTicks = 0;
+				this.groundNavigationForced = false;
+				this.hoverStationVec = null;
+				if (!tryClaimTaskOrChainNextSession(serverWorld)) {
+					this.currentTask = null;
+					this.hoverStationVec = null;
+					if (!this.minion.isArcaneLevitating()) {
+						restoreHeldWeapon();
+					}
+				}
+				return;
+			}
+		}
+
+		if (isStillWater || isStillLava) {
+			removeFluidSource(serverWorld, targetPos, currentState, isStillWater);
+			this.currentSession.completeTask(this.currentTask, serverWorld);
+			this.workTicks = 0;
+			this.ticksNavigating = 0;
+			this.stallCollisionTicks = 0;
+			this.groundNavigationForced = false;
+			this.hoverStationVec = null;
+
+			if (!tryClaimTaskOrChainNextSession(serverWorld)) {
+				this.currentTask = null;
+				this.hoverStationVec = null;
+				if (!this.minion.isArcaneLevitating()) {
+					restoreHeldWeapon();
+				}
+			}
 			return;
 		}
 
@@ -2219,10 +2268,16 @@ public class MinionBuildGoal extends Goal {
 				setupTaskKinematics(serverWorld, nextTask.getWorldPos());
 				return true;
 			}
-			// Current session is active but all remaining tasks are either:
-			// - claimed by other minions, or waiting on block-placement dependencies.
-			// Stay committed to this session — do NOT abandon it for a nearer one.
-			return false;
+			// If claiming failed because the session finished or was removed, clear it and fall through to Step 2
+			if (!this.currentSession.isActive() || ConstructionManager.getInstance().getSession(this.currentSession.getId()).isEmpty()) {
+				this.currentSession = null;
+				this.currentTask = null;
+			} else {
+				// Current session is active but all remaining tasks are either:
+				// - claimed by other minions, or waiting on block-placement dependencies.
+				// Stay committed to this session — do NOT abandon it for a nearer one.
+				return false;
+			}
 		} else if (this.currentSession != null && (!this.currentSession.isActive()
 				|| ConstructionManager.getInstance().getSession(this.currentSession.getId()).isEmpty())) {
 			this.currentSession = null;

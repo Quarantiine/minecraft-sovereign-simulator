@@ -30,13 +30,15 @@ import org.lwjgl.glfw.GLFW;
 public class MiningConfirmModalScreen extends Screen {
 
 	public static final int WINDOW_WIDTH = 300;
-	public static final int WINDOW_HEIGHT = 170;
+	public static final int WINDOW_HEIGHT = 196;
 
 	private BlockPos pos1;
 	private BlockPos pos2;
 	private final ItemStack scepterStack;
 	private final Screen parentScreen;
+	private final java.util.Set<net.minecraft.util.Identifier> curatedBlockIds = new java.util.LinkedHashSet<>();
 
+	private ButtonWidget curateButton;
 	private ButtonWidget startButton;
 	private ButtonWidget resetButton;
 	private ButtonWidget cancelButton;
@@ -49,6 +51,9 @@ public class MiningConfirmModalScreen extends Screen {
 		this.pos2 = pos2 != null ? pos2.toImmutable() : ClientMiningCaptureTracker.getPos2();
 		this.scepterStack = scepterStack;
 		this.parentScreen = parentScreen;
+		if (ClientMiningCaptureTracker.hasCuratedBlocks()) {
+			this.curatedBlockIds.addAll(ClientMiningCaptureTracker.getCuratedBlockIds());
+		}
 	}
 
 	public MiningConfirmModalScreen(ItemStack scepterStack, Screen parentScreen) {
@@ -65,6 +70,19 @@ public class MiningConfirmModalScreen extends Screen {
 
 	public BlockPos getPos2() {
 		return this.pos2;
+	}
+
+	public java.util.Set<net.minecraft.util.Identifier> getCuratedBlockIds() {
+		return java.util.Collections.unmodifiableSet(this.curatedBlockIds);
+	}
+
+	public void setCuratedBlockIds(java.util.Set<net.minecraft.util.Identifier> ids) {
+		this.curatedBlockIds.clear();
+		if (ids != null) {
+			this.curatedBlockIds.addAll(ids);
+		}
+		ClientMiningCaptureTracker.setCuratedBlockIds(this.curatedBlockIds);
+		updateStartButtonState();
 	}
 
 	public boolean hasValidGeometry() {
@@ -102,9 +120,10 @@ public class MiningConfirmModalScreen extends Screen {
 	}
 
 	/**
-	 * Computes the exact number of destructible (non-air, hardness >= 0) blocks enclosed within [pos1, pos2].
+	 * Computes the exact number of destructible (non-air, hardness >= 0) blocks enclosed within [pos1, pos2],
+	 * respecting any curated block filter if active.
 	 *
-	 * @return Count of destructible blocks in client world.
+	 * @return Count of matching destructible blocks in client world.
 	 */
 	public int getDestructibleBlockCount() {
 		if (this.pos1 == null || this.pos2 == null) {
@@ -128,7 +147,9 @@ public class MiningConfirmModalScreen extends Screen {
 						if (state != null && !state.isAir()) {
 							float hardness = state.getHardness(mc.world, m);
 							if (hardness >= 0.0F) {
-								count++;
+								if (this.curatedBlockIds.isEmpty() || this.curatedBlockIds.contains(net.minecraft.registry.Registries.BLOCK.getId(state.getBlock()))) {
+									count++;
+								}
 							}
 						}
 					}
@@ -170,10 +191,18 @@ public class MiningConfirmModalScreen extends Screen {
 			this.addDrawableChild(minus1);
 			this.addDrawableChild(plus1);
 			this.addDrawableChild(plus5);
+
+			// 2. Curate Blocks button in dedicated curation row
+			int curateBtnY = startY + 86;
+			this.curateButton = ButtonWidget.builder(Text.literal("§d🎯 Curate Blocks"), b -> openCurationModal())
+				.dimensions(startX + 180, curateBtnY, 104, 18)
+				.tooltip(Tooltip.of(Text.literal("Choose which blocks minions should mine or don't mine")))
+				.build();
+			this.addDrawableChild(this.curateButton);
 		}
 
-		// 2. Action buttons at bottom tray
-		int bottomY = startY + WINDOW_HEIGHT - 32;
+		// 3. Action buttons at bottom tray
+		int bottomY = startY + WINDOW_HEIGHT - 30;
 		int btnWidth = 84;
 
 		this.startButton = ButtonWidget.builder(Text.literal("§a✔ Mine Area"), b -> startMiningArea())
@@ -197,6 +226,29 @@ public class MiningConfirmModalScreen extends Screen {
 		updateStartButtonState();
 	}
 
+	public void openCurationModal() {
+		if (this.pos1 == null || this.pos2 == null) return;
+		MinecraftClient mc = this.client != null ? this.client : MinecraftClient.getInstance();
+		if (mc != null) {
+			mc.setScreen(new MiningCurationModalScreen(
+				this.pos1,
+				this.pos2,
+				this.curatedBlockIds,
+				this,
+				this::onCurationApplied
+			));
+		}
+	}
+
+	public void onCurationApplied(java.util.Set<net.minecraft.util.Identifier> selectedIds) {
+		this.curatedBlockIds.clear();
+		if (selectedIds != null) {
+			this.curatedBlockIds.addAll(selectedIds);
+		}
+		ClientMiningCaptureTracker.setCuratedBlockIds(this.curatedBlockIds);
+		updateStartButtonState();
+	}
+
 	private void adjustModalHeight(int delta) {
 		if (this.pos1 == null || this.pos2 == null) return;
 		ClientMiningCaptureTracker.adjustHeight(delta);
@@ -213,6 +265,7 @@ public class MiningConfirmModalScreen extends Screen {
 
 	public void clearSelection() {
 		ClientMiningCaptureTracker.clear();
+		this.curatedBlockIds.clear();
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.clearMineCorners(this.scepterStack);
 		}
@@ -234,8 +287,8 @@ public class MiningConfirmModalScreen extends Screen {
 		BlockPos p1 = this.pos1;
 		BlockPos p2 = this.pos2;
 
-		// Dispatch C2S StartMiningAreaPayload
-		ModClientNetworking.sendStartMiningArea(p1, p2);
+		// Dispatch C2S StartMiningAreaPayload with curatedBlockIds
+		ModClientNetworking.sendStartMiningArea(p1, p2, new java.util.ArrayList<>(this.curatedBlockIds));
 
 		// Audio and chat feedback
 		if (this.client != null && this.client.world != null && this.client.player != null) {
@@ -250,14 +303,16 @@ public class MiningConfirmModalScreen extends Screen {
 				1.0F,
 				1.2F
 			);
+			String curationSuffix = !this.curatedBlockIds.isEmpty() ? " §8[§d" + this.curatedBlockIds.size() + " types curated§8]" : "";
 			this.client.player.sendMessage(
-				Text.literal("§6✦ Initiating Area Quarry Mining: §e" + getDimensionX() + "x" + getDimensionY() + "x" + getDimensionZ() + " §8(§f" + destructibleCount + " blocks§8)§r"),
+				Text.literal("§6✦ Initiating Area Quarry Mining: §e" + getDimensionX() + "x" + getDimensionY() + "x" + getDimensionZ() + " §8(§f" + destructibleCount + " blocks" + curationSuffix + "§8)§r"),
 				true
 			);
 		}
 
 		// Clear local tracker and scepter corners, then close
 		ClientMiningCaptureTracker.clear();
+		this.curatedBlockIds.clear();
 		if (this.scepterStack != null && !this.scepterStack.isEmpty()) {
 			CommandScepterItem.clearMineCorners(this.scepterStack);
 		}
@@ -316,16 +371,29 @@ public class MiningConfirmModalScreen extends Screen {
 			String hLabel = underground ? "§eHeight / Depth: §c[↓ " + ClientMiningCaptureTracker.getUndergroundDepth() + "b deep]" : "§eAdjust Height:";
 			context.drawTextWithShadow(this.textRenderer, Text.literal(hLabel), startX + 16, startY + 68, 0xFFD700);
 
+			// Curation summary label in dedicated row
+			String curLabel;
+			if (this.curatedBlockIds.isEmpty()) {
+				curLabel = "§eTargets: §aAll Types §8(§f" + destructibleBlocks + "b§8)";
+			} else {
+				curLabel = "§eTargets: §d" + this.curatedBlockIds.size() + " Types §8(§a" + destructibleBlocks + "b§8)";
+			}
+			context.drawTextWithShadow(this.textRenderer, Text.literal(curLabel), startX + 16, startY + 90, 0xFFD700);
+
 			// Instruction / Description lines
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§eExcavation Method: §fTop-to-Bottom Reverse Topological"), startX + 16, startY + 90, 0xFFD700);
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Minions will systematically dismantle this 3D quarry."), startX + 16, startY + 104, 0xAAAAAA);
-			context.drawTextWithShadow(this.textRenderer, Text.literal("§8Bedrock & indestructible blocks are safeguarded."), startX + 16, startY + 118, 0x888888);
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§eExcavation Method: §fTop-to-Bottom Reverse Topological"), startX + 16, startY + 112, 0xFFD700);
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Minions will systematically dismantle this 3D quarry."), startX + 16, startY + 126, 0xAAAAAA);
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§8Bedrock & unselected blocks are safeguarded."), startX + 16, startY + 140, 0x888888);
 		} else {
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§c⚠ Incomplete corner selection (Set Pos1 & Pos2)"), startX + 16, startY + 34, 0xFF5555);
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§7Left-click blocks in AREA mode to set Pos1 and Pos2."), startX + 16, startY + 54, 0xAAAAAA);
 		}
 
 		super.render(context, mouseX, mouseY, delta);
+	}
+
+	public ButtonWidget getCurateButton() {
+		return this.curateButton;
 	}
 
 	@Override

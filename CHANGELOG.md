@@ -6,6 +6,121 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.2.1] - 2026-10-16
+
+### 🎯 Mining Curation: Selective Block Filtering & In-World Excavation Focus
+
+### 📢 Overview & Player Highlights (GitHub Release Notes)
+
+Welcome to **v1.2.1**! This update gives you complete precision over what your minions mine, allows miners to dig independently in parallel without waiting around, drains flooded quarries, and smooths out building placement:
+
+- 🎯 **Selective Mining (Block Curation)**: You can now pick and choose exactly which blocks your minions will mine! Want to strip-mine only diamonds, coal, and iron while leaving the surrounding stone and dirt untouched? Or harvest only logs and leaves from a forest? Click **`[ 🎯 Curate Blocks ]`** in the mining confirmation window to pick your targets. In-world highlight grids will only show up on the blocks you chose!
+- 💧 **Water, Lava & Clutter Clearing**: Minions now automatically scoop up water and lava inside your mining areas using buckets (even crafting buckets from iron ingots if needed) so your quarries don't stay flooded. They also clear away grass, flowers, and torches. In building mode, builders will also scoop away water puddles before placing solid structure blocks.
+- ⚡ **Continuous Parallel Mining**: Minions digging in different spots now dig downward immediately at their own pace! They no longer freeze or wait idle for other minions to finish an entire horizontal layer across the quarry.
+- 🏗️ **Seamless Blueprint Placement**: Fixed an issue where right-clicking near the ground to place a blueprint would accidentally trigger an Area Fill warning message. Blueprints now place smoothly and instantly wherever you click.
+- 📦 **Smart Multi-Job Staging**: You can queue up mining areas, blueprints, and area fills right on top of each other (like clearing a hill and dropping a castle blueprint onto the exact same spot). Minions finish the excavation first, then seamlessly start building without interruptions.
+- 🛏️ **Sleeping In Beds Works!**: Fixed the vanilla bug where beds placed by minions or captured from worlds claimed "This bed is occupied". You can now sleep in constructed beds immediately!
+
+### Added
+
+#### 🎯 Selective Mining Curation Modal (`MiningCurationModalScreen`)
+
+- **Granular Block & Non-Block Selection Modal**:
+  - Added a dedicated **Mining Curation Modal** (`MiningCurationModalScreen`, 360x240px) accessible directly from the Mining Confirmation dialog via the new **`[ 🎯 Curate Blocks ]`** button.
+  - Allows commanders to selectively specify which block types minions should dismantle or leave untouched in a confirmed 3D quarry volume (e.g., harvesting only wood logs and leaves from a forest while leaving dirt/stone, or targeting only precious ores while skipping deepslate).
+- **Independent Column-Based Mining Progression**:
+  - Refactored `ConstructionSession.isDismantleTaskReady()` Rule 3 from a global layer-wide freeze to independent vertical column ($X, Z$) clearance.
+  - Minions excavating separate columns now dig down into subsequent layers immediately once their overhead vertical column is cleared, completely eliminating layer-wide stalling where workers were previously forced to wait idle for peers to finish the entire horizontal layer.
+- **Strict Area Fill Modal Isolation & Seamless Blueprint Placement**:
+  - Fixed an issue where right-clicking near the ground in `BLUEPRINT` mode triggered the Area Fill modal warning (`✦ Left-click two blocks to set Pos1 and Pos2 before confirming area fill!`) and blocked blueprint placement if leftover corner coordinates were present on the scepter.
+  - Scepter right-click routing in `useOnBlock` and `use()` now strictly validates `buildingMode == BuildingMode.AREA`, ensuring blueprints place effortlessly at any distance or proximity to the ground without false modal intercepts.
+- **Water & Non-Block Mining & Removal**:
+  - **Universal Block & Non-Block Demolition**: Builder minions now actively mine and remove water, lava, and non-blocks (plants, flowers, torches, tall grass) within the mining volume unless curated not to be mined.
+  - **Fluid Curation & Bucket Icons**: Water and Lava appear directly in the curation modal list with recognizable `WATER_BUCKET` and `LAVA_BUCKET` icons and exact block counts, selected by default. Commanders can deselect Water to preserve ponds, moats, and aquifers.
+  - **Aqua Ghost Grid Highlighting**: Water source blocks render with a distinct aqua/cyan ghost grid outline, and lava with a fiery red-orange outline, dynamically filtered by curation.
+  - **Autonomous Water Scooping & Build Clearance**: Builder minions scoop water into buckets, craft buckets from iron ingots, scavenge nearby containers, or displace water with solid blocks. In `BUILD` mode, builders automatically clear water source blocks before placing structure blocks.
+- **Real-World Terrain Scanning & Count Tallies**:
+  - Automatically scans real-world client chunk blocks within the selected `[pos1, pos2]` bounding box upon opening.
+  - Detects all unique destructible block types present in the volume and tallies exact block counts per type.
+  - Sorts block entries descending by abundance, rendering 3D block icons (`ItemStack`), localized display names, registry identifiers (`namespace:path`), and total block counts.
+- **Real-Time Search Bar & Bulk Controls**:
+  - Integrated real-time search field (`[ 🔍 Search blocks... ]`) supporting block display names, namespace prefixes, and registry paths.
+  - Added **`[ ✔ All ]`** and **`[ ✖ Clear ]`** quick controls for effortless bulk selection.
+  - Interactive row toggle buttons (`[ ✔ Mine ]` in emerald green vs `[ ✕ Don't Mine ]` in muted dark red) for individual block management.
+- **Non-Overlapping Bottom Tray & Status Bar**:
+  - Relocated the Selected Targets summary section (`Selected: X / Y Types (N blocks to mine)`) into its own dedicated dashboard bar positioned cleanly above the **`[ ✖ Cancel ]`** and **`[ ✔ Apply ]`** action buttons, completely preventing text and button overlap.
+- **Selective In-World Fiery Ghost Grid Highlighting**:
+  - Integrated `ClientMiningCaptureTracker.isBlockCurated` and `ClientConstructionTracker.ActiveSessionClientData.curatedBlockIds` with `BlueprintHologramRenderer.renderMiningGhostGrid`.
+  - **Zero Curation Invariant**: If no curation filter is applied, all destructible block types in the mining volume render fiery ghost grid boxes.
+  - **Selective Curation Invariant**: If the commander selects a subset of block types (e.g. 2 block types such as coal and iron ore), **strictly and exclusively those curated block types** are highlighted with grids; all unselected blocks are completely hidden from the grid overlay.
+  - **Active Session Synchronization**: Confirmed mining sessions transmit `curatedBlockIds` via `SyncConstructionSessionPayload` so persistent active mining operations continue rendering ghost grid boxes strictly on the curated targets as minions mine them, with boxes vanishing as blocks turn to air.
+  - **Live Preview & Safe Revert**: Updates live in real time as blocks are toggled inside the curation modal, with automatic cancellation revert to the previous state.
+- **Fail-Safe Apply Logic & Live Target Summary**:
+  - Unchecking all blocks and pressing **`[ ✔ Apply ]`** automatically triggers a fail-safe that repopulates all detected blocks, preventing accidental 0-block lockouts.
+  - Live summary label in `MiningConfirmModalScreen` displays real-time target status: `Targets: All Types (N blocks)` or `Targets: X/Y Types (M blocks)`.
+  - The confirm dialog's `Blocks: N` counter dynamically recalculates to display the exact curated destructible block count.
+
+#### ⚙️ Server-Side Selective Excavation Engine & Clean Session Lifecycle
+
+- **Selective Blueprint Construction (`StructureBlueprint`)**:
+  - Upgraded `StructureBlueprint.createAreaBlueprint` to accept an optional `allowedBlockIds` filter set (`Set<Identifier>`).
+  - Blocks not present in the curated whitelist are omitted from task generation, allowing minions to excavate only chosen targets.
+- **Autonomous Curated Task Queueing (`ConstructionSession`)**:
+  - Initialized `ConstructionSession` with `curatedBlockIds` filter set for `DISMANTLE` sessions.
+  - Minions only receive and execute tasks for whitelisted blocks in strict reverse topological (top-to-bottom) order.
+- **Accurate In-World Completion Contract**:
+  - `ConstructionSession.hasRemainingBlocksInWorld()` now strictly filters against `curatedBlockIds`.
+  - Intentionally unmined blocks left behind (e.g., dirt, stone, or obsidian) no longer prevent the session from completing. Once all curated targets are cleared, the excavation session finishes cleanly, removes the wireframe highlight, and mobilizes minions.
+- **Uncurated World State Safeguard (`ConstructionSession` & `MinionBuildGoal`)**:
+  - In `ConstructionSession.claimNextTask()`, if a block at a queued task coordinate changed in the world (e.g., from falling sand/gravel, fluid flow, or player placement) to an uncurated block type, the task auto-completes immediately without dispatching workers.
+  - In `MinionBuildGoal.executeDismantleWork()`, added a strict guard ensuring minions never break an in-world block that is not present in `curatedBlockIds`, safely skipping uncurated replacements and advancing to the next target.
+- **Active Session Synchronization on World Join (`ConstructionManager.syncToPlayer`)**:
+  - Added `ConstructionManager.syncToPlayer()` wired to `ServerPlayConnectionEvents.JOIN`, ensuring newly joined or reconnecting players instantly receive active construction and quarry session wireframes and ghost grids with their complete curation whitelist.
+- **Network Protocol Upgrade (`StartMiningAreaPayload` & `SyncConstructionSessionPayload`)**:
+  - Upgraded both `StartMiningAreaPayload` and `SyncConstructionSessionPayload` records with `List<Identifier> curatedBlockIds`.
+  - Retained overloaded backward-compatible constructors ensuring zero breakage for legacy clients and network packets.
+
+### Fixed
+
+#### 🛡️ Barrier Visual Suppression Outside of Barrier Mode
+- **Strict Visual Isolation for Sovereign Barriers**:
+  - Resolved an issue where sealed barrier wireframes and floating billboard tags (`[ Sovereign Barrier #1 ]`) remained visible in the world whenever the Command Scepter was held in other modes (such as `MINE`, `PATROL`, `ASSAULT`, `RALLY`, `DESIGN`, or `BUILD` with `BLUEPRINT` / `AREA` sub-modes).
+  - Added an early return guard in `BarrierHologramRenderer` that checks `(mode == CommandMode.BUILD && bMode == BuildingMode.BARRIER)`. If the player is not actively in Barrier mode, all barrier rendering (wireframes, laser columns, ghost lines, hover boxes, and waypoint tags) is completely suppressed, keeping the commander's view clean and distraction-free.
+
+#### 🛏️ BedBlock Sleeping Fix: Sanitized Occupied State & Paired Multiblock Completion
+- **Eliminated False "Bed is Occupied" Block**:
+  - Resolved vanilla Minecraft's `BedBlock.OCCUPIED` bug where beds captured from existing worlds (e.g. village houses) or placed by minions retained `OCCUPIED=true`.
+  - Vanilla Minecraft's `BedBlock.onUse` checks `(Boolean)state.get(OCCUPIED)` and immediately rejects the player with `"This bed is occupied"`.
+  - Enforced automatic sanitization of `BedBlock.OCCUPIED` to `false` across all blueprint capture (`StructureBlueprint.captureBlocks`), property transfer (`StructureBlueprint.transferBlockStateProperties`), blueprint block instantiation (`BlueprintBlock`), and in-world placement (`MinionBuildGoal.placeBlueprintBlock`), ensuring players can always sleep in constructed beds immediately.
+- **Paired Multiblock Auto-Completion**:
+  - Upgraded `ConstructionSession.completeTask()` to auto-complete the corresponding other bed half (head or foot) whenever either half is completed by a minion, matching `DoorBlock` behavior in both `BUILD` and `DISMANTLE` modes.
+
+#### ⛏️ Non-Destructive Job Queueing: Sequential FIFO Execution & Overlapping Job Gating
+- **Strict Overlapping Job Gating (`isBlockedByOverlappingOlderSession`)**:
+  - Implemented `isBlockedByOverlappingOlderSession()` in `ConstructionManager` and enforced it in `ConstructionSession.claimNextTask()`.
+  - When multiple jobs (quarry mining areas, building blueprints, volumetric area fills) overlap geometrically in 3D space, minions strictly finish the older active job 100% as a whole before ANY minion touches or claims tasks from the newer overlapping job.
+  - Completely prevents partial build/mine interleaving or race conditions where minions place blocks into an active quarry or break blocks placed by an overlapping blueprint.
+- **Zero-Hitch Seamless Session Chaining (Smooth Transition)**:
+  - Eliminated the 1-tick downward glide, weapon-swapping stutter, and disengagement jitter during session transitions.
+  - When an active session completes or all remaining tasks are cleared, `MinionBuildGoal.tryClaimTaskOrChainNextSession()` falls through to chain the next queued session in the exact same tick.
+  - Builders transition directly from blueprint construction to mining (or vice versa) in mid-air, dynamically swapping held items from blueprint blocks to pickaxes while maintaining smooth flight altitude.
+- **Mining Exclusion from Constructed Structures**:
+  - Updated `ConstructionManager.completeSession()` so only constructive sessions (`!session.isDismantle()`) are recorded in `constructedStructureBounds`. Completed excavation pits and quarries are no longer falsely flagged as constructed buildings.
+- **Eliminated Destructive Overlap Cancellation**:
+  - Resolved an issue where anchoring a new blueprint or area job while minions were actively mining caused them to abort/stop mining and immediately start building the blueprint in mid-air.
+  - Removed destructive bounding box overlap cancellation (`intersects(newBox)`) from `ConstructionManager.startSession()`, allowing mining areas, structure blueprints, and volumetric area fills to coexist in a clean queue even when occupying the exact same site (e.g., clearing a hillside and then erecting a building on the cleared ground).
+- **3D Bounding Box Proximity Metric (`getSquaredDistanceToSession`)**:
+  - Upgraded `ConstructionManager.findNearestSessionForMinion()` and `isMinionNearActiveSession()` to use 3D bounding box proximity (`getSquaredDistanceToSession()`) rather than anchor coordinates, ensuring deep subterranean mining excavations are never falsely deemed out of range by surface workers.
+- **Strict Sequential FIFO Task Commitment**:
+  - Enforced that minions commit 100% of their labor to the oldest active session (`session.getCreatedTick()`) in range until all blocks are completely placed or excavated.
+  - Minions seamlessly chain one by one to subsequently queued jobs upon 100% completion of the active job.
+- **Uncluttered Active Mining Visuals (Zero Interior Ghost Grid Clutter)**:
+  - Addressed player feedback regarding in-world grid visuals: after confirming a mining quarry, the client displays only the clean outer bounding box wireframe outline (`renderMiningBoundingBox`).
+  - Interior 1×1×1 block ghost grid wireframes (`renderMiningGhostGrid`) are now displayed strictly during the drafting/selection and curation stages so players can preview targeted blocks, and are completely suppressed once confirmed so the world and mining site remain completely visible, clean, and free of grid clutter while minions are working.
+
+
+---
+
 ## [1.2.0] - 2026-10-15
 
 ### 🛡️ Sovereign Barrier Defense, Volumetric Area Fill, Unified Depth Excavation & Autonomous Threat Triage

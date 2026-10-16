@@ -43,8 +43,8 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
   - [4. Saving & Auto-Selection](#4-saving--auto-selection)
 - [⛏️ 9. Mining & Area Clearance (MINE Mode)](#️-9-mining--area-clearance-mine-mode)
   - [A. Custom Area Boundary Quarry Mining (AREA Mode)](#a-custom-area-boundary-quarry-mining-area-mode)
-  - [B. Minion Excavation, Strict FIFO Queueing & Safety Systems](#b-minion-excavation-strict-fifo-queueing--safety-systems)
-  - [C. Minion Excavation & Safety Systems (Both Modes)](#c-minion-excavation--safety-systems-both-modes)
+  - [B. Selective Mining Curation ([ 🎯 Curate Blocks ])](#b-selective-mining-curation--curate-blocks-)
+  - [C. Minion Excavation, Strict FIFO Queueing & Safety Systems](#c-minion-excavation-strict-fifo-queueing--safety-systems)
 - [🧙‍♂️ 10. Universal Arcane Levitation & Obstacle Vaulting](#️-10-universal-arcane-levitation--obstacle-vaulting)
 - [🔔 11. Dual-Tier Panic Retreat & Emergency Citadel Call (Keybind R)](#-11-dual-tier-panic-retreat--emergency-citadel-call-keybind-r)
   - [A. Quick R: Tactical Squad Retreat](#a-quick-r-tactical-squad-retreat)
@@ -83,28 +83,28 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 
 ### 🏗️ Multiblock Construction & Flight (`BUILD` Mode)
 
-| Input                                                                 | Target / Context         | Action                                                                                                                                                                                                       |
-| :-------------------------------------------------------------------- | :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sub-Mode Toggle**                                                   | Command Hub / Scepter    | **Toggle Sub-Mode**: Cycle between `BLUEPRINT` (structure paste), `AREA` (volumetric fill), and `BARRIER` (defense perimeter) with `[ 🏛 Build ]` / `[ ◫ Area ]` / `[ 🛡 Barrier ]`.                         |
-| **Right-Click** _(Quick Tap)_                                         | Ground Block (up to 96m) | **Anchor Construction** _(BLUEPRINT)_: Deploys armed blueprint at targeted ground block. Builders activate 3D Arcane Levitation and block phasing to construct persistently to 100% completion.              |
-| **1st Left-Click**                                                    | Ground Block             | **Set Corner 1 (`Pos1`)** _(AREA)_: Sets Corner 1 on targeted surface for volumetric fill.                                                                                                                   |
-| **2nd Left-Click**                                                    | Ground Block             | **Set Corner 2 (`Pos2`)** _(AREA)_: Sets Corner 2, locking the 3D fill footprint and rendering Cyan/Aqua ghost grid wireframes.                                                                              |
+| Input                                                                 | Target / Context         | Action                                                                                                                                                                                                                                           |
+| :-------------------------------------------------------------------- | :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sub-Mode Toggle**                                                   | Command Hub / Scepter    | **Toggle Sub-Mode**: Cycle between `BLUEPRINT` (structure paste), `AREA` (volumetric fill), and `BARRIER` (defense perimeter) with `[ 🏛 Build ]` / `[ ◫ Area ]` / `[ 🛡 Barrier ]`.                                                             |
+| **Right-Click** _(Quick Tap)_                                         | Ground Block (up to 96m) | **Anchor Construction** _(BLUEPRINT)_: Deploys armed blueprint at targeted ground block without interference from leftover Area Fill corners. Builders activate 3D Arcane Levitation and block phasing to construct persistently to 100% completion. |
+| **1st Left-Click**                                                    | Ground Block             | **Set Corner 1 (`Pos1`)** _(AREA)_: Sets Corner 1 on targeted surface for volumetric fill.                                                                                                                                                       |
+| **2nd Left-Click**                                                    | Ground Block             | **Set Corner 2 (`Pos2`)** _(AREA)_: Sets Corner 2, locking the 3D fill footprint and rendering Cyan/Aqua ghost grid wireframes.                                                                                                                  |
 | **Ctrl + Scroll** / **`[`** / **`]`** / **`PageUp`** / **`PageDown`** | In `AREA` Sub-Mode       | **Adjust Fill Height & Depth**: Unified bi-directional control expands upward (+height) or contracts down to baseline. Decreasing past 1 automatically expands downward into the ground (`[↓ Xb deep]`). Hold `Shift` for $\pm 5$ fast stepping. |
-| **Right-Click**                                                       | Pos1 & Pos2 Selected     | **Open Fill Confirmation Modal** _(AREA)_: Opens `BuildAreaConfirmModalScreen` to choose block type, inspect volume/dimensions, and confirm construction.                                                    |
-| **Shift + Left-Click**                                                | In `AREA` Sub-Mode       | **Reset Build Corners**: Instantly clears `Pos1` and `Pos2` selection with bass tone.                                                                                                                        |
-| **Left-Click**                                                        | In `BARRIER` Sub-Mode    | **Place Node / Extend / Seal**: Sets consecutive waypoint (`Barrier 1..N`); clicking existing confirmed waypoint extends; clicking Point 1 or any waypoint snaps circuit closed and opens Seal modal.        |
-| **Right-Click**                                                       | Waypoint Node (BARRIER)  | **Remove Node**: Right-clicking an existing or pending waypoint deletes **only that specific clicked node**.                                                                                                 |
-| **Right-Click**                                                       | Ground / Air (BARRIER)   | **Open Seal Modal**: Right-clicking non-waypoint terrain, interior land, or open air opens `BarrierConfirmModalScreen` **strictly when $\ge 2$ waypoints exist**.                                            |
-| **Shift + Left-Click**                                                | In `BARRIER` Sub-Mode    | **Reset Barrier Draft**: Instantly clears all unsealed drafting nodes.                                                                                                                                       |
-| **Right-Click** _(Quick Tap)_                                         | Open Sky                 | **Retains Armed Blueprint**: Retains blueprint selection without accidental cycling or dropping.                                                                                                             |
-| **Keybind `R`**                                                       | In `BLUEPRINT` Sub-Mode  | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°). In `AREA` and `BARRIER` sub-modes, `R` triggers Squad Retreat / Emergency Recall instead.                                     |
-| **Left-Click / Shift + Left-Click**                                   | In `BLUEPRINT` Sub-Mode  | **Normal Hit / Break**: Standard survival attack or creative block break; does **not** rotate blueprint.                                                                                                     |
-| **Arcane Build Flight**                                               | Scepter in `BUILD` Mode  | **Survival 3D Flight**: Free unconstrained vanilla flight (Space to ascend, Shift to descend, WASD flight). Shallow water $\le 5$ blocks permitted; deep water (>5 blocks) cancels flight with safe descent. |
-| **Keybind `H`**                                                       | In `BUILD` Mode          | **Tactical RTS Camera Zoom**: Cycles zoom presets (`0.75x`, `1.0x` default, `1.5x`, `2.0x`).                                                                                                                 |
-| **Ctrl + Mouse Scroll**                                               | In `BLUEPRINT` Sub-Mode  | **Smooth Camera Zoom**: Smoothly zooms tactical perspective without hotbar cycling conflicts.                                                                                                                |
-| **`[ 📋 BOM ]` Button**                                               | In Command Hub           | **Material BOM Modal**: Live resource readiness & inventory delta calculator across bags and nearby minion backpacks within 64m.                                                                             |
-| **`[ 🔍 3D View ]` Button**                                           | In Command Hub           | **3D Architectural Blueprint Explorer**: Interactive 3D voxel inspection, floor slicer, palette remapping (`[ 🎨 Remap ]`), direct renaming (`[ ✏ Rename ]` / `[R]`), and mega-structure pre-caching.        |
-| **Catalog Delete `[ ✕ ]`**                                            | In Command Hub           | **Delete Custom Blueprint**: Permanently deletes player-captured blueprint with safety confirmation modal.                                                                                                   |
+| **Right-Click**                                                       | Pos1 & Pos2 Selected     | **Open Fill Confirmation Modal** _(AREA)_: Opens `BuildAreaConfirmModalScreen` to choose block type, inspect volume/dimensions, and confirm construction.                                                                                        |
+| **Shift + Left-Click**                                                | In `AREA` Sub-Mode       | **Reset Build Corners**: Instantly clears `Pos1` and `Pos2` selection with bass tone.                                                                                                                                                            |
+| **Left-Click**                                                        | In `BARRIER` Sub-Mode    | **Place Node / Extend / Seal**: Sets consecutive waypoint (`Barrier 1..N`); clicking existing confirmed waypoint extends; clicking Point 1 or any waypoint snaps circuit closed and opens Seal modal.                                            |
+| **Right-Click**                                                       | Waypoint Node (BARRIER)  | **Remove Node**: Right-clicking an existing or pending waypoint deletes **only that specific clicked node**.                                                                                                                                     |
+| **Right-Click**                                                       | Ground / Air (BARRIER)   | **Open Seal Modal**: Right-clicking non-waypoint terrain, interior land, or open air opens `BarrierConfirmModalScreen` **strictly when $\ge 2$ waypoints exist**.                                                                                |
+| **Shift + Left-Click**                                                | In `BARRIER` Sub-Mode    | **Reset Barrier Draft**: Instantly clears all unsealed drafting nodes.                                                                                                                                                                           |
+| **Right-Click** _(Quick Tap)_                                         | Open Sky                 | **Retains Armed Blueprint**: Retains blueprint selection without accidental cycling or dropping.                                                                                                                                                 |
+| **Keybind `R`**                                                       | In `BLUEPRINT` Sub-Mode  | **Rotate Blueprint**: Rotates hologram 90° clockwise (0° → 90° → 180° → 270°). In `AREA` and `BARRIER` sub-modes, `R` triggers Squad Retreat / Emergency Recall instead.                                                                         |
+| **Left-Click / Shift + Left-Click**                                   | In `BLUEPRINT` Sub-Mode  | **Normal Hit / Break**: Standard survival attack or creative block break; does **not** rotate blueprint.                                                                                                                                         |
+| **Arcane Build Flight**                                               | Scepter in `BUILD` Mode  | **Survival 3D Flight**: Free unconstrained vanilla flight (Space to ascend, Shift to descend, WASD flight). Shallow water $\le 5$ blocks permitted; deep water (>5 blocks) cancels flight with safe descent.                                     |
+| **Keybind `H`**                                                       | In `BUILD` Mode          | **Tactical RTS Camera Zoom**: Cycles zoom presets (`0.75x`, `1.0x` default, `1.5x`, `2.0x`).                                                                                                                                                     |
+| **Ctrl + Mouse Scroll**                                               | In `BLUEPRINT` Sub-Mode  | **Smooth Camera Zoom**: Smoothly zooms tactical perspective without hotbar cycling conflicts.                                                                                                                                                    |
+| **`[ 📋 BOM ]` Button**                                               | In Command Hub           | **Material BOM Modal**: Live resource readiness & inventory delta calculator across bags and nearby minion backpacks within 64m.                                                                                                                 |
+| **`[ 🔍 3D View ]` Button**                                           | In Command Hub           | **3D Architectural Blueprint Explorer**: Interactive 3D voxel inspection, floor slicer, palette remapping (`[ 🎨 Remap ]`), direct renaming (`[ ✏ Rename ]` / `[R]`), and mega-structure pre-caching.                                            |
+| **Catalog Delete `[ ✕ ]`**                                            | In Command Hub           | **Delete Custom Blueprint**: Permanently deletes player-captured blueprint with safety confirmation modal.                                                                                                                                       |
 
 ### 📐 Custom Blueprint Capture & Palette Remap (`DESIGN` Mode)
 
@@ -119,13 +119,14 @@ A comprehensive, quick-reference manual for all minion commands, controls, squad
 
 ### ⛏️ Mining & Area Clearance (`MINE` Mode)
 
-| Input                         | Target / Context           | Action                                                                                                                                                                 |
-| :---------------------------- | :------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1st Left-Click**            | Targeted Block Surface     | **Set Mining Corner 1 (`Pos1`)**: Anchors `Pos1` on targeted block surface with fiery orange marker box.                                                               |
-| **2nd Left-Click**            | Opposite Diagonal Surface  | **Set Mining Corner 2 (`Pos2`)**: Completes 3D excavation volume and projects full fiery orange/amber ghost grid wireframes.                                           |
-| **Ctrl + Mouse Scroll**       | Holding Scepter in MINE    | **In-World Mining Height & Depth Adjustment**: Unified bi-directional control expands upward or contracts down to baseline. Decreasing past 1 automatically digs downward into the ground (`[↓ Xb deep]`). Hold `Shift` for $\pm 5$ fast stepping. |
-| **Shift + Left-Click**        | Anywhere                   | **Reset Mining Corners**: Clears both `Pos1` and `Pos2` with bass tone, guaranteeing fresh `Pos1` placement on next click.                                             |
-| **Right-Click** _(Quick Tap)_ | With Pos1 & Pos2 Established | **Open Mining Confirmation Modal**: Displays destructible block tallies, volume dimensions, non-overlapping height/depth stepper buttons, and starts excavation (`[ ✔ Start Mining ]`). |
+| Input                         | Target / Context             | Action                                                                                                                                                                                                                                             |
+| :---------------------------- | :--------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1st Left-Click**            | Targeted Block Surface       | **Set Mining Corner 1 (`Pos1`)**: Anchors `Pos1` on targeted block surface with fiery orange marker box.                                                                                                                                           |
+| **2nd Left-Click**            | Opposite Diagonal Surface    | **Set Mining Corner 2 (`Pos2`)**: Completes 3D excavation volume and projects full fiery orange/amber ghost grid wireframes.                                                                                                                       |
+| **Ctrl + Mouse Scroll**       | Holding Scepter in MINE      | **In-World Mining Height & Depth Adjustment**: Unified bi-directional control expands upward or contracts down to baseline. Decreasing past 1 automatically digs downward into the ground (`[↓ Xb deep]`). Hold `Shift` for $\pm 5$ fast stepping. |
+| **Shift + Left-Click**        | Anywhere                     | **Reset Mining Corners**: Clears both `Pos1` and `Pos2` with bass tone, guaranteeing fresh `Pos1` placement on next click.                                                                                                                         |
+| **Right-Click** _(Quick Tap)_ | With Pos1 & Pos2 Established | **Open Mining Confirmation Modal**: Displays destructible block tallies, volume dimensions, non-overlapping height/depth stepper buttons, and starts excavation (`[ ✔ Start Mining ]`).                                                            |
+| **`[ 🎯 Curate Blocks ]`**     | Inside Confirmation Modal    | **Granular Mining Curation**: Whitelist/blacklist specific block types (`[ ✔ Mine ]` vs `[ ✕ Don't Mine ]`). Suppresses unselected blocks from in-world ghost grid highlighting with search filtering & bulk controls.                          |
 
 ### 🔷 Visual Pathway Patrols (`PATHWAY` Mode)
 
@@ -527,6 +528,7 @@ The **`BUILD`** mode features three distinct operational sub-modes for construct
 9. **Right-Click** on any ground block to anchor the construction session:
    - **100% Pixel-Perfect Crosshair Alignment**: A camera-aligned raycast ensures the hologram and placement anchor match exactly where your screen crosshair points on the terrain, even from high-altitude bird's-eye views (up to 96m reach).
    - **One-Click Aerial Placement**: Instantly transmits placement packets to the server so you can drop foundations without descending to the ground.
+   - **Seamless Ground Placement & Area Isolation**: Right-clicking ground blocks immediately anchors the blueprint without interference from leftover corner coordinates (`pos1`/`pos2`) from prior Area Fill sessions. Blueprint mode never falsely opens the Area Fill modal or displays area warnings.
    - **Persistent Selection**: Placing blueprints or clicking into the air preserves your active blueprint selection without accidental cycling, allowing you to repeatedly stamp out multiple identical structures consecutively.
 10. Assigned **Builder** minions will activate **3D Arcane Levitation**, flying up to each layer and completing the structure bottom-to-top:
 
@@ -537,7 +539,10 @@ The **`BUILD`** mode features three distinct operational sub-modes for construct
 - **Post-Construction Structure Egress & Anti-Entombment**: Upon finishing a building, builders do NOT get trapped inside. They retain block phasing (`noClip = true`) and fly smoothly out of the building to the exterior perimeter. Normal collision physics are only restored once the builder is safely outside with clear headroom on verified safe ground.
 - **360° Perimeter Waypoints & Guaranteed Flank Spread**: When construction completes with no further blueprints in the vicinity, golden beacon beams (`END_ROD` + `GLOW`) and chime audio rise around the finished build, distributed evenly across all flanks (South/Front, East Flank, North/Back, West Flank) so minions completely encircle the structure instead of stacking in one spot. Builders are teleported directly to their assigned flank station, safely positioned outside the structure, and released to roam freely on foot (`setSitting = false`, `guardAnchorPos = null`, `selected = false`) without locking into hold position.
 - **Full-Column Surface Scanning & Anti-Suffocation Safeguard**: Waypoints are dynamically scanned vertically from the highest world surface (`world.getTopY`) down to foundation depth, evaluating candidate positions with strict `isSafeStandingPosition()` checks (2 vertical blocks of clear air, solid non-hazardous ground, zero lava/fire hazards). If a minion is ever detected embedded in a solid wall or underground rock while not phasing, an automatic server-side safeguard (`unstuckIfInSolidWall`) immediately teleports them to the nearest safe 2-block open air space with portal VFX.
-- **Autonomous Blueprint Chaining & Vicinity Transition**: If you place down additional blueprints in the builders' vicinity ($\le 128$ blocks) while they are working on a build or stationed, they automatically and immediately transition to the next placed blueprint upon finishing the current structure. They never enter sitting or sleeping states when active blueprints exist nearby, seamlessly moving from build to build across your base or fortress!
+- **Autonomous Blueprint & Mining Chaining (Non-Destructive Overlap Queueing)**:
+  - **Concurrent Multi-Job Staging**: You can place down blueprints, volumetric area fills, and mining areas simultaneously across the kingdom—even overlapping the exact same coordinates (e.g., placing an excavation quarry over a hill, and immediately dropping a castle blueprint on the exact site). Staging a new job never cancels, overwrites, or interrupts ongoing work.
+  - **Strict FIFO Execution (100% Finish-Before-Start)**: Minions strictly finish the active job 100% before anyone begins work on subsequent jobs. When mining is queued first, workers will completely level the hill first, and the moment the final excavation block is mined, they automatically and seamlessly transition to placing the castle blueprint on the cleared terrain!
+  - **Concurrent 3D Wireframes**: In-world holographic wireframes for all active placed sessions remain rendered concurrently in the client, giving you a full visual preview of your planned development queue.
 - **Autonomous Stationed Mobilization**: When you place a new blueprint down nearby (within 112–128 blocks horizontally and vertically), stationed builder minions automatically wake up (`setSitting = false`) and mobilize to build immediately without requiring you to walk over and re-select them—easily reaching across mega structure construction sites! A single right-click on any stationed builder still commands them to follow if desired.
 - **Creative Mode**: Builders place blocks freely at zero material cost. Any existing blocks (grass, flowers, snow, dirt) are automatically pre-cleared with zero dropped items, eliminating all clutter.
 - **Survival Mode**: Builders resolve construction materials through a multi-stage logistics pipeline (Backpack → Local Containers → Peer Sharing → Autonomous Quarrying/Timber → Mob Hunting Contracts commissioned to Warriors).
@@ -597,8 +602,9 @@ The **`BARRIER`** sub-mode enables commanders to establish custom multi-node pol
      - **Open Seal Modal**: Right-clicking on **anything else** (regular ground terrain, interior land, solid blocks, or open air) opens the **Confirm Sovereign Barrier Modal** **strictly when at least 2 waypoints have been placed down**. If 0 or 1 waypoints exist, right-clicking non-waypoints does nothing until the second waypoint is placed down.
      - **Shift + Right-Click**: Opens the Command Hub GUI.
 
-4. **100% Uncluttered Clean Interior**:
+4. **100% Uncluttered Clean Interior & Mode-Specific Visual Isolation**:
    - Sealed barriers visualize exclusively along their outer perimeter wireframe (`RenderLayer.getLines()`) and hovering billboard tags above boundary waypoints (`[ Barrier 1 #1 ]`, `[ Barrier 1 #2 ]`, etc.).
+   - **Mode-Specific Hologram Suppression**: Barrier visuals are rendered **strictly while actively in `BUILD (BARRIER)` mode** with the Command Scepter held. Switching to any other mode (`MINE`, `PATROL`, `ASSAULT`, `RALLY`, `DESIGN`, `BLUEPRINT`, `AREA`) or unequipping the scepter immediately suppresses all barrier visuals, keeping the view clean.
    - **Zero Middle Obstructions**: Completely free of central pillars, laser lines, center ground boxes, center titles, or sky crests. Village squares, streets, and courtyards remain completely open, unobstructed, and aesthetically pristine.
 
 5. **Custom Barrier Naming & Command Hub Dashboard**:
@@ -608,6 +614,7 @@ The **`BARRIER`** sub-mode enables commanders to establish custom multi-node pol
    - **Rename Modal (`[ ✎ ]`)**: Opens `BarrierEditModalScreen` to rename any existing barrier or inspect its perimeter metrics.
    - **Defunct Barrier Automatic Cleanup**: If a barrier's waypoint count drops below 2 after removing nodes, it is automatically purged from the world and the GUI.
    - **World Persistence**: Sealed barriers persist across world restarts and dimension transfers via `data/sovereign_barrier_zones.dat` and synchronize automatically with clients.
+   - **Strict Visual Isolation & Concurrent Operation**: Sovereign Barrier holograms, laser pillars, and billboard tags render **strictly** when holding the Command Scepter in `BUILD` mode with `BARRIER` sub-mode active. In any other mode (`MINE`, `BUILD: BLUEPRINT`, `BUILD: AREA`, `FOLLOW`, `PATHWAY`, etc.), barrier visuals are completely suppressed to keep your screen clean and distraction-free. Furthermore, barriers operate continuously and independently without occupying minion worker slots or interfering with construction/mining queues.
 
 ---
 
@@ -693,22 +700,68 @@ The **`AREA`** mining mode allows commanders to define exact 3D excavation bound
    - **Modal Inspection Details**:
      - Displays `Pos1` and `Pos2` corner coordinates.
      - Displays Width $\times$ Height $\times$ Depth dimensions and total volume in voxels.
-     - **Destructible Block Counter**: Analyzes and displays the exact count of destructible, non-air blocks within the boundary (excluding unbreakable bedrock).
+     - **Destructible Block Counter**: Analyzes and displays the exact count of destructible, non-air blocks within the boundary (excluding unbreakable bedrock), dynamically updated when curation filters are applied.
+     - **Targets Status**: Displays real-time curation summary (e.g. `§eTargets: §aAll Types §8(142 blocks)` or `§eTargets: §b2 / 5 Types §8(36 blocks)`).
+     - **`[ 🎯 Curate Blocks ]` Button**: Opens the **Mining Curation Modal** (`MiningCurationModalScreen`) allowing granular block whitelisting and blacklisting before confirming the job.
      - **Non-Overlapping Stepper Layout**: Dedicated **`[ -5 ]`**, **`[ -1 ]`**, **`[ +1 ]`**, and **`[ +5 ]`** stepper buttons are right-aligned with ample margin from the `Height / Depth:` label, preventing text and button overlap even with underground depth tags (`[↓ Xb deep]`).
    - **Modal Actions**:
-     - **`[ ✔ Start Mining ]`**: Dispatches `StartMiningAreaPayload` to the server, clears the client selection, plays horn & chime fanfare, and starts the top-down excavation session.
+     - **`[ ✔ Start Mining ]`**: Dispatches `StartMiningAreaPayload` (with curated block targets) to the server, clears the client selection, plays horn & chime fanfare, and starts the top-down selective excavation session.
      - **`[ ⌫ Reset ]`**: Wipes `Pos1` and `Pos2` selection corners.
      - **`[ ✖ Cancel ]`**: Closes the modal without starting excavation, keeping your corner selection intact.
      - **Crisp Overlay**: Completely bypasses background blur (`applyBlur` no-op) to preserve 100% battlefield situational awareness.
 
-### B. Minion Excavation, Strict FIFO Queueing & Safety Systems
+### B. Selective Mining Curation (`[ 🎯 Curate Blocks ]`)
+
+The **Mining Curation Modal** (`MiningCurationModalScreen`, 360x240px) gives commanders complete tactical control over what blocks minions mine and what blocks they leave alone:
+
+1. **Automatic Area Terrain Scanning**:
+   - Automatically scans all blocks and non-blocks in the selected 3D bounding box `[Pos1, Pos2]` on the client.
+   - Detects all unique destructible block types and fluids (including Water, Lava, flowers, torches, tall grass) present in the volume and tallies exact counts.
+   - Displays 3D item icons, localized block names, namespaced registry IDs, and total count tallies ordered descending by abundance.
+   - **Water & Lava Fluid Ingestion**: Water and Lava source blocks are recognized as valid curation entries with `WATER_BUCKET` and `LAVA_BUCKET` icons, checked by default. Commanders can selectively uncheck them to preserve ponds, moats, and aquifers, or keep them checked to have builder minions actively drain and scoop them.
+2. **Selective Filtering Controls & In-World Grid Highlighting**:
+   - **Row Toggles**: Click **`[ ✔ Mine ]`** (emerald green) or **`[ ✕ Don't Mine ]`** (muted red) to toggle specific block types.
+   - **Selective In-World Ghost Grid**:
+     - **No Curation**: If no curation filter is applied, all destructible block types in the mining volume render ghost grid boxes (with water highlighted in vibrant aqua/cyan and lava in fiery orange-red).
+     - **Specific Curation (e.g. 2 blocks)**: Only those selected block types render ghost grids; unselected blocks (and unselected fluids) are completely hidden from the grid overlay.
+     - **Live Feedback & Active Sync**: Blocks update live in real time as they are toggled inside the curation modal. Once confirmed, active mining operations continue to render ghost grids specifically for the curated targets as minions mine them, with individual grid boxes vanishing as blocks turn to air.
+   - **Non-Overlapping Status Bar**: Dedicated Selected Targets bar elevated above the Cancel and Apply buttons guarantees clean legibility without overlap.
+   - **`[ ✔ All ]` Bulk Button**: Whitelists all detected block types in one click.
+   - **`[ ✖ Clear ]` Bulk Button**: Unchecks all blocks to curate a targeted whitelist from scratch.
+   - **Live Search Field (`[ 🔍 Search blocks... ]`)**: Real-time search query filtering blocks by name (e.g., `Oak`, `Iron`, `Water`), namespace (`minecraft`), or path (`log`, `ore`, `water`).
+3. **Fail-Safe Fallback Contract**:
+   - If a player unchecks all blocks and clicks **`[ ✔ Apply ]`**, the modal automatically reverts to mining all blocks in the area, preventing 0-block dispatch lockouts.
+4. **Selective Excavation & Clean Session Completion**:
+   - Minions generate tasks **strictly** for whitelisted blocks in top-to-bottom order.
+   - Builder minions actively scoop and clear water sources (using buckets, bucket crafting, storage scavenging, or solid block displacement) unless water is curated not to be mined. In `BUILD` mode, builders also automatically clear water sources before placing construction blocks.
+   - Blocks left untouched (e.g., stone or dirt while logging trees, or preserved water bodies) do **not** stall or prevent session completion.
+   - The moment all curated targets are mined, the session finishes, celebratory fanfare sounds, and the wireframe outline **immediately disappears**!
+
+### C. Minion Excavation, Strict FIFO Queueing & Safety Systems
 
 Assigned **Builder** minions mobilize autonomously to execute the mining operation:
 
-- **Strict FIFO Job Completion (100% Finish-Before-Start)**:
+- **Strict FIFO Job Completion (100% Finish-Before-Start Across All Modes)**:
   - When multiple jobs are queued across the kingdom (whether building blueprints, volumetric area fills, or mining quarries), minions strictly commit 100% of their efforts to completing the earliest placed job first.
-  - Minions will **never** leave an older blueprint or mining area partially complete to start a newer job, even if the newer job is physically closer. Only when the first job reaches 100% completion do minions mobilize to subsequent jobs.
-- **Full Selected Area Clearance**: Builders mine **every** solid, destructible block within the selected volume from the highest Y level down to the lowest Y level.
+  - Minions will **never** leave an older blueprint or mining area partially complete to start a newer job, even if the newer job is physically closer. Only when the active job reaches 100% completion do minions mobilize to subsequent jobs.
+- **Strict Overlapping Job Gating (`isBlockedByOverlappingOlderSession`)**:
+  - If a newer job (e.g., a building blueprint, mining quarry, or volumetric area fill) geometrically overlaps an older ongoing job in 3D space, the newer job is strictly blocked from dispatch.
+  - No minion is permitted to claim tasks or touch the newer overlapping job until the older job finishes 100% as a whole. This completely prevents race conditions where minions mine blocks placed by another job or build inside an unmined quarry.
+- **Zero-Hitch Seamless Session Chaining (Smooth Transition)**:
+  - When an active session completes (or its remaining blocks are cleared), minions smoothly chain to the next queued session in the exact same tick (`tryClaimTaskOrChainNextSession`).
+  - Minions transition directly from blueprint building to quarry mining (or vice-versa) in mid-air with zero 1-tick downward glide, zero weapon-swapping stutter, and zero delay, dynamically swapping held items from blueprint blocks to pickaxes while maintaining flight altitude.
+- **Non-Destructive Overlap Queueing & Concurrent Staging**:
+  - You can stage multiple mining areas, structure blueprints, and area fills at the exact same location concurrently without cancellation or conflict (e.g., placing an excavation quarry to clear a hill and dropping a building blueprint on the exact site).
+  - Staging a new job never halts or aborts the ongoing excavation; the active wireframe and the newly placed blueprint wireframe render simultaneously, and minions finish 100% of the excavation before immediately starting construction.
+- **Multiblock Bed Placement & Sleeping Sanity Guarantee**:
+  - Resolved vanilla Minecraft's `BedBlock.OCCUPIED` bug where beds captured from worlds or villages retained `OCCUPIED=true`, causing the game to permanently display "This bed is occupied" when players attempted to sleep.
+  - Bed blocks captured, generated, or placed by minions are automatically sanitized to `OCCUPIED=false` across both head and foot parts.
+  - Completing either part of a bed block automatically completes its paired partner in both `BUILD` and `DISMANTLE` modes, preventing duplicate passes and desynced states.
+- **3D Bounding Box Proximity Metric (`getSquaredDistanceToSession`)**:
+  - Minion distance checks evaluate Euclidean distance to the session's full 3D bounding box (`session.getWorldBoundingBox()`) rather than just the surface anchor point.
+  - Subterranean quarries digging dozens of blocks deep underground (even down to bedrock at $Y = -60$) remain cleanly within worker range ($\le 128$ blocks), preventing surface minions from prematurely dropping tasks or considering deep underground jobs out of range.
+- **Full Selected Area Clearance**: Builders mine **every** solid, destructible block within the selected volume from the highest Y level down to the lowest Y level (or all whitelisted blocks when curation filters are applied).
+- **Independent Column Clearance & Zero Layer Waiting**: Minions excavate downward in parallel through their own respective $(X, Z)$ columns. When a minion finishes a block, it immediately progresses to the next block down in that column as long as overhead blocks in the column are cleared, without being forced to wait idle for peers to finish the entire horizontal layer across the quarry.
 - **Zero Air-Mining Guarantee**: Builders strictly never claim, navigate to, or swing pickaxes at air blocks. If a block was destroyed or already air, minions instantly advance to the next real block without swinging or vocalizing.
 - **Anti-Bobbing Mining Flight**: Miners utilize the exact same Arcane Levitation flight as builders during mining. Minions fly to a stable elevated station at `targetY + 1.25D`, maintain zero gravity and zero vertical velocity oscillation, and freeze velocity (`0.0D`) during mining swings, never falling into trenches when mining blocks beneath them.
 - **Mining Completion Evacuation, Safe Stationing & Anti-Suffocation Safeguards**: When all mining tasks are complete, miners receive intelligent post-completion treatment tailored to the excavation environment:

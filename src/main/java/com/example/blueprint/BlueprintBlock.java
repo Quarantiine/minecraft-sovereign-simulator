@@ -1,6 +1,7 @@
 package com.example.blueprint;
 
 import java.util.Objects;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.item.Item;
@@ -47,6 +48,9 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 
 	public BlueprintBlock {
 		Objects.requireNonNull(offset, "offset cannot be null");
+		if (state != null && state.getBlock() instanceof BedBlock && state.contains(BedBlock.OCCUPIED) && state.get(BedBlock.OCCUPIED)) {
+			state = state.with(BedBlock.OCCUPIED, false);
+		}
 	}
 
 	/**

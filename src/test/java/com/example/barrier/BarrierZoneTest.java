@@ -873,6 +873,8 @@ public class BarrierZoneTest {
 			"BarrierHologramRenderer must call immediate.draw() to flush text buffers to GPU in AFTER_TRANSLUCENT");
 		Assertions.assertTrue(content.contains("isBarrierMode"),
 			"BarrierHologramRenderer must support rendering confirmed barriers while holding scepter");
+		Assertions.assertTrue(content.contains("if (!isBarrierMode)"),
+			"BarrierHologramRenderer must exit early when not in barrier mode so visuals do not show outside of barrier mode");
 	}
 }
 

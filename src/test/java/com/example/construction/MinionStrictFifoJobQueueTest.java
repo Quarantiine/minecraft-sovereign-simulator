@@ -143,5 +143,129 @@ public class MinionStrictFifoJobQueueTest {
 			content.contains("CopyOnWriteArrayList"),
 			"sessionsByOwner must use CopyOnWriteArrayList for thread-safe session queueing"
 		);
+		Assertions.assertTrue(
+			content.contains("getSquaredDistanceToSession(minionPos, session)"),
+			"findNearestSessionForMinion must use 3D bounding box proximity"
+		);
+	}
+
+	@Test
+	@DisplayName("Source Invariant: ConstructionManager does not cancel overlapping sessions, enabling sequential job queueing")
+	void testConstructionManagerDoesNotCancelOverlappingSessions() throws IOException {
+		Path path = Path.of("src/main/java/com/example/construction/ConstructionManager.java");
+		Assertions.assertTrue(Files.exists(path), "ConstructionManager.java must exist");
+		String content = Files.readString(path);
+
+		// Must NOT cancel previous sessions whose bounding box intersects newBox
+		Assertions.assertFalse(
+			content.contains("intersects(newBox)"),
+			"ConstructionManager.startSession must not cancel overlapping sessions"
+		);
+	}
+
+	@Test
+	@DisplayName("3D Box Distance ensures deep underground mining areas remain in range of surface minions")
+	void testUndergroundMiningBoxProximity() {
+		// Minion on surface: (10, 64, 10)
+		BlockPos minionPos = new BlockPos(10, 64, 10);
+		// Mining area spanning (0, -60, 0) to (20, 64, 20), anchor at (0, -60, 0)
+		BlockPos anchorPos = new BlockPos(0, -60, 0);
+		net.minecraft.util.math.BlockBox box = new net.minecraft.util.math.BlockBox(0, -60, 0, 20, 64, 20);
+
+		// Distance to anchor: dx=10, dy=124, dz=10 -> 100 + 15376 + 100 = 15576 (~124.8 blocks)
+		double anchorDistSq = minionPos.getSquaredDistance(anchorPos);
+		Assertions.assertTrue(anchorDistSq > 120.0 * 120.0);
+
+		// Clamped distance to box: minion is inside the box horizontally and vertically (Y=64 <= 64)
+		int clampedX = Math.max(box.getMinX(), Math.min(minionPos.getX(), box.getMaxX()));
+		int clampedY = Math.max(box.getMinY(), Math.min(minionPos.getY(), box.getMaxY()));
+		int clampedZ = Math.max(box.getMinZ(), Math.min(minionPos.getZ(), box.getMaxZ()));
+		double boxDistSq = minionPos.getSquaredDistance(clampedX, clampedY, clampedZ);
+		Assertions.assertEquals(0.0, boxDistSq, "Surface minion directly inside/at top of mining area must have 0 box distance");
+	}
+
+	@Test
+	@DisplayName("Source Invariant: MinionBuildGoal verifies currentTask.isCompleted() in tick()")
+	void testMinionBuildGoalTaskCompletedGuard() throws IOException {
+		Path path = Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java");
+		Assertions.assertTrue(Files.exists(path), "MinionBuildGoal.java must exist");
+		String content = Files.readString(path);
+
+		Assertions.assertTrue(
+			content.contains("this.currentTask.isCompleted()"),
+			"MinionBuildGoal.tick() must inspect this.currentTask.isCompleted() to advance completed tasks"
+		);
+	}
+
+	@Test
+	@DisplayName("Overlapping Sessions: newer overlapping job is blocked until older job finishes as a whole")
+	void testOverlappingSessionsGatedUntilOlderJobComplete() throws IOException {
+		Path mgrPath = Path.of("src/main/java/com/example/construction/ConstructionManager.java");
+		Assertions.assertTrue(Files.exists(mgrPath), "ConstructionManager.java must exist");
+		String mgrContent = Files.readString(mgrPath);
+
+		Assertions.assertTrue(
+			mgrContent.contains("isBlockedByOverlappingOlderSession"),
+			"ConstructionManager must implement isBlockedByOverlappingOlderSession"
+		);
+		Assertions.assertTrue(
+			mgrContent.contains("thisBox.intersects(olderBox)"),
+			"isBlockedByOverlappingOlderSession must verify 3D bounding box intersection"
+		);
+		Assertions.assertTrue(
+			mgrContent.contains("if (box != null && !session.isDismantle())"),
+			"completeSession must not add dismantled mining quarries to constructedStructureBounds"
+		);
+
+		Path sessPath = Path.of("src/main/java/com/example/construction/ConstructionSession.java");
+		Assertions.assertTrue(Files.exists(sessPath), "ConstructionSession.java must exist");
+		String sessContent = Files.readString(sessPath);
+
+		Assertions.assertTrue(
+			sessContent.contains("ConstructionManager.getInstance().isBlockedByOverlappingOlderSession(this)"),
+			"ConstructionSession.claimNextTask must verify it is not blocked by an older overlapping session"
+		);
+	}
+
+	@Test
+	@DisplayName("BedBlock Occupied Invariant: Bed states are sanitized to occupied=false across blueprint and build logic")
+	void testBedBlockOccupiedSanitizationInvariants() throws IOException {
+		// 1. BlueprintBlock forces OCCUPIED=false for BedBlock
+		Path bpBlockPath = Path.of("src/main/java/com/example/blueprint/BlueprintBlock.java");
+		Assertions.assertTrue(Files.exists(bpBlockPath), "BlueprintBlock.java must exist");
+		String bpBlockContent = Files.readString(bpBlockPath);
+		Assertions.assertTrue(
+			bpBlockContent.contains("BedBlock.OCCUPIED") && bpBlockContent.contains("with(BedBlock.OCCUPIED, false)"),
+			"BlueprintBlock must sanitize BedBlock.OCCUPIED to false"
+		);
+
+		// 2. StructureBlueprint sanitizes BedBlock OCCUPIED during capture and property transfer
+		Path structBpPath = Path.of("src/main/java/com/example/blueprint/StructureBlueprint.java");
+		Assertions.assertTrue(Files.exists(structBpPath), "StructureBlueprint.java must exist");
+		String structBpContent = Files.readString(structBpPath);
+		Assertions.assertTrue(
+			structBpContent.contains("BedBlock.OCCUPIED") && structBpContent.contains("with(BedBlock.OCCUPIED, false)"),
+			"StructureBlueprint must sanitize BedBlock.OCCUPIED to false"
+		);
+
+		// 3. MinionBuildGoal ensures placed bed halves always have OCCUPIED=false
+		Path buildGoalPath = Path.of("src/main/java/com/example/entity/ai/goal/MinionBuildGoal.java");
+		Assertions.assertTrue(Files.exists(buildGoalPath), "MinionBuildGoal.java must exist");
+		String buildGoalContent = Files.readString(buildGoalPath);
+		Assertions.assertTrue(
+			buildGoalContent.contains("targetState.with(BedBlock.OCCUPIED, false)")
+				&& buildGoalContent.contains("otherState.with(BedBlock.OCCUPIED, false)"),
+			"MinionBuildGoal must set BedBlock.OCCUPIED to false on both bed halves"
+		);
+
+		// 4. ConstructionSession auto-completes the corresponding bed half
+		Path sessionPath = Path.of("src/main/java/com/example/construction/ConstructionSession.java");
+		Assertions.assertTrue(Files.exists(sessionPath), "ConstructionSession.java must exist");
+		String sessionContent = Files.readString(sessionPath);
+		Assertions.assertTrue(
+			sessionContent.contains("state.getBlock() instanceof BedBlock && state.contains(BedBlock.PART)"),
+			"ConstructionSession.completeTask must auto-complete the corresponding bed half"
+		);
 	}
 }
+

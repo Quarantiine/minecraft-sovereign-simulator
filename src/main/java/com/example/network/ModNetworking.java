@@ -1022,7 +1022,7 @@ public class ModNetworking {
 
 		try {
 			com.example.construction.ConstructionSession session = com.example.construction.ConstructionManager.getInstance()
-				.startAreaDismantleSession(world, pos1, pos2, player);
+				.startAreaDismantleSession(world, pos1, pos2, player, payload.curatedBlockIds());
 			if (session != null && session.isActive()) {
 				world.playSound(
 					null, player.getX(), player.getY(), player.getZ(),

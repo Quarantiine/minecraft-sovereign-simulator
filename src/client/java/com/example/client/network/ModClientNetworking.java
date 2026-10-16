@@ -444,12 +444,27 @@ public class ModClientNetworking {
 	/**
 	 * Dispatches a {@link com.example.network.StartMiningAreaPayload} to initiate an area dismantle session on the server.
 	 *
+	 * @param pos1            First corner position.
+	 * @param pos2            Second corner position.
+	 * @param curatedBlockIds Curated list of block identifiers to dismantle (empty = all blocks).
+	 */
+	public static void sendStartMiningArea(
+		net.minecraft.util.math.BlockPos pos1,
+		net.minecraft.util.math.BlockPos pos2,
+		java.util.List<net.minecraft.util.Identifier> curatedBlockIds
+	) {
+		com.example.network.StartMiningAreaPayload payload = new com.example.network.StartMiningAreaPayload(pos1, pos2, curatedBlockIds);
+		ClientPlayNetworking.send(payload);
+	}
+
+	/**
+	 * Dispatches a {@link com.example.network.StartMiningAreaPayload} to initiate an area dismantle session on the server.
+	 *
 	 * @param pos1 First corner position.
 	 * @param pos2 Second corner position.
 	 */
 	public static void sendStartMiningArea(net.minecraft.util.math.BlockPos pos1, net.minecraft.util.math.BlockPos pos2) {
-		com.example.network.StartMiningAreaPayload payload = new com.example.network.StartMiningAreaPayload(pos1, pos2);
-		ClientPlayNetworking.send(payload);
+		sendStartMiningArea(pos1, pos2, java.util.Collections.emptyList());
 	}
 
 	/**
