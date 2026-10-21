@@ -471,15 +471,10 @@ Floating billboard badges render directly above each minion's head using exact L
 
 - **Free Survival Build Flight & Physical Arcane Flight**: When holding the Command Scepter in `BUILD` mode, the commander is immediately granted physical Arcane Flight in both Survival and Creative modes. Unlike detached 3rd-person camera boom offsets which create cursor-to-world parallax, Arcane Build Flight physically controls the player's avatar while keeping the camera centered on the player's true perspective:
   - **Unconstrained 3D Vanilla Flight in Survival**: In Survival mode, players experience fluid, unconstrained 3D flight matching creative flight physics. Ascend with **`Space`**, descend with **`Shift`**, and glide in any direction with WASD without rigid hover altitude locking or velocity clamping.
-  - **Water Flight Cancellation Safeguard**: If the player flies over water or enters a fluid column while in `BUILD` mode, `CommandScepterItem.isPlayerOverWater` automatically detects the liquid beneath them. The server immediately:
-    1. Cancels all active construction sessions belonging to the commander (`cancelActiveSessionsForOwner`).
-    2. Switches the scepter's operating mode to **`FOLLOW`** (`CommandMode.FOLLOW`).
-    3. Revokes flight abilities (`allowFlying = false`, `flying = false`) and clears `ACTIVE_SERVER_BUILD_FLIERS`.
-    4. Triggers an extinguishing sizzle audio cue (`SoundEvents.BLOCK_FIRE_EXTINGUISH`) and water splash particles (`ParticleTypes.SPLASH`).
-    5. Displays an immediate actionbar warning: `§c⚠ Construction cancelled: Flying over water is prohibited in BUILD mode!§r`.
+  - **Unrestricted Water & Underwater Construction Flight**: Commanders can freely fly over oceans, lakes, and deep rivers, as well as fly underwater to build docks, bridges, harbors, ocean monuments, and submerged installations. Builders engaged in construction or levitation do not drown and yield `SwimGoal` so they remain stationed at work underwater without forced surfacing.
   - **Indoor & Cave Ceiling Clamping**: In enclosed areas, raycasts check overhead terrain and ensure safe headroom below solid ceilings.
   - **Adaptive Height Adjustments**: Cycling to a taller or shorter blueprint dynamically updates target hover height in real time.
-  - **Graceful Descent & Zero Fall Damage**: When switching out of `BUILD` mode, stowing the scepter, or descending to ground, the player lands smoothly with complete fall damage immunity enforced by server-side tracking (`ACTIVE_SERVER_BUILD_FLIERS`).
+  - **Graceful Descent & Zero Fall Damage**: When switching out of `BUILD` mode, stowing the scepter, or descending to ground/water, the player lands smoothly with complete fall damage immunity enforced by server-side tracking (`ACTIVE_SERVER_BUILD_FLIERS`).
 - **Camera-Aligned Crosshair Raycasting (96m Reach)**: Raycasting initiates from the player's eye coordinates along the look vector through the center screen crosshair, eliminating parallax errors and aligning the 3D ghost preview 100% with the cursor.
 - **One-Click Aerial Placement (`AnchorConstructionPayload`)**: Eliminates vanilla reach limits by transmitting targeted coordinates and face directions over custom C2S packets, allowing commanders to anchor construction and dismantle sessions from high in the air without descending.
 - **Sky Tap Blueprint Cycling**: Right-clicking into empty air or open sky cycles through the blueprint catalog, cleanly separating placement from browsing.
@@ -1415,22 +1410,19 @@ The commander's active game mode dynamically dictates minion logistics, resource
 - **Elimination of Velocity Clamping**: Rigid hover altitude locking and vertical velocity zeroing have been eliminated, allowing the commander to survey, position, and inspect blueprints at any angle or altitude.
 - **Graceful Descent & Zero Fall Damage**: Switching scepter modes, stowing the scepter, or touching down gently restores normal ground physics with complete fall damage immunity enforced server-side (`ACTIVE_SERVER_BUILD_FLIERS`).
 
-### Shallow Water 5-Block Flight Tolerance vs. Deep Water Cancellation Safeguard (`CommandScepterItem`, `BuildFlightManager`, `ConstructionManager`)
+### Unrestricted Aquatic & Marine Flight, Underwater Construction & Minion Breathing (`CommandScepterItem`, `BuildFlightManager`, `MinionEntity`, `MinionBuildGoal`)
 
-- **Vertical Column Depth Scanning**: `CommandScepterItem.isPlayerOverWater` measures the vertical column height of water beneath the player down to solid ground.
-- **Architectural Collision Exemption (Bridges, Glass Walkways, Slabs)**:
-  - Downward raycasts verify non-empty collision shapes (`!state.getCollisionShape().isEmpty()`), ensuring players flying over bridges, slabs, stairs, or glass platforms constructed over oceans/rivers are treated as standing above solid architecture and are not cancelled. Lily pads on open water are bypassed to accurately inspect fluid depth below.
-  - Multi-point fluid contact evaluates player head (`getEyePos()`), feet, and sub-feet positions, ensuring exact depth tracking when wading, swimming, or dipping into water.
-- **Shallow Water Flight Allowance ($\le 5$ Blocks High)**:
-  - If the water body beneath the player is **5 blocks high or less** ($\le 5$ blocks deep of water above solid ground, such as creeks, ponds, marshes, shallow moats, canals, or puddles), the player is fully permitted to fly over it freely without interruption!
-  - Builders can smoothly survey and construct structures near shorelines, bridges over creeks, or buildings adjacent to shallow water bodies.
-- **Deep Water Cancellation ($> 5$ Blocks Deep)**:
-  - If a player enters water or flies over deep water (> 5 blocks deep, such as oceans, deep lakes, or deep rivers) while in `BUILD` mode:
-    1. **Minions Continue Building**: Active minion construction sessions remain completely uninterrupted—builder minions continue placing blocks, quarrying, and completing the blueprint.
-    2. **Mode Reversion**: Switches the scepter's operating mode to **`FOLLOW`** (`CommandMode.FOLLOW`).
-    3. **Safe Descent & Fall Damage Immunity**: Revokes flight abilities (`allowFlying = false`, `flying = false`) while retaining server fall damage protection (`fallDistance = 0.0F`) until the commander touches ground or splashes into water (`isOnGround() || isTouchingWater()`).
-    4. **Audiovisual Feedback**: Plays an extinguishing sizzle sound effect (`SoundEvents.BLOCK_FIRE_EXTINGUISH`) and spawns water splash particles (`ParticleTypes.SPLASH`).
-    5. **Commander Alert**: Displays an immediate warning message on the actionbar: `§c⚠ Build mode cancelled: Flying over deep water is prohibited! (Minions will continue building)§r`.
+- **Unrestricted Aquatic & Oceanic Flight**:
+  - `CommandScepterItem.isPlayerOverWater` returns `false` unconditionally, completely lifting former 5-block water depth restrictions.
+  - Commanders in `BUILD` mode can fly freely across oceans, deep lakes, rivers, moats, and water bodies of any depth without cancellation.
+  - Enables effortless surveying, planning, and multi-minion construction of maritime bridges, harbors, lighthouses, docks, and submerged ocean bases.
+- **Underwater Survey & Submerged Construction**:
+  - Commanders can descend directly beneath the water surface while in `BUILD` mode to inspect foundations and stage aquatic blueprints without flight revocation or mode dropping.
+- **Minion Underwater Construction & Breathing Protection**:
+  - `MinionEntity.SwimGoal` dynamically yields while actively building or levitating so minions do not float uncontrollably to the water surface.
+  - Builder minions working submerged have their air supply continually replenished (`setAir(getMaxAir())`), granting complete immunity to drowning during aquatic construction.
+  - `MinionBuildGoal` hover station calculations recognize water fluid blocks as valid operational airspace for builder stations.
+  - Autonomous water scooping, bucket clearance, and solid block displacement ensure structures are built cleanly in and around water.
 
 ---
 
@@ -1572,6 +1564,8 @@ Minions project dynamic billboarding badges hovering above their nameplates:
 ### Universal Equipment & Goal Compatibility
 
 - **Adaptive Role Querying (`getEffectiveRole()` & `matchesRole()`)**: All AI goals (`MinionActiveTargetGoal`, `MinionRangedAttackGoal`, `SentinelHealAllyGoal`, `MinionBuildGoal`, `ConstructionManager`, `MinionFormationFollowGoal`) query `matchesRole()` and `getEffectiveRole()`. This allows `AUTO` minions to seamlessly satisfy role requirements, rank properly in military formation ranks, phase through blocks during egress, and participate in squad tasks.
+- **Survival Mining Resource Retention**: When mining or dismantling blocks in survival mode, `AUTO` minions hold onto all harvested materials (stone, dirt, ores, wood) in their backpack inventory just like dedicated `BUILDER` minions. Mined items are never prematurely offloaded or dropped when adapting roles.
+- **Post-Construction Follower Preservation**: If an `AUTO` (or any other) minion was selected and actively following the commander when assisting in a build or mine operation, its selected status (`isSelected() == true`) is strictly preserved upon task completion. The minion immediately resumes formation escort via `MinionFormationFollowGoal` rather than being left behind. Unselected helpers are stationed at the site to guard and roam freely.
 - **Universal Auto-Equip**: Auto minions intelligently accept weapons and tools of all disciplines (swords, bows, crossbows, tridents, pickaxes, axes, shovels) while rejecting non-weapon items in the main hand. Auto minions never disarm valid weapons.
 
 ---
@@ -1847,7 +1841,8 @@ To bridge the gap between in-world capture and survival mode practical construct
     - **`[ ✕ Erase ]`**: Maps the target block to `minecraft:air`, omitting that block type completely from the compiled blueprint so minions never build or require it.
     - **`[ ↺ Reset ]`**: Reverts that specific block type back to its original captured block.
   - **Batch Controls**: `[ ↺ Reset All ]` wipes all active replacements; `[ ✔ Apply ]` stores configurations and returns to the save dialog.
-- **Strict Placeable Block Guardrail (`BlockPickerModalScreen`)**:
+- **Strict Placeable Block Guardrail & Recent Picked Sidebar (`BlockPickerModalScreen`)**:
+  - **Recent Picked Blocks Panel**: Dedicated sidebar panel displaying up to 10 recently chosen replacement blocks with 1-click selection, avoiding the need to repeatedly search for common blocks.
   - **Placeable-Only Filter**: The block selector candidate pool strictly indexes items where `item instanceof BlockItem && !blockItem.getBlock().getDefaultState().isAir()`.
   - Non-block items (swords, tools, armor, food, diamonds, sticks, music discs) are completely excluded from selection.
   - **Instant Real-Time Search**: Pre-caches candidate block items on load for `< 1ms` keystroke filtering across block display names and registry identifiers (`minecraft:stone`).
@@ -2437,4 +2432,57 @@ The **Sovereign Barrier Mode** (`BuildingMode.BARRIER`) is a defensive territory
   4. `MinionBuildGoal.placeBlueprintBlock()` forces `OCCUPIED = false` on both `HEAD` and `FOOT` states.
 - **Paired Multiblock Auto-Completion**:
   - In `ConstructionSession.completeTask()`, completing either half of a bed block automatically completes its paired partner across both `BUILD` and `DISMANTLE` modes, preventing duplicate passes and desynchronized multi-block states.
+
+---
+
+## 31. Advanced Combat Queuing, Survival Logistics, Escort Continuity & Aquatic Engineering
+
+### 31.1 Clustered Multi-Target Attack System & Non-Interrupting Target Chaining (`CommandScepterItem`, `MinionEntity`)
+
+- **Area-Wide Assault Queuing**:
+  - Right-clicking any hostile mob with the Command Scepter targets the clicked mob as primary focus and automatically queries all nearby clustered hostiles within a 16-block radius (`clusterBox.expand(16.0D, 8.0D, 16.0D)`).
+  - Populates each attacking minion's assault queue (`setAssaultTargets(fullAssaultQueue)`) so minions eliminate the primary target and smoothly chain through every queued enemy in sequence.
+- **Non-Interrupting Multi-Click Target Chaining (`addAssaultTargets`)**:
+  - If the commander right-clicks additional hostile mobs while minions are already engaged in active combat, units do **not** abruptly drop their current target or reset their combat AI.
+  - The newly clicked targets and their surrounding clusters are seamlessly appended to the ongoing queue (`minion.addAssaultTargets(fullAssaultQueue)`).
+  - Combat minions finish eliminating their active target first, then immediately pivot to the newly targeted enemies in smooth sequence.
+- **Visual Feedback & Action Bar Notification**:
+  - Displays sweeping lock-on particles around the primary target, subtle linkage sparks on secondary targets, and an action bar confirmation: `Minions targeting cluster: N hostile(s) queued!`.
+
+### 31.2 Auto Mode Survival Mining Inventory Retention & Unified Builder Logistics (`MinionHarvestingHelper`, `MinionBuildGoal`, `ConstructionManager`)
+
+- **Unified Survival Resource Retention**:
+  - Minions operating in `AUTO` mode that assist in survival mining or dismantling sessions now retain all harvested stone, ores, dirt, and timber in their 9-slot backpack inventory, matching dedicated `BUILDER` behavior.
+  - `MinionHarvestingHelper.checkAndDepositExcessMaterials` verifies that `AUTO` minions do not prematurely dump or offload their inventory when dynamically evaluating roles.
+  - Overspill drops during block breaks share into `AUTO` minion inventories as valid recipients.
+  - Upon session completion in `ConstructionManager.completeSession()`, `AUTO` minions offload their inventory into nearby supply chests or deploy autonomous chests only when appropriate, preventing scattered ground items.
+
+### 31.3 Post-Build & Post-Mine Follow State & Escort Preservation (`ConstructionManager`, `MinionFormationFollowGoal`)
+
+- **Formation Escort Continuity**:
+  - If a minion was selected and actively following the player before helping with a construction or quarry session, it retains `isSelected() == true` upon session completion.
+  - As soon as the final block is placed or excavated, `MinionFormationFollowGoal` immediately resumes formation escort, keeping the commander's personal guard intact without requiring manual re-selection.
+- **Unselected Helper Stationing**:
+  - Minions that were unselected helpers are stationed at structure perimeter waypoints or safe fallbacks and roam freely to guard the completed build site.
+
+### 31.4 Recent Picked Blocks Sidebar Panel in Design Block Picker (`BlockPickerModalScreen`)
+
+- **Sidebar Panel Integration**:
+  - `BlockPickerModalScreen` expanded to 380px wide to house a dedicated **✦ Recent Picked** sidebar panel.
+  - Displays up to 10 recently selected placeable blocks using an LRU cache.
+- **1-Click Material Substitution**:
+  - Selecting any block pushes it to the front of the recent blocks cache.
+  - Commanders can click any recent block directly from the sidebar to instantly select and remap without typing search queries.
+  - Includes item renderers, slot borders, hover highlights, and item tooltips.
+
+### 31.5 Unrestricted Marine Flight & Underwater Construction Protections (`CommandScepterItem`, `BuildFlightManager`, `MinionEntity`, `MinionBuildGoal`)
+
+- **Unrestricted Water Flight**:
+  - Removed previous 5-block water depth limits; commanders in `BUILD` mode can fly freely over oceans, deep lakes, rivers, and water bodies of any depth.
+  - Full support for underwater flight to survey submerged foundations.
+- **Submerged Minion Construction & Breathing Immunity**:
+  - Minions engaged in construction or levitation dynamically yield `SwimGoal` so they do not bob to the surface while working.
+  - Air supply is continuously replenished (`setAir(getMaxAir())`) while building underwater, granting full drowning immunity.
+  - Water fluid blocks are recognized as valid operational hover stations in `MinionBuildGoal`.
+
 

@@ -294,12 +294,13 @@ public final class MinionHarvestingHelper {
 		}
 
 		// In survival mode:
-		// For mining/dismantle sessions, minions hold onto all harvested materials in their 9-slot backpack.
+		// For mining/dismantle sessions, minions (both BUILDER and AUTO role) hold onto all harvested materials in their backpack.
 		// They only offload into a chest when their inventory is completely full and cannot accept incoming items.
 		// For building/construction sessions, builders deposit excess materials when near capacity (>= 7 of 9 slots full)
 		// so they retain empty slots to fetch required blueprint blocks.
 		boolean isMiningSession = session != null && session.isDismantle();
-		if (isMiningSession) {
+		boolean isAutoRole = minion.getRole() == com.example.entity.custom.MinionRole.AUTO;
+		if (isMiningSession || (isAutoRole && session == null)) {
 			if (!forceAllExcess) {
 				// While actively mining, do not proactively offload at task boundaries if space remains
 				return;

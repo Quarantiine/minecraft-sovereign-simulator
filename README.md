@@ -90,14 +90,16 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
      - Morphs to **Sentinel** if this minion itself, the commander, or any nearby ally drops below 70% HP (equipping shield and channeling restorative healing) or when holding a guard post.
      - Morphs to **Warrior** if actively attacked, targeting an enemy, or hostile mobs enter within 16m (dynamically gaining the `+4.0` frontline Attack Damage bonus and aggressive assault AI).
      - Morphs to **Builder** if peaceful and an active blueprint or quarry task requires engineering hands within 128 blocks.
+     - **Survival Mining Inventory Retention**: Retains mined resources (stone, ores, dirt, wood) in backpack inventory throughout survival mining just like dedicated Builders, eliminating premature inventory dumping upon dynamic role reassignment.
 
 ---
 
 ### Core Strategic Systems
 
-- **Free Survival Arcane Build Flight & Shallow Water Tolerance**:
+- **Free Survival Arcane Build Flight & Aquatic Construction**:
   - Enjoy unconstrained 3D creative-style flight in Survival mode while holding the Scepter in **`BUILD`** mode (Space to ascend, Shift to descend, full WASD navigation).
-  - Shallow water $\le 5$ blocks high/deep from solid ground (creeks, ponds, moats, canals, puddles) is fully permitted for flight without interruption. Only deep water bodies ($> 5$ blocks deep) cancel flight and `BUILD` mode; minions continue building uninterrupted.
+  - Unrestricted flight over water bodies of any depth (oceans, deep lakes, rivers) and underwater, enabling seamless construction of bridges, docks, and submerged ocean bases.
+  - Minions possess underwater breathing protection (`setAir(getMaxAir())`) and swimming suppression while building, preventing drowning or surface bouncing.
 - **Anti-Suffocation, Anti-Entombment & Safe Evacuation**:
   - Minions safely phase through blocks while building (`noClip = true`), with automatic server-side anti-suffocation safeguards (`unstuckIfInSolidWall`) ensuring units are never stuck in walls or underground rock.
   - Mining sessions evacuate minions intelligently: surface quarries evacuate workers to the open-sky rim overlooking the pit, while underground room excavations station workers onto the cleared interior floor (`box.getMinY()`), never clipping into solid perimeter rock.
@@ -135,9 +137,15 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - Select two corners with left-clicks to enclose any building in a 3D holographic ghost prism.
   - Adjust height in real time with `Ctrl` + Scroll.
   - Name and save the structure directly to world data without destroying the original building. Minion builders can then replicate it anywhere with 100% exact block fidelity!
-  - **Granular Palette Remapping & Material Replacement (`[ 🎨 Remap ]`)**: Accessible in both the capture dialog and the 3D Blueprint Explorer. Inspect the full block tally, substitute any block with another placeable block via the searchable `BlockPickerModalScreen`, or erase unwanted blocks into `minecraft:air`. Preserves directional blockstate properties (stairs, slabs, logs, pillars) and allows choosing **[ 💾 Overwrite ]** or **[ 📋 Save as Copy ]** with zero paging friction (Slot 1 Slide 1 default).
+  - **Granular Palette Remapping & Material Replacement (`[ 🎨 Remap ]`)**: Accessible in both the capture dialog and the 3D Blueprint Explorer. Inspect the full block tally, substitute any block with another placeable block via the searchable `BlockPickerModalScreen` (featuring a convenient **Recent Picked** sidebar for 1-click access to favorite materials), or erase unwanted blocks into `minecraft:air`. Preserves directional blockstate properties (stairs, slabs, logs, pillars) and allows choosing **[ 💾 Overwrite ]** or **[ 📋 Save as Copy ]** with zero paging friction (Slot 1 Slide 1 default).
   - **Newest-First Catalog Ordering**: Newly captured blueprints immediately appear at Slot 1 on Slide 1 by default, automatically armed on your held Scepter.
   - **3D Blueprint Explorer & Clarity Viewport GUI**: Click `[ 🔍 3D View ]` in the Command Hub to open `BlueprintExplorerScreen`, featuring true 3D rotated quad rendering, 6-directional interior occlusion culling, authentic botanical flora and multi-face textures, directional sunlight ($N \cdot L$), Fullscreen/Maximize mode (`[ ⛶ ]` / `Tab` / `F`), an Architectural Floor Slicer (`▲` / `▼`), in-viewer Palette Remapping (`[ 🎨 Remap ]`), in-viewer Custom Blueprint Renaming (`[ ✏ Rename ]` / `[R]`) with catalog order preservation, an uncluttered spacious action button bar (`[ ✔ Arm ]`, `[ 🎨 Remap ]`, `[ 📋 BOM ]`, `[ 🗑 Del ]`, `[ Close ]`), high-performance pre-cached mesh rendering (`BlueprintMeshCache`) with zero-allocation depth sorting for mega-structures, 2D camera panning, $0.25\times$ to $8.0\times$ zoom, ground pedestal, real-time cardinal compass, and zero text cut-off across all resolutions.
+- **Clustered Multi-Target Assault Queue & Non-Interrupting Target Chaining**:
+  - Right-clicking a hostile mob with the Command Scepter targets the clicked mob and queues all surrounding hostiles within 16 blocks for minions to focus down sequentially.
+  - Multi-clicking additional enemies while minions are actively fighting appends the new targets smoothly into their assault queue (`addAssaultTargets`) without mid-fight target swapping, allowing units to finish their current kill before pivoting to the next.
+- **Post-Build & Post-Mine Follow State & Escort Preservation**:
+  - Minions that were selected and following the player before helping with a construction or quarry session automatically retain their selected state (`isSelected() == true`) when the session finishes, immediately resuming formation escort.
+  - Unselected helpers roam freely to guard the finished site.
 - **Visual Pathway Patrols**:
   - Script custom patrol loops or ping-pong routes with glowing checkpoint badges (`[ 1 ]`, `[ 2 ]`) and luminous laser vector tethers.
   - **Single Initial Default Pathway (Zero Auto-Creation)**: Starts with only **one** initial default pathway (**Route 1 🟡 Gold `#FFD700`**). Pathways are **never** auto-created—players have total control to add more routes on their own.

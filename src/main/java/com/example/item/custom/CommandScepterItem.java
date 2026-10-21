@@ -2432,87 +2432,15 @@ public class CommandScepterItem extends Item {
 	 *
 	 * @param world  The world instance.
 	 * @param player The player entity.
-	 * @return true if player is over deep water (> 5 blocks high); false if on land or shallow water (<= 5 blocks high).
+	/**
+	 * Determines whether the player is over an unbuildable hazard.
+	 * Flying over water and underwater is fully permitted for marine and aquatic construction.
+	 *
+	 * @return false always, enabling building and flight over water bodies of any depth and underwater.
 	 */
 	public static boolean isPlayerOverWater(World world, PlayerEntity player) {
-		if (player == null || world == null) {
-			return false;
-		}
-
-		BlockPos feetPos = player.getBlockPos();
-		BlockPos headPos = BlockPos.ofFloored(player.getEyePos());
-		int bottomY = world.getBottomY();
-
-		BlockState feetState = world.getBlockState(feetPos);
-		BlockState headState = world.getBlockState(headPos);
-		BlockState belowFeetState = world.getBlockState(feetPos.down());
-
-		// Check if player is currently inside water (feet, head, or dipped into water)
-		boolean inWater = feetState.getFluidState().isIn(FluidTags.WATER) || feetState.isOf(Blocks.WATER)
-				|| headState.getFluidState().isIn(FluidTags.WATER) || headState.isOf(Blocks.WATER)
-				|| player.isTouchingWater() || player.isSubmergedInWater();
-
-		// Find the top of the water column
-		BlockPos.Mutable mut;
-		if (inWater) {
-			// Locate a valid starting water block
-			if (headState.getFluidState().isIn(FluidTags.WATER) || headState.isOf(Blocks.WATER)) {
-				mut = headPos.mutableCopy();
-			} else if (feetState.getFluidState().isIn(FluidTags.WATER) || feetState.isOf(Blocks.WATER)) {
-				mut = feetPos.mutableCopy();
-			} else if (belowFeetState.getFluidState().isIn(FluidTags.WATER) || belowFeetState.isOf(Blocks.WATER)) {
-				mut = feetPos.down().mutableCopy();
-			} else {
-				mut = feetPos.mutableCopy();
-			}
-
-			// Scan upward to locate the top surface of this water body
-			while (mut.getY() < world.getTopY()) {
-				BlockPos above = mut.up();
-				BlockState aboveState = world.getBlockState(above);
-				if (aboveState.getFluidState().isIn(FluidTags.WATER) || aboveState.isOf(Blocks.WATER)) {
-					mut.move(0, 1, 0);
-				} else {
-					break;
-				}
-			}
-		} else {
-			mut = feetPos.mutableCopy();
-			// Player is airborne / above: scan downwards to find the top surface of water or solid ground
-			while (mut.getY() > bottomY) {
-				BlockState state = world.getBlockState(mut);
-				if (state.getFluidState().isIn(FluidTags.WATER) || state.isOf(Blocks.WATER)) {
-					break; // Found water surface
-				}
-				// Solid ground, architecture, bridge, roof, glass, slabs, stairs, etc. (ignore lily pads on water)
-				boolean hasCollision = !state.isAir() && !state.getCollisionShape(world, mut).isEmpty() && !state.isOf(Blocks.LILY_PAD);
-				if (hasCollision || state.isSolidBlock(world, mut)) {
-					return false; // Solid structure or ground between player and any water below
-				}
-				mut.move(0, -1, 0);
-			}
-			if (mut.getY() <= bottomY) {
-				return false; // Scanned all the way to void/bottom without hitting water
-			}
-		}
-
-		// Now mut is at the topmost water block of the water column directly beneath or containing the player.
-		// Measure the vertical height (depth) of this water column down to solid ground.
-		int waterHeight = 0;
-		while (mut.getY() > bottomY) {
-			BlockState state = world.getBlockState(mut);
-			if (state.getFluidState().isIn(FluidTags.WATER) || state.isOf(Blocks.WATER)) {
-				waterHeight++;
-				mut.move(0, -1, 0);
-			} else {
-				// Reached solid ground / non-water floor beneath the water column
-				break;
-			}
-		}
-
-		// If the water is 5 blocks high or less (<= 5 blocks deep), allow flying over it in BUILD mode.
-		// Deep water (> 5 blocks high) prohibits flight and cancels construction.
-		return waterHeight > 5;
+		// Flight over water and underwater is fully supported for construction
+		return false;
 	}
 
 	private static final java.util.Set<java.util.UUID> ACTIVE_SERVER_BUILD_FLIERS = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -3800,18 +3728,60 @@ public class CommandScepterItem extends Item {
 			minions.removeIf(m -> m.matchesRole(MinionRole.BUILDER));
 			minions.removeIf(m -> m.getCombatPolicy() == com.example.entity.custom.MinionCombatPolicy.PASSIVE);
 
+			// Query nearby clustered hostiles around the clicked target (within 16 blocks)
+			Box clusterBox = target.getBoundingBox().expand(16.0D, 8.0D, 16.0D);
+			List<LivingEntity> clusteredTargets = serverWorld.getEntitiesByClass(
+				LivingEntity.class,
+				clusterBox,
+				e -> e.isAlive() && !e.isRemoved() && e != target
+					&& (e instanceof net.minecraft.entity.mob.HostileEntity || e instanceof net.minecraft.entity.mob.Monster)
+					&& !(e instanceof MinionEntity)
+					&& !(e instanceof net.minecraft.entity.passive.TameableEntity tameable && tameable.isTamed())
+					&& com.example.targeting.MinionTargetFilterManager.getInstance().isAllowed(player.getUuid(), e.getType())
+			);
+			// Sort nearby clustered hostiles by distance to the clicked primary target
+			clusteredTargets.sort(Comparator.comparingDouble(e -> e.squaredDistanceTo(target)));
+
+			// Form prioritized assault queue: primary clicked target first, followed by nearby clustered hostiles
+			List<LivingEntity> fullAssaultQueue = new ArrayList<>();
+			fullAssaultQueue.add(target);
+			fullAssaultQueue.addAll(clusteredTargets);
+
 			for (MinionEntity minion : minions) {
 				minion.setSitting(false);
-				minion.setTarget(target);
-				minion.getNavigation().startMovingTo(target, 1.35D);
+				LivingEntity currentCombatTarget = minion.getTarget();
+				if (currentCombatTarget != null && currentCombatTarget.isAlive() && !currentCombatTarget.isRemoved()) {
+					// Minion is already locked in active combat: append the clicked mob and its cluster
+					// to the assault queue so the minion finishes its current enemy first, then proceeds
+					// seamlessly to the new targets!
+					minion.addAssaultTargets(fullAssaultQueue);
+				} else {
+					// Minion is idle or previous target is dead: immediately attack new target and queue cluster
+					minion.setAssaultTargets(fullAssaultQueue);
+					minion.setTarget(target);
+					minion.setAttacking(true);
+					minion.getNavigation().startMovingTo(target, 1.35D);
+				}
 			}
 
-			// Lock-on particles: ANGRY_VILLAGER and CRIT around the target
+			// Lock-on particles: ANGRY_VILLAGER and CRIT around the primary target
 			double tx = target.getX();
 			double ty = target.getY() + target.getHeight() * 0.5D;
 			double tz = target.getZ();
 			serverWorld.spawnParticles(ParticleTypes.ANGRY_VILLAGER, tx, ty, tz, 8, 0.3, 0.4, 0.3, 0.02);
 			serverWorld.spawnParticles(ParticleTypes.CRIT, tx, ty, tz, 20, 0.4, 0.5, 0.4, 0.15);
+
+			// Subtle linkage particles for clustered secondary targets
+			for (LivingEntity secondary : clusteredTargets) {
+				serverWorld.spawnParticles(ParticleTypes.CRIT, secondary.getX(), secondary.getY() + secondary.getHeight() * 0.5D, secondary.getZ(), 6, 0.2, 0.3, 0.2, 0.05);
+			}
+
+			if (clusteredTargets.size() > 0) {
+				player.sendMessage(
+					Text.literal("§c⚔ Minions targeting cluster: §e" + fullAssaultQueue.size() + "§c hostile(s) queued!§r"),
+					true
+				);
+			}
 
 			// Note block drum SFX
 			serverWorld.playSound(

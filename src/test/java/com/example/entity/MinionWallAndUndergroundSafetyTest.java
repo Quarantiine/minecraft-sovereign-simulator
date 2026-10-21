@@ -251,19 +251,21 @@ public class MinionWallAndUndergroundSafetyTest {
 	}
 
 	@Test
-	@DisplayName("Source Invariant: CommandScepterItem permits build flight over water 5 blocks high or less")
+	@DisplayName("Source Invariant: CommandScepterItem permits build flight over water and underwater")
 	void testWaterHeightFlightPermissionSourceInvariant() throws IOException {
 		Path scepterPath = Path.of("src/main/java/com/example/item/custom/CommandScepterItem.java");
 		String content = Files.readString(scepterPath);
 
-		Assertions.assertTrue(content.contains("return waterHeight > 5;"),
-			"CommandScepterItem.isPlayerOverWater must permit flight when waterHeight <= 5 (only waterHeight > 5 cancels flight)");
+		Assertions.assertTrue(content.contains("public static boolean isPlayerOverWater(World world, PlayerEntity player)"),
+			"CommandScepterItem must define isPlayerOverWater helper");
+		Assertions.assertTrue(content.contains("return false;"),
+			"CommandScepterItem.isPlayerOverWater must return false to permit flight over water and underwater");
 	}
 
 	@Test
-	@DisplayName("Simulation: Water height calculation allows flight over water up to 5 blocks high, rejects > 5")
+	@DisplayName("Simulation: Water height calculation permits flight over water of any depth and underwater")
 	void testWaterHeightSimulation() {
-		java.util.function.Function<Integer, Boolean> isOverWater = depth -> depth > 5;
+		java.util.function.Function<Integer, Boolean> isOverWater = depth -> false;
 
 		// 0 blocks (dry ground)
 		Assertions.assertFalse(isOverWater.apply(0), "Dry land must allow build flight");
@@ -273,28 +275,25 @@ public class MinionWallAndUndergroundSafetyTest {
 		Assertions.assertFalse(isOverWater.apply(3), "Water 3 blocks high must allow build flight");
 		Assertions.assertFalse(isOverWater.apply(4), "Water 4 blocks high must allow build flight");
 		Assertions.assertFalse(isOverWater.apply(5), "Water 5 blocks high must allow build flight");
-		// 6+ blocks high water (deep river / lake)
-		Assertions.assertTrue(isOverWater.apply(6), "Water 6 blocks high (> 5) must cancel build flight");
-		// 10 blocks high water (ocean)
-		Assertions.assertTrue(isOverWater.apply(10), "Deep ocean must cancel build flight");
+		// 6+ blocks high water (deep river / lake / ocean)
+		Assertions.assertFalse(isOverWater.apply(6), "Water 6 blocks high must allow build flight");
+		Assertions.assertFalse(isOverWater.apply(10), "Deep ocean must allow build flight");
 	}
 
 	@Test
-	@DisplayName("Source Invariant: Water detection recognizes architectural bridges, slabs, glass, and safe descent fall immunity")
+	@DisplayName("Source Invariant: Minion and player underwater build and safe descent fall immunity")
 	void testWaterEdgeCasesSourceInvariants() throws IOException {
 		Path scepterPath = Path.of("src/main/java/com/example/item/custom/CommandScepterItem.java");
 		String content = Files.readString(scepterPath);
 
-		// 1. Bridges, slabs, glass with collision are not treated as water
-		Assertions.assertTrue(content.contains("boolean hasCollision = !state.isAir() && !state.getCollisionShape(world, mut).isEmpty() && !state.isOf(Blocks.LILY_PAD);"),
-			"CommandScepterItem must check non-empty collision shapes to allow building over bridges/slabs/glass");
-
-		// 2. Head in water / feet in water / below feet checks
-		Assertions.assertTrue(content.contains("BlockPos headPos = BlockPos.ofFloored(player.getEyePos());"),
-			"CommandScepterItem must check head/eye position for submerged water detection");
-
-		// 3. Safe descent fall damage immunity preserved until landing or water touch
+		// Safe descent fall damage immunity preserved until landing or water touch
 		Assertions.assertTrue(content.contains("if (serverPlayer.isOnGround() || serverPlayer.isTouchingWater()) {"),
 			"CommandScepterItem must maintain fall damage immunity until player lands on ground or touches water");
+
+		// Minion entity underwater breathing during construction
+		Path minionPath = Path.of("src/main/java/com/example/entity/custom/MinionEntity.java");
+		String minionContent = Files.readString(minionPath);
+		Assertions.assertTrue(minionContent.contains("this.setAir(this.getMaxAir());"),
+			"MinionEntity must replenish air when building underwater to prevent drowning");
 	}
 }

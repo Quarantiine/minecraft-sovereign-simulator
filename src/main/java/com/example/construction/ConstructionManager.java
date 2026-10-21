@@ -539,7 +539,7 @@ public class ConstructionManager {
 					return false;
 				}
 				// Non-builder roles (Warriors, Sentinels) are NEVER affected by construction completion
-				if (!m.matchesRole(MinionRole.BUILDER)) {
+				if (!m.matchesRole(MinionRole.BUILDER) && m.getRole() != MinionRole.AUTO) {
 					return false;
 				}
 				// If participants are tracked, minion MUST be a recorded participant
@@ -700,7 +700,9 @@ public class ConstructionManager {
 
 				// Safely relocate minion to perimeter waypoint, releasing from hold position to roam freely
 				minion.requestTeleport(wx, waypoint.getY(), wz);
-				minion.setSelected(false);
+				if (!minion.isSelected()) {
+					minion.setSelected(false);
+				}
 				minion.setSitting(false);
 				minion.setGuardAnchorPos(null);
 				minion.clearAssaultTargets();
@@ -716,7 +718,9 @@ public class ConstructionManager {
 				if (safeFallback != null) {
 					minion.requestTeleport(safeFallback.getX() + 0.5D, safeFallback.getY(), safeFallback.getZ() + 0.5D);
 				}
-				minion.setSelected(false);
+				if (!minion.isSelected()) {
+					minion.setSelected(false);
+				}
 				minion.setSitting(false);
 				minion.setGuardAnchorPos(null);
 				minion.clearAssaultTargets();

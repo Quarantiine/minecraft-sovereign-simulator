@@ -30,17 +30,19 @@ import org.lwjgl.glfw.GLFW;
  */
 public class BlockPickerModalScreen extends Screen {
 
-	public static final int WINDOW_WIDTH = 340;
+	public static final int WINDOW_WIDTH = 380;
 	public static final int WINDOW_HEIGHT = 240;
 
 	private static final int COLUMNS = 9;
 	private static final int SLOT_SIZE = 24;
 	private static final int ICON_INSET = 4;
 	private static final int SCROLLBAR_WIDTH = 6;
+	private static final int MAX_RECENT_BLOCKS = 10;
 
 	public record BlockEntry(Identifier id, Block block, Item item, ItemStack stack, String searchKey) {}
 
 	private static List<BlockEntry> cachedAllBlocks = null;
+	private static final List<Identifier> RECENT_PICKED_BLOCKS = new ArrayList<>();
 
 	private final Screen parentScreen;
 	private final Consumer<Identifier> onSelectCallback;
@@ -57,6 +59,11 @@ public class BlockPickerModalScreen extends Screen {
 	private int gridY;
 	private int gridW;
 	private int gridH;
+
+	private int recentX;
+	private int recentY;
+	private int recentW;
+	private int recentH;
 
 	private double scrollOffset = 0.0D;
 	private boolean draggingScrollbar = false;
@@ -104,6 +111,11 @@ public class BlockPickerModalScreen extends Screen {
 		this.gridY = this.winY + 58;
 		this.gridW = COLUMNS * SLOT_SIZE;
 		this.gridH = 140;
+
+		this.recentX = this.winX + 252;
+		this.recentY = this.winY + 58;
+		this.recentW = 112;
+		this.recentH = 140;
 
 		// 1. Search bar
 		this.searchField = new TextFieldWidget(
@@ -200,12 +212,32 @@ public class BlockPickerModalScreen extends Screen {
 		clampScroll();
 	}
 
+	private Identifier recentBlockAt(double mouseX, double mouseY) {
+		int startY = this.recentY + 16;
+		int slotSize = 22;
+		for (int i = 0; i < RECENT_PICKED_BLOCKS.size() && i < MAX_RECENT_BLOCKS; i++) {
+			int col = i % 4;
+			int row = i / 4;
+			int sx = this.recentX + 6 + col * 26;
+			int sy = startY + row * 26;
+			if (mouseX >= sx && mouseX < sx + slotSize && mouseY >= sy && mouseY < sy + slotSize) {
+				return RECENT_PICKED_BLOCKS.get(i);
+			}
+		}
+		return null;
+	}
+
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (super.mouseClicked(mouseX, mouseY, button)) {
 			return true;
 		}
 		if (button == 0) {
+			Identifier clickedRecent = recentBlockAt(mouseX, mouseY);
+			if (clickedRecent != null) {
+				selectBlock(clickedRecent);
+				return true;
+			}
 			if (isOverScrollbar(mouseX, mouseY)) {
 				this.draggingScrollbar = true;
 				scrollToMouse(mouseY);
@@ -247,6 +279,13 @@ public class BlockPickerModalScreen extends Screen {
 	}
 
 	public void selectBlock(Identifier blockId) {
+		if (blockId != null) {
+			RECENT_PICKED_BLOCKS.remove(blockId);
+			RECENT_PICKED_BLOCKS.add(0, blockId);
+			while (RECENT_PICKED_BLOCKS.size() > MAX_RECENT_BLOCKS) {
+				RECENT_PICKED_BLOCKS.remove(RECENT_PICKED_BLOCKS.size() - 1);
+			}
+		}
 		if (this.client != null) {
 			this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
 		}
@@ -293,10 +332,18 @@ public class BlockPickerModalScreen extends Screen {
 		context.fill(this.gridX - 2, this.gridY - 2, this.gridX + this.gridW + 2, this.gridY + this.gridH + 2, 0xFF151D28);
 		context.drawBorder(this.gridX - 2, this.gridY - 2, this.gridW + 4, this.gridH + 4, 0xFF3A4E63);
 
+		// Render Recent Picked container background
+		context.fill(this.recentX - 2, this.recentY - 2, this.recentX + this.recentW + 2, this.recentY + this.recentH + 2, 0xFF151D28);
+		context.drawBorder(this.recentX - 2, this.recentY - 2, this.recentW + 4, this.recentH + 4, 0xFFE2B007);
+		context.fill(this.recentX - 1, this.recentY - 1, this.recentX + this.recentW + 1, this.recentY + 13, 0xDD1B2A3A);
+		context.drawTextWithShadow(this.textRenderer, Text.literal("§6✦ Recent Picked"), this.recentX + 4, this.recentY + 2, 0xFFFFFF);
+
 		// Enable scissor clipping for scrollable grid
 		context.enableScissor(this.gridX, this.gridY, this.gridX + this.gridW, this.gridY + this.gridH);
 
 		BlockEntry hoveredEntry = null;
+		ItemStack hoveredRecentStack = null;
+		Identifier hoveredRecentId = null;
 
 		int totalEntries = this.filteredEntries.size();
 		int startRow = Math.max(0, (int) (this.scrollOffset / SLOT_SIZE));
@@ -329,9 +376,38 @@ public class BlockPickerModalScreen extends Screen {
 
 		context.disableScissor();
 
+		// Render Recent Picked slots
+		int rStartY = this.recentY + 16;
+		int rSlotSize = 22;
+		if (RECENT_PICKED_BLOCKS.isEmpty()) {
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§8None yet"), this.recentX + 8, rStartY + 4, 0x888888);
+		} else {
+			for (int i = 0; i < RECENT_PICKED_BLOCKS.size() && i < MAX_RECENT_BLOCKS; i++) {
+				Identifier rId = RECENT_PICKED_BLOCKS.get(i);
+				Block rBlock = Registries.BLOCK.get(rId);
+				ItemStack rStack = new ItemStack(rBlock);
+
+				int col = i % 4;
+				int row = i / 4;
+				int sx = this.recentX + 6 + col * 26;
+				int sy = rStartY + row * 26;
+
+				boolean hovered = mouseX >= sx && mouseX < sx + rSlotSize && mouseY >= sy && mouseY < sy + rSlotSize;
+				int slotBg = hovered ? 0x88E2B007 : 0x551B2A3A;
+				context.fill(sx, sy, sx + rSlotSize, sy + rSlotSize, slotBg);
+				context.drawBorder(sx, sy, rSlotSize, rSlotSize, hovered ? 0xFFFFFF : 0xFFE2B007);
+				context.drawItem(rStack, sx + 3, sy + 3);
+
+				if (hovered) {
+					hoveredRecentStack = rStack;
+					hoveredRecentId = rId;
+				}
+			}
+		}
+
 		// Render scrollbar if content overflows
 		if (maxScroll() > 0) {
-			int trackX = this.gridX + this.gridW + 6;
+			int trackX = this.gridX + this.gridW + 4;
 			context.fill(trackX, this.gridY, trackX + SCROLLBAR_WIDTH, this.gridY + this.gridH, 0xFF151D28);
 			int thumbH = Math.max(16, (int) (this.gridH * (this.gridH / (double) contentHeight())));
 			int thumbY = this.gridY + (int) ((this.scrollOffset / maxScroll()) * (this.gridH - thumbH));
@@ -345,6 +421,12 @@ public class BlockPickerModalScreen extends Screen {
 			List<Text> tooltip = new ArrayList<>();
 			tooltip.add(Text.literal("§f" + hoveredEntry.stack().getName().getString()));
 			tooltip.add(Text.literal("§8" + hoveredEntry.id().toString()));
+			context.drawTooltip(this.textRenderer, tooltip, mouseX, mouseY);
+		} else if (hoveredRecentStack != null && hoveredRecentId != null) {
+			List<Text> tooltip = new ArrayList<>();
+			tooltip.add(Text.literal("§6[Recent] §f" + hoveredRecentStack.getName().getString()));
+			tooltip.add(Text.literal("§8" + hoveredRecentId.toString()));
+			tooltip.add(Text.literal("§eClick to pick instantly"));
 			context.drawTooltip(this.textRenderer, tooltip, mouseX, mouseY);
 		}
 	}

@@ -1373,6 +1373,30 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 	}
 
 	/**
+	 * Appends additional hostile targets to the active assault queue without interrupting
+	 * the minion's current target. If the minion is currently idle, it acquires the target.
+	 *
+	 * @param targets Collection of hostile targets to append.
+	 */
+	public void addAssaultTargets(Collection<? extends LivingEntity> targets) {
+		if (this.matchesRole(MinionRole.BUILDER)) {
+			return;
+		}
+		if (targets != null) {
+			for (LivingEntity target : targets) {
+				if (target != null && target.isAlive() && !target.isRemoved() && target.getWorld() == this.getWorld()) {
+					if (!this.assaultTargets.contains(target)) {
+						this.assaultTargets.add(target);
+					}
+				}
+			}
+		}
+		if (this.getTarget() == null || !this.getTarget().isAlive()) {
+			this.acquireNextAssaultTarget();
+		}
+	}
+
+	/**
 	 * Checks whether the minion has active assault targets remaining in its queue.
 	 * Prunes dead, removed, or out-of-world targets.
 	 *
@@ -1448,7 +1472,24 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 
 	@Override
 	protected void initGoals() {
-		this.goalSelector.add(0, new SwimGoal(this));
+		this.goalSelector.add(0, new SwimGoal(this) {
+			@Override
+			public boolean canStart() {
+				// Underwater construction: minions building or levitating do not get forcibly surfaced
+				if (MinionEntity.this.isActivelyBuilding() || MinionEntity.this.isArcaneLevitating()) {
+					return false;
+				}
+				return super.canStart();
+			}
+
+			@Override
+			public boolean shouldContinue() {
+				if (MinionEntity.this.isActivelyBuilding() || MinionEntity.this.isArcaneLevitating()) {
+					return false;
+				}
+				return super.shouldContinue();
+			}
+		});
 		this.goalSelector.add(1, new SitGoal(this));
 		this.goalSelector.add(2, new LongDoorInteractGoal(this, true));
 		this.goalSelector.add(3, new SentinelGuardGoal(this));
@@ -1624,11 +1665,14 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			this.fallDistance = 0.0F;
 		}
 
-		// Minions working or descending from construction/mining never accumulate fall distance
+		// Minions working or descending from construction/mining never accumulate fall distance, and can breathe underwater
 		if (this.isActivelyBuilding() || this.arcaneLevitating || this.exitingBuilding
 				|| (this.getWorld() != null && this.getWorld().getTime() - this.lastConstructionActivityTick <= 100L)
 				|| com.example.construction.ConstructionManager.getInstance().isMinionEngagedInConstruction(this)) {
 			this.fallDistance = 0.0F;
+			if (this.isSubmergedInWater() || this.isTouchingWater()) {
+				this.setAir(this.getMaxAir());
+			}
 		}
 
 		if (!this.getWorld().isClient()) {

@@ -1468,7 +1468,8 @@ public class MinionBuildGoal extends Goal {
 				double candX = targetX + (offset[0] * dist);
 				double candZ = targetZ + (offset[1] * dist);
 				BlockPos candPos = BlockPos.ofFloored(candX, elevatedY, candZ);
-				if (world.getBlockState(candPos).isAir()) {
+				BlockState candState = world.getBlockState(candPos);
+				if (candState.isAir() || candState.isOf(Blocks.WATER)) {
 					return new Vec3d(candX, elevatedY, candZ);
 				}
 			}
@@ -2033,7 +2034,7 @@ public class MinionBuildGoal extends Goal {
 							List<com.example.entity.custom.MinionEntity> teammates = serverWorld.getEntitiesByClass(
 								com.example.entity.custom.MinionEntity.class,
 								this.minion.getBoundingBox().expand(16.0D),
-								m -> m != this.minion && m.isAlive() && m.matchesRole(com.example.entity.custom.MinionRole.BUILDER) &&
+								m -> m != this.minion && m.isAlive() && (m.matchesRole(com.example.entity.custom.MinionRole.BUILDER) || m.getRole() == com.example.entity.custom.MinionRole.AUTO) &&
 									(this.currentSession.getOwnerUuid() == null || this.currentSession.getOwnerUuid().equals(m.getOwnerUuid()))
 							);
 							for (com.example.entity.custom.MinionEntity mate : teammates) {

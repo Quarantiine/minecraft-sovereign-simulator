@@ -4,6 +4,42 @@ All notable changes to **Sovereign Simulator: Arcane Strategy & Engineering** wi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-10-21
+
+### ⚔️ Combat Cluster Assault, Auto Minion Mining Retention, Post-Build Escort & Aquatic Construction
+
+> **Release Overview**:
+> - ⚔️ **Smarter Group Combat**: Right-click an enemy and your squad will focus-fire it and line up all nearby monsters to eliminate them in sequence. If you click more enemies mid-fight, minions finish off their current target first before pivoting to the newly clicked targets—no more abrupt mid-battle distractions!
+> - ⛏️ **Auto Minions Keep Their Mining Loot**: Minions in Auto mode mining in Survival now safely store all mined blocks and ores in their backpacks just like dedicated Builders do, rather than dropping them when switching roles.
+> - 🛡️ **Guards Stay With You After Building**: Minions that were following you before helping with a build or mining job will immediately resume following you once the project finishes, while unselected helpers stay behind to guard the new site.
+> - 🎨 **Recent Blocks Sidebar**: When customizing blueprint palettes, a new "Recent Picked" panel lets you 1-click your favorite or frequently used blocks without typing searches every time.
+> - 🌊 **Ocean & Underwater Construction**: Build flight is now completely unrestricted over water bodies of any depth and underwater. Builder minions can work submerged without drowning or floating away, making docks, bridges, and underwater bases effortless to build.
+
+### Added
+
+#### ⚔️ Clustered Multi-Target Attack System (`CommandScepterItem`)
+- **Area-Wide Assault Queuing**: Right-clicking a hostile mob with the Command Scepter now targets the clicked entity as the primary focus target and automatically queries all nearby clustered hostiles within a 16-block radius (`clusterBox.expand(16.0D, 8.0D, 16.0D)`).
+- **Assault Queue Chaining & Non-Interrupting Queueing**: All valid monsters and enemy mobs in the cluster are populated directly into each combat minion's `assaultTargets` queue (`minion.setAssaultTargets(fullAssaultQueue)`). When the commander right-clicks multiple enemies, minions actively engaged in combat append the newly clicked targets to their assault queue (`minion.addAssaultTargets(fullAssaultQueue)`) so they finish killing their current enemy first before seamlessly pursuing the newly clicked mobs, preventing abrupt target swaps mid-fight.
+- **Visual Feedback & Action Bar Notification**: Displays sweeping lock-on particles around the primary target, subtle linkage sparks on secondary targets, and an action bar confirmation: `Minions targeting cluster: N hostile(s) queued!`.
+
+#### 🎨 Recent Picked Blocks Sidebar (`BlockPickerModalScreen`)
+- **Recent Block Quick-Selection Panel**: Integrated a dedicated "Recent Picked" sidebar panel inside `BlockPickerModalScreen` (width expanded to 380px) displaying up to 10 recently selected placeable blocks.
+- **LRU Cache & 1-Click Replacement**: Selecting a block pushes it to the front of the recent blocks list. Commanders can click any recent block directly from the sidebar to instantly select and remap without re-typing searches. Includes slot borders, item renderers, and tooltip info.
+
+#### 🌊 Flying Over Water & Under Water Construction
+- **Unrestricted Aquatic & Marine Flight**: Removed the previous 5-block water depth flight cancellation. Players in `BUILD` mode can now freely fly and hover over water bodies of any depth (oceans, rivers, deep lakes) and fly underwater to construct submerged structures, ocean monuments, docks, and bridges.
+- **Minion Underwater Construction & Breathing**: Minions engaged in construction or arcane levitation now yield `SwimGoal` so they are not forcibly bounced to the water surface, and their air supply is continuously replenished (`setAir(getMaxAir())`) while building underwater to prevent drowning. Hover station calculation also accepts water blocks for construction stations.
+
+### Changed & Fixed
+
+#### ⛏️ Auto Mode Survival Mining Inventory Retention
+- **Resource Retention Invariant**: Fixed an issue where minions in `AUTO` mode, upon mining blocks or completing dismantle tasks in survival mode, dumped their inventory because `evaluateAutoRole()` dynamically reassigned them to `WARRIOR` or `MinionHarvestingHelper` treated their materials as excess.
+- **Unified Builder/Auto Logistics**: `MinionHarvestingHelper.checkAndDepositExcessMaterials` and `ConstructionManager.completeSession` now ensure that `AUTO` minions retain mined resources (stone, ores, dirt, wood) in their backpack inventory until full, matching dedicated `BUILDER` behavior. Overspill drops during block breaks also share into `AUTO` minion inventories.
+
+#### 🛡️ Post-Build / Post-Mine Follow State Preservation
+- **Escort Preservation**: If a minion was selected and actively following the player before helping with a build or mining session, it retains `isSelected() == true` upon session completion. As soon as construction finishes, `MinionFormationFollowGoal` immediately resumes formation escort.
+- **Unselected Helpers Roam**: Minions that were unselected helpers are stationed at structure waypoints or safe fallbacks and roam freely to guard the completed build site.
+
 ---
 
 ## [1.2.1] - 2026-10-16
