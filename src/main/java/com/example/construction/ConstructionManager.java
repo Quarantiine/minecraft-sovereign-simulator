@@ -757,6 +757,12 @@ public class ConstructionManager {
 				for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
 					com.example.entity.ai.logistics.MinionHarvestingHelper.checkAndDepositExcessMaterials(minion, world, session, true);
 				}
+			} else {
+				for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
+					if (com.example.entity.ai.logistics.MinionHarvestingHelper.isInventoryFull(minion.getInventory())) {
+						com.example.entity.ai.logistics.MinionHarvestingHelper.offloadMinedItemsToStorages(minion, world, session);
+					}
+				}
 			}
 
 			// Gather loose ground items in the cleanup area
@@ -778,12 +784,14 @@ public class ConstructionManager {
 					if (!stack.isEmpty()) {
 						ItemStack rem = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(stack, world, anchor, session, session.getOwnerUuid());
 						if (!rem.isEmpty()) {
-							// If existing containers are full or none found within 32 blocks, attempt autonomous chest deployment by a nearby minion
-							for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
-								BlockPos newChestPos = com.example.entity.ai.logistics.MinionHarvestingHelper.deployAutonomousChest(minion, world, session);
-								if (newChestPos != null) {
-									rem = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(rem, world, newChestPos, session, session.getOwnerUuid());
-									if (rem.isEmpty()) break;
+							if (!session.isDismantle()) {
+								// If existing containers are full or none found within 32 blocks, attempt autonomous chest deployment by a nearby minion
+								for (com.example.entity.custom.MinionEntity minion : nearbyMinions) {
+									BlockPos newChestPos = com.example.entity.ai.logistics.MinionHarvestingHelper.deployAutonomousChest(minion, world, session);
+									if (newChestPos != null) {
+										rem = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(rem, world, newChestPos, session, session.getOwnerUuid());
+										if (rem.isEmpty()) break;
+									}
 								}
 							}
 						}

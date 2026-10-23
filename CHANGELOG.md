@@ -21,10 +21,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 > - 🪓 **In-World Tool Transformations**: Builders autonomously craft and wield Hoes to till Farmland, Shovels to flatten Dirt Paths or smother campfires, Axes to strip logs, and Shears to carve pumpkins with realistic sound effects and tool durability.
 > - 📚 **Multi-Tier Non-Block to Block Synthesis**: Minions can process complete survival crafting pipelines: Sugar Cane $\to$ Paper $\to$ Books $\to$ Bookshelves $\to$ Lecterns; Sand/Gravel/Dye $\to$ Concrete Powder $\to$ Hydrated Solid Concrete; Dirt/Water/Wheat $\to$ Mud Bricks; Redstone mechanisms; Apiculture candles and waxed copper; and wild flora foraging.
 > - 🎒 **Automatic Backpack Hygiene**: Builders offload non-essential byproducts (seeds, excess dirt, saplings) into nearby containers when backpack free slots drop below 3, preventing full inventories from blocking builds.
+> - ⛏️ **Mining Storage Auto-Offload & Drop Safety**: When mining minions' 9-slot backpacks become full during excavation or quarrying, they now automatically seek out nearby storage blocks (chests, double chests, barrels, trapped chests, shulker boxes, hoppers) up to 128 blocks away across the entire world height and offload all mined materials (cobblestone, deepslate, ores, dirt, gravel) into storage! If no storage blocks exist or all nearby storages are 100% full, minions will NOT place unwanted chests—instead dropping excess items on the ground so mining never stalls!
 > - 🎨 **Creative-Only Block Purge & Safe Palette Fallbacks**: GUI block pickers and network packets strictly filter out creative-only and operator blocks (`Blocks.LIGHT` / "Light bulb", `BARRIER`, `COMMAND_BLOCK`, `SPAWNER`, `BEDROCK`, etc.) while whitelisting Farmland and Dirt Paths. Uncraftable exotic materials automatically fall back to harmonious palette substitutes.
 > - 🧱 **Physical Placement Safeguards**: Enforces solid foundations below falling blocks (sand, gravel, concrete powder) and agricultural substrates (Farmland for crops, Soul Sand for Nether Wart, Jungle Logs for Cocoa), forces `LeavesBlock.PERSISTENT = true` to stop leaf decay, and safely converts Nether water into Blue Stained Glass with steam VFX.
 
 ### Added
+
+#### ⛏️ Mining Storage Auto-Offload & Drop Safety (`MinionHarvestingHelper`, `MinionBuildGoal`)
+- **Mining Storage Auto-Offload (`offloadMinedItemsToStorages`, `findNearbyStorageBlocks`, `getContainerInventory`)**:
+  - When mining minions' 9-slot backpacks become full during excavation or quarrying, minions automatically search for nearby storage blocks (chests, double chests, barrels, trapped chests, shulker boxes, hoppers) up to 128 blocks horizontally across full vertical world height.
+  - Minions deposit their mined items (cobblestone, deepslate, stone, dirt, ores, minerals, gravel, netherrack, etc.) into these containers, freeing up backpack space so they can keep mining uninterrupted.
+  - Strictly preserves essential equipment: tools, weapons, armor, food rations, torches, lanterns, buckets, and command scepters are never deposited.
+  - Seamlessly handles vanilla Double Chests via `ChestBlock.getInventory`, giving minions access to all 54 slots across single and double chests.
+- **No Autonomous Chest Placement for Miners / Ground Drop Safety**:
+  - If no storage blocks exist within range, or if all nearby storage blocks are completely full, mining minions do NOT craft or place down unwanted chests.
+  - Instead, excess mined items that cannot fit into their backpack drop safely onto the ground as loose items, allowing miners to keep clearing their tasks without getting stuck or deadlocked.
 
 #### 🕊️ Neutral Standby Command Mode (`CommandMode.DEFAULT`, `CommandScepterItem`)
 - Added `DEFAULT("default", 0.6F, "Default", "§7")` as the 8th operational scepter mode.

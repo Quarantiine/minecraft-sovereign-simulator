@@ -313,14 +313,13 @@ public final class MinionHarvestingHelper {
 		boolean isMiningSession = session != null && session.isDismantle();
 		boolean isAutoRole = minion.getRole() == com.example.entity.custom.MinionRole.AUTO;
 		if (isMiningSession || (isAutoRole && session == null)) {
-			if (!forceAllExcess) {
-				// While actively mining, do not proactively offload at task boundaries if space remains
-				return;
-			}
-			// Even when forced, if the inventory still has empty slots, keep holding onto everything!
+			// Even when forced, if the inventory still has empty slots (occupiedSlots < inv.size()), keep holding onto everything!
 			if (occupiedSlots < inv.size()) {
 				return;
 			}
+			// When inventory is completely full, offload mined items into nearby storages
+			offloadMinedItemsToStorages(minion, world, session);
+			return;
 		} else {
 			if (!forceAllExcess && occupiedSlots < 7) {
 				return;
@@ -624,7 +623,156 @@ public final class MinionHarvestingHelper {
 	}
 
 	/**
-	 * Deposits a stack into a nearby container within range.
+	 * Checks if every slot in a minion inventory is occupied (no empty slots available).
+	 */
+	public static boolean isInventoryFull(SimpleInventory inv) {
+		if (inv == null) return false;
+		for (int i = 0; i < inv.size(); i++) {
+			if (inv.getStack(i).isEmpty()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Determines whether an ItemStack represents a mined substrate or mineral byproduct that should
+	 * be offloaded into storage blocks when a mining minion's inventory becomes full.
+	 * Strictly preserves tools, weapons, armor, food, torches, lanterns, buckets, and command/grenade sticks.
+	 */
+	public static boolean isMinedMaterial(ItemStack stack) {
+		if (stack == null || stack.isEmpty()) return false;
+		Item item = stack.getItem();
+		if (item instanceof ToolItem) return false;
+		if (item instanceof ArmorItem) return false;
+		if (item instanceof SwordItem || item instanceof BowItem || item instanceof CrossbowItem || item instanceof TridentItem || item instanceof MaceItem) return false;
+		if (item.getComponents().contains(DataComponentTypes.FOOD)) return false;
+		if (item == Items.TORCH || item == Items.SOUL_TORCH || item == Items.LANTERN || item == Items.SOUL_LANTERN) return false;
+		if (item == Items.WATER_BUCKET || item == Items.LAVA_BUCKET || item == Items.BUCKET) return false;
+		if (item == com.example.item.ModItems.COMMAND_SCEPTER || item == com.example.item.ModItems.FROST_GRENADE_STICK || item == com.example.item.ModItems.TNT_STICK) return false;
+		return true;
+	}
+
+	/**
+	 * Safely resolves the inventory of any container block, seamlessly supporting single chests,
+	 * double chests (via DoubleInventory), barrels, trapped chests, shulker boxes, hoppers, and droppers.
+	 */
+	public static Inventory getContainerInventory(ServerWorld world, BlockPos pos) {
+		if (world == null || pos == null) return null;
+		BlockState state = world.getBlockState(pos);
+		Block block = state.getBlock();
+		if (block instanceof ChestBlock chestBlock) {
+			Inventory inv = ChestBlock.getInventory(chestBlock, state, world, pos, true);
+			if (inv != null) {
+				return inv;
+			}
+		}
+		BlockEntity be = world.getBlockEntity(pos);
+		if (be instanceof Inventory inv) {
+			return inv;
+		}
+		return null;
+	}
+
+	/**
+	 * Locates all available storage container blocks within the horizontal search radius across the full vertical world height.
+	 * Excludes containers locked inside protected enemy/foreign barrier zones and deduplicates paired double chest positions.
+	 */
+	public static List<BlockPos> findNearbyStorageBlocks(ServerWorld world, BlockPos center, int horizontalRadius, UUID ownerUuid) {
+		List<BlockPos> containers = new ArrayList<>();
+		if (world == null || center == null) return containers;
+
+		int minChunkX = (center.getX() - horizontalRadius) >> 4;
+		int maxChunkX = (center.getX() + horizontalRadius) >> 4;
+		int minChunkZ = (center.getZ() - horizontalRadius) >> 4;
+		int maxChunkZ = (center.getZ() + horizontalRadius) >> 4;
+
+		Set<BlockPos> visited = new HashSet<>();
+
+		for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+			for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+				if (!world.isChunkLoaded(cx, cz)) continue;
+				WorldChunk chunk = world.getWorldChunk(new BlockPos(cx << 4, center.getY(), cz << 4));
+				if (chunk == null) continue;
+				for (BlockEntity be : chunk.getBlockEntities().values()) {
+					if (be instanceof Inventory) {
+						BlockPos pos = be.getPos();
+						if (Math.abs(pos.getX() - center.getX()) <= horizontalRadius
+							&& Math.abs(pos.getZ() - center.getZ()) <= horizontalRadius) {
+							if (visited.add(pos)) {
+								if (ownerUuid != null && com.example.barrier.BarrierManager.getInstance().isPositionProtected(world, pos, ownerUuid)) {
+									continue;
+								}
+								// If double chest, mark the other half visited to prevent redundant processing
+								BlockState state = world.getBlockState(pos);
+								if (state.getBlock() instanceof ChestBlock && state.contains(ChestBlock.CHEST_TYPE)) {
+									ChestType chestType = state.get(ChestBlock.CHEST_TYPE);
+									if (chestType != ChestType.SINGLE && state.contains(ChestBlock.FACING)) {
+										Direction facing = state.get(ChestBlock.FACING);
+										BlockPos otherHalf = (chestType == ChestType.LEFT)
+											? pos.offset(facing.rotateYClockwise())
+											: pos.offset(facing.rotateYCounterclockwise());
+										visited.add(otherHalf);
+									}
+								}
+								containers.add(pos.toImmutable());
+							}
+						}
+					}
+				}
+			}
+		}
+
+		containers.sort((p1, p2) -> Double.compare(p1.getSquaredDistance(center), p2.getSquaredDistance(center)));
+		return containers;
+	}
+
+	/**
+	 * Deposits an item stack into a target container inventory:
+	 * Pass 1: Merges into existing matching item stacks up to max stack size.
+	 * Pass 2: Places remaining quantity into empty slots.
+	 *
+	 * @return True if at least one item was transferred.
+	 */
+	public static boolean depositStackIntoInventory(ItemStack stack, Inventory targetInv) {
+		if (stack == null || stack.isEmpty() || targetInv == null) return false;
+		boolean transferred = false;
+		int maxStack = targetInv.getMaxCountPerStack();
+
+		// Pass 1: Merge into existing matching stacks
+		for (int i = 0; i < targetInv.size() && !stack.isEmpty(); i++) {
+			ItemStack existing = targetInv.getStack(i);
+			if (!existing.isEmpty() && ItemStack.areItemsAndComponentsEqual(existing, stack)) {
+				int limit = Math.min(existing.getMaxCount(), maxStack);
+				int space = limit - existing.getCount();
+				if (space > 0) {
+					int toMove = Math.min(space, stack.getCount());
+					existing.increment(toMove);
+					stack.decrement(toMove);
+					transferred = true;
+				}
+			}
+		}
+
+		// Pass 2: Place into empty slots
+		for (int i = 0; i < targetInv.size() && !stack.isEmpty(); i++) {
+			ItemStack existing = targetInv.getStack(i);
+			if (existing.isEmpty() && targetInv.isValid(i, stack)) {
+				int limit = Math.min(stack.getMaxCount(), maxStack);
+				int toMove = Math.min(limit, stack.getCount());
+				targetInv.setStack(i, stack.split(toMove));
+				transferred = true;
+			}
+		}
+
+		if (transferred) {
+			targetInv.markDirty();
+		}
+		return transferred;
+	}
+
+	/**
+	 * Deposits a stack into nearby containers within range across all available storage blocks.
 	 *
 	 * @return The remaining stack that could not be deposited (or empty if fully stored).
 	 */
@@ -633,32 +781,76 @@ public final class MinionHarvestingHelper {
 			return stack;
 		}
 
-		BlockPos targetChestPos = findNearbyChestWithSpace(world, searchCenter, VILLAGE_CONTAINER_SEARCH_RADIUS);
-		if (targetChestPos != null) {
-			BlockEntity be = world.getBlockEntity(targetChestPos);
-			if (be instanceof Inventory containerInv) {
-				for (int cSlot = 0; cSlot < containerInv.size(); cSlot++) {
-					ItemStack destStack = containerInv.getStack(cSlot);
-					if (destStack.isEmpty()) {
-						containerInv.setStack(cSlot, stack.copy());
-						stack.setCount(0);
-						containerInv.markDirty();
-						return ItemStack.EMPTY;
-					} else if (ItemStack.areItemsAndComponentsEqual(destStack, stack)) {
-						int transferable = Math.min(stack.getCount(), destStack.getMaxCount() - destStack.getCount());
-						if (transferable > 0) {
-							destStack.increment(transferable);
-							stack.decrement(transferable);
-							containerInv.markDirty();
-							if (stack.isEmpty()) {
-								return ItemStack.EMPTY;
-							}
-						}
-					}
+		List<BlockPos> storagePositions = findNearbyStorageBlocks(world, searchCenter, VILLAGE_CONTAINER_SEARCH_RADIUS, ownerUuid);
+		for (BlockPos containerPos : storagePositions) {
+			Inventory containerInv = getContainerInventory(world, containerPos);
+			if (containerInv == null) continue;
+
+			if (depositStackIntoInventory(stack, containerInv)) {
+				containerInv.markDirty();
+				world.playSound(null, containerPos, SoundEvents.BLOCK_CHEST_CLOSE, SoundCategory.BLOCKS, 0.6F, 1.0F);
+				if (stack.isEmpty()) {
+					return ItemStack.EMPTY;
 				}
 			}
 		}
 		return stack;
+	}
+
+	/**
+	 * Offloads mined materials from a mining minion's inventory into nearby storage blocks (chests, barrels, etc.).
+	 * If no storage blocks exist or all nearby storage blocks are full, returns false so minion can drop items on the ground.
+	 *
+	 * @return True if at least one item was successfully stored into nearby storage blocks.
+	 */
+	public static boolean offloadMinedItemsToStorages(MinionEntity minion, ServerWorld world, ConstructionSession session) {
+		if (minion == null || world == null) return false;
+		SimpleInventory inv = minion.getInventory();
+		UUID ownerUuid = minion.getOwnerUuid();
+		if (ownerUuid == null && session != null) {
+			ownerUuid = session.getOwnerUuid();
+		}
+
+		List<BlockPos> storagePositions = findNearbyStorageBlocks(world, minion.getBlockPos(), VILLAGE_CONTAINER_SEARCH_RADIUS, ownerUuid);
+		if (storagePositions.isEmpty()) {
+			return false;
+		}
+
+		boolean anyDeposited = false;
+		BlockPos lastContainerPos = null;
+
+		for (BlockPos containerPos : storagePositions) {
+			Inventory containerInv = getContainerInventory(world, containerPos);
+			if (containerInv == null) continue;
+
+			boolean containerModified = false;
+			for (int slot = 0; slot < inv.size(); slot++) {
+				ItemStack stack = inv.getStack(slot);
+				if (stack.isEmpty() || !isMinedMaterial(stack)) continue;
+
+				if (depositStackIntoInventory(stack, containerInv)) {
+					anyDeposited = true;
+					containerModified = true;
+					lastContainerPos = containerPos;
+					if (stack.isEmpty()) {
+						inv.setStack(slot, ItemStack.EMPTY);
+					}
+				}
+			}
+
+			if (containerModified) {
+				containerInv.markDirty();
+				inv.markDirty();
+			}
+		}
+
+		if (anyDeposited && lastContainerPos != null) {
+			inv.markDirty();
+			world.playSound(null, lastContainerPos, SoundEvents.BLOCK_CHEST_CLOSE, SoundCategory.BLOCKS, 0.8F, 1.0F);
+			world.spawnParticles(ParticleTypes.HAPPY_VILLAGER, lastContainerPos.getX() + 0.5D, lastContainerPos.getY() + 0.8D, lastContainerPos.getZ() + 0.5D, 5, 0.2D, 0.2D, 0.2D, 0.02D);
+		}
+
+		return anyDeposited;
 	}
 
 	private static boolean harvestWoodOrAgroForestry(

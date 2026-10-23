@@ -2232,6 +2232,11 @@ public class MinionBuildGoal extends Goal {
 			serverWorld.breakBlock(targetPos, false, this.minion);
 			updateConnectableNeighbors(serverWorld, targetPos);
 
+			// If minion inventory is full, use nearby storages to store mined items first!
+			if (com.example.entity.ai.logistics.MinionHarvestingHelper.isInventoryFull(this.minion.getInventory())) {
+				com.example.entity.ai.logistics.MinionHarvestingHelper.offloadMinedItemsToStorages(this.minion, serverWorld, this.currentSession);
+			}
+
 			for (ItemStack drop : drops) {
 				int beforeCount = drop.getCount();
 				ItemStack remainder = this.minion.getInventory().addStack(drop);
@@ -2239,8 +2244,8 @@ public class MinionBuildGoal extends Goal {
 					this.minion.getInventory().markDirty();
 				}
 				if (!remainder.isEmpty()) {
-					// Offload excess into nearby or newly crafted autonomous chest
-					com.example.entity.ai.logistics.MinionHarvestingHelper.checkAndDepositExcessMaterials(this.minion, serverWorld, this.currentSession, true);
+					// Offload mined materials into nearby storage blocks (chests, barrels, etc.)
+					com.example.entity.ai.logistics.MinionHarvestingHelper.offloadMinedItemsToStorages(this.minion, serverWorld, this.currentSession);
 					remainder = this.minion.getInventory().addStack(remainder);
 					if (!remainder.isEmpty()) {
 						remainder = com.example.entity.ai.logistics.MinionHarvestingHelper.depositStackIntoNearbyContainer(remainder, serverWorld, targetPos, this.currentSession, this.minion.getOwnerUuid());
@@ -2305,6 +2310,11 @@ public class MinionBuildGoal extends Goal {
 
 		// Complete the task in session
 		this.currentSession.completeTask(this.currentTask, serverWorld);
+
+		// If minion inventory is full upon task completion, store mined items into nearby storages
+		if (com.example.entity.ai.logistics.MinionHarvestingHelper.isInventoryFull(this.minion.getInventory())) {
+			com.example.entity.ai.logistics.MinionHarvestingHelper.offloadMinedItemsToStorages(this.minion, serverWorld, this.currentSession);
+		}
 
 		// Reset work and navigation counters
 		this.workTicks = 0;
