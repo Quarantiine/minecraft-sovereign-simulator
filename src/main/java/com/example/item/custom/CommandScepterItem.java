@@ -1892,11 +1892,17 @@ public class CommandScepterItem extends Item {
 
 	@Override
 	public int getMaxUseTime(ItemStack stack, LivingEntity user) {
+		if (getMode(stack) == CommandMode.DEFAULT) {
+			return 0;
+		}
 		return 72000;
 	}
 
 	@Override
 	public UseAction getUseAction(ItemStack stack) {
+		if (getMode(stack) == CommandMode.DEFAULT) {
+			return UseAction.NONE;
+		}
 		return UseAction.BLOCK;
 	}
 
@@ -2452,12 +2458,12 @@ public class CommandScepterItem extends Item {
 		}
 
 		boolean isHeld = selected || player.getOffHandStack() == stack;
-		boolean isBuildMode = isHeld && getMode(stack) == CommandMode.BUILD;
+		boolean isFlightMode = isHeld && (getMode(stack) == CommandMode.BUILD || getMode(stack) == CommandMode.MINE);
 
 		if (entity instanceof net.minecraft.server.network.ServerPlayerEntity serverPlayer) {
 			java.util.UUID uuid = serverPlayer.getUuid();
-			if (isBuildMode) {
-				// Water Flight Check: If player is flying or hovering over deep water in BUILD mode, exit BUILD mode & flight only (minions continue building)
+			if (isFlightMode) {
+				// Water Flight Check: If player is flying or hovering over deep water in flight mode, exit flight mode (minions continue tasks)
 				if (isPlayerOverWater(world, serverPlayer)) {
 					setMode(stack, CommandMode.FOLLOW);
 
@@ -2469,7 +2475,7 @@ public class CommandScepterItem extends Item {
 					// Keep in ACTIVE_SERVER_BUILD_FLIERS to ensure fall distance is zeroed until touching ground/water
 					ACTIVE_SERVER_BUILD_FLIERS.add(uuid);
 
-					serverPlayer.sendMessage(Text.literal("§c⚠ Build mode cancelled: Flying over deep water is prohibited! (Minions will continue building)§r"), true);
+					serverPlayer.sendMessage(Text.literal("§c⚠ Flight mode cancelled: Flying over deep water is prohibited!§r"), true);
 					serverPlayer.getServerWorld().playSound(null, serverPlayer.getBlockPos(), SoundEvents.ENTITY_GENERIC_EXTINGUISH_FIRE, SoundCategory.PLAYERS, 1.0F, 1.0F);
 					serverPlayer.getServerWorld().spawnParticles(ParticleTypes.SPLASH, serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(), 20, 0.4D, 0.2D, 0.4D, 0.1D);
 					return;
@@ -2639,6 +2645,11 @@ public class CommandScepterItem extends Item {
 				SCREEN_OPENER.openScreen(player, context.getHand(), stack);
 			}
 			return ActionResult.success(world.isClient());
+		}
+
+		// DEFAULT Mode: Standby mode. Pass through all block interactions so default Minecraft actions execute.
+		if (mode == CommandMode.DEFAULT) {
+			return ActionResult.PASS;
 		}
 
 		// 1. Crosshair Entity Check: if an entity is aligned with the cursor within 64 blocks
@@ -2933,6 +2944,9 @@ public class CommandScepterItem extends Item {
 		}
 
 		CommandMode mode = getMode(stack);
+		if (mode == CommandMode.DEFAULT) {
+			return TypedActionResult.pass(stack);
+		}
 		if (mode == CommandMode.DESIGN) {
 			if (world.isClient() && CAPTURE_MODAL_OPENER != null) {
 				BlockPos p1 = getDesignPos1(stack);
@@ -2998,6 +3012,9 @@ public class CommandScepterItem extends Item {
 	public ActionResult useOnEntity(ItemStack stack, PlayerEntity user, LivingEntity entity, Hand hand) {
 		World world = user.getWorld();
 		CommandMode mode = getMode(stack);
+		if (mode == CommandMode.DEFAULT) {
+			return ActionResult.PASS;
+		}
 		SquadGroup squad = getTargetSquad(stack);
 
 		// Check primed escort first

@@ -528,6 +528,11 @@ public class ConstructionSession {
 				}
 
 				if (isTaskReady(task, world)) {
+					// Non-blocking survival queue: if this minion recently lacked materials for this task,
+					// skip it temporarily to let other ready tasks proceed without deadlocking the session!
+					if (task.hasDeficiencyCooldown(minionUuid, currentTick)) {
+						continue;
+					}
 					if (task.claim(minionUuid, currentTick)) {
 						this.lastActivityTick = currentTick;
 						this.participatingMinions.add(minionUuid);
@@ -630,11 +635,55 @@ public class ConstructionSession {
 			return false;
 		}
 		BlueprintBlock bpBlock = task.getBlueprintBlock();
+		BlockState targetState = bpBlock.state();
 
 		// 1. Hanging blocks MUST have overhead solid support already in the world
 		if (bpBlock.isHanging()) {
 			BlockPos overhead = targetPos.up();
 			return !world.getBlockState(overhead).isAir();
+		}
+
+		// 1.5 Physical Support Dependencies for fragile / gravity-affected blocks
+		if (targetState != null) {
+			// Gravity/Falling blocks (Sand, Gravel, Concrete Powder, Anvil) must have solid support beneath
+			if (targetState.getBlock() instanceof net.minecraft.block.FallingBlock) {
+				BlockPos underneath = targetPos.down();
+				BlockState underState = world.getBlockState(underneath);
+				if (underState.isAir() || !underState.isSolidBlock(world, underneath)) {
+					return false;
+				}
+			}
+
+			// Crops (Wheat, Carrots, Potatoes, Beetroots, Stems) MUST have Farmland directly underneath
+			if (targetState.getBlock() instanceof net.minecraft.block.CropBlock
+					|| targetState.getBlock() instanceof net.minecraft.block.StemBlock
+					|| targetState.getBlock() instanceof net.minecraft.block.AttachedStemBlock) {
+				BlockPos underneath = targetPos.down();
+				if (!world.getBlockState(underneath).isOf(net.minecraft.block.Blocks.FARMLAND)) {
+					return false;
+				}
+			}
+
+			// Nether wart must have Soul Sand directly underneath
+			if (targetState.isOf(net.minecraft.block.Blocks.NETHER_WART)) {
+				BlockPos underneath = targetPos.down();
+				if (!world.getBlockState(underneath).isOf(net.minecraft.block.Blocks.SOUL_SAND)) {
+					return false;
+				}
+			}
+
+			// Cocoa Beans must have a Jungle Log/Wood on attached face
+			if (targetState.getBlock() instanceof net.minecraft.block.CocoaBlock) {
+				net.minecraft.util.math.Direction facing = targetState.get(net.minecraft.block.CocoaBlock.FACING);
+				BlockPos logPos = targetPos.offset(facing);
+				BlockState logState = world.getBlockState(logPos);
+				if (!logState.isOf(net.minecraft.block.Blocks.JUNGLE_LOG)
+						&& !logState.isOf(net.minecraft.block.Blocks.STRIPPED_JUNGLE_LOG)
+						&& !logState.isOf(net.minecraft.block.Blocks.JUNGLE_WOOD)
+						&& !logState.isOf(net.minecraft.block.Blocks.STRIPPED_JUNGLE_WOOD)) {
+					return false;
+				}
+			}
 		}
 
 		// 2. Base layer (effective Y <= 0) can always be placed
@@ -669,6 +718,11 @@ public class ConstructionSession {
 		if (state == null) return false;
 		net.minecraft.block.Block b = state.getBlock();
 		return b instanceof net.minecraft.block.AnvilBlock
+			|| b instanceof net.minecraft.block.CropBlock
+			|| b instanceof net.minecraft.block.StemBlock
+			|| b instanceof net.minecraft.block.AttachedStemBlock
+			|| b instanceof net.minecraft.block.CocoaBlock
+			|| b instanceof net.minecraft.block.SugarCaneBlock
 			|| b instanceof net.minecraft.block.BlastFurnaceBlock
 			|| b instanceof net.minecraft.block.GrindstoneBlock
 			|| b instanceof net.minecraft.block.SmithingTableBlock

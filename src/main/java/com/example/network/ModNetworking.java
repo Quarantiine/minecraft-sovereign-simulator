@@ -899,7 +899,7 @@ public class ModNetworking {
 					}
 					if (Registries.BLOCK.containsId(to)) {
 						Block toBlock = Registries.BLOCK.get(to);
-						if (toBlock != null && (toBlock.asItem() instanceof BlockItem) && !toBlock.getDefaultState().isAir()) {
+						if (toBlock != null && (toBlock.asItem() instanceof BlockItem) && com.example.blueprint.BlueprintBlock.isSurvivalPlaceableBlock(toBlock)) {
 							validatedReplacements.put(from, to);
 						}
 					}
@@ -1094,7 +1094,7 @@ public class ModNetworking {
 		}
 
 		net.minecraft.block.Block block = Registries.BLOCK.get(blockId);
-		if (block == null || block.getDefaultState().isAir()) {
+		if (block == null || !com.example.blueprint.BlueprintBlock.isSurvivalPlaceableBlock(block)) {
 			block = net.minecraft.block.Blocks.STONE_BRICKS;
 		}
 		net.minecraft.block.BlockState fillState = com.example.blueprint.BlockOrientationHelper.applyOrientation(

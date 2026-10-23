@@ -27,6 +27,7 @@ public class ConstructionTask {
 	private Status status = Status.PENDING;
 	private UUID claimedBy = null;
 	private long claimTick = 0L;
+	private final java.util.Map<UUID, Long> deficiencyCooldowns = new java.util.concurrent.ConcurrentHashMap<>();
 
 	/**
 	 * Constructs a new ConstructionTask.
@@ -102,6 +103,24 @@ public class ConstructionTask {
 			this.status = Status.PENDING;
 			this.claimedBy = null;
 			this.claimTick = 0L;
+		}
+	}
+
+	public boolean hasDeficiencyCooldown(UUID minionUuid, long currentTick) {
+		if (minionUuid == null) return false;
+		Long until = this.deficiencyCooldowns.get(minionUuid);
+		return until != null && currentTick < until;
+	}
+
+	public void setDeficiencyCooldown(UUID minionUuid, long untilTick) {
+		if (minionUuid != null) {
+			this.deficiencyCooldowns.put(minionUuid, untilTick);
+		}
+	}
+
+	public void clearDeficiencyCooldown(UUID minionUuid) {
+		if (minionUuid != null) {
+			this.deficiencyCooldowns.remove(minionUuid);
 		}
 	}
 

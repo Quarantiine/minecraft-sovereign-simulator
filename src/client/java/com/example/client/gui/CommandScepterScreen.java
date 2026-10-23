@@ -255,7 +255,7 @@ public class CommandScepterScreen extends Screen {
 		}
 
 
-		// Command Mode Buttons in a 2-column grid (7 modes)
+		// Command Mode Buttons in a 2-column grid (8 modes)
 		CommandMode[] modes = CommandMode.values();
 		for (int i = 0; i < modes.length; i++) {
 			CommandMode mode = modes[i];
@@ -272,14 +272,12 @@ public class CommandScepterScreen extends Screen {
 			this.addDrawableChild(btn);
 		}
 
-		// Minion Target Filter Button: occupies the first free slot after the command mode grid (always visible)
-		int filterCol = modes.length % 2;
-		int filterRow = modes.length / 2;
+		// Minion Target Filter Button: positioned symmetrically above column 1 in header area
 		this.targetFilterBtn = ButtonWidget.builder(
 			Text.literal("§c⚔ Targets"),
 			b -> openTargetFilterModal()
 		)
-		.dimensions(startX + 16 + filterCol * 70, startY + 118 + filterRow * 21, 66, 19)
+		.dimensions(startX + 87, startY + 100, 65, 15)
 		.tooltip(Tooltip.of(Text.literal("§c⚔ Minion Target Filter\n§7Choose which mobs your Auto, Sentinel & Warrior\nminions are allowed to attack on sight.")))
 		.build();
 		this.addDrawableChild(this.targetFilterBtn);
@@ -952,7 +950,7 @@ public class CommandScepterScreen extends Screen {
 			this.clearMineCornersBtn.visible = isMine;
 		}
 
-		boolean hideBlueprints = isPathway || (isBuild && (this.selectedBuildingMode == BuildingMode.AREA || this.selectedBuildingMode == BuildingMode.BARRIER));
+		boolean hideBlueprints = isPathway || (this.selectedMode == CommandMode.DEFAULT) || (isBuild && (this.selectedBuildingMode == BuildingMode.AREA || this.selectedBuildingMode == BuildingMode.BARRIER));
 		for (ButtonWidget btn : this.blueprintButtons) {
 			btn.visible = !hideBlueprints;
 		}
@@ -1851,7 +1849,8 @@ public class CommandScepterScreen extends Screen {
 		if (this.blueprintButtons.isEmpty()) return;
 
 		boolean isPathway = this.selectedMode == CommandMode.PATHWAY;
-		if (isPathway) {
+		boolean isDefault = this.selectedMode == CommandMode.DEFAULT;
+		if (isPathway || isDefault) {
 			for (ButtonWidget btn : this.blueprintButtons) {
 				btn.visible = false;
 				btn.active = false;
@@ -2063,6 +2062,13 @@ public class CommandScepterScreen extends Screen {
 				context.drawTextWithShadow(this.textRenderer, Text.literal("§6✦ Sovereign Barriers (" + zones.size() + "):"), startX + 165, startY + 106, 0xFFA500);
 				context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Page " + (this.barrierPage + 1) + " / " + totalPages), startX + 245, startY + 231, 0xAAAAAA);
 			}
+		} else if (this.selectedMode == CommandMode.DEFAULT) {
+			context.drawTextWithShadow(this.textRenderer, Text.literal("§7✦ Neutral Standby Mode"), startX + 165, startY + 106, 0xAAAAAA);
+			context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§fDefault Minecraft Interactions"), startX + 245, startY + 135, 0xFFFFFF);
+			context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Scepter does not intercept actions."), startX + 245, startY + 150, 0xAAAAAA);
+			context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7Use doors, chests & mobs normally."), startX + 245, startY + 165, 0xAAAAAA);
+			context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§ePress [V] or Sneak + R-Click in air"), startX + 245, startY + 185, 0xFFFF55);
+			context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("§7to reconfigure command modes."), startX + 245, startY + 198, 0x888888);
 		} else {
 			context.drawTextWithShadow(this.textRenderer, Text.literal("§bBlueprint Catalog:"), startX + 165, startY + 106, 0x55FFFF);
 			Collection<StructureBlueprint> allBlueprints = BlueprintRegistry.getAll();
@@ -2151,6 +2157,7 @@ public class CommandScepterScreen extends Screen {
 			case DESIGN -> "§7Capture spatial volume.";
 			case RECRUIT -> "§dEnthrall living mobs into thralls.";
 			case PATHWAY -> "§3Define & patrol waypoint routes.";
+			case DEFAULT -> "§7Neutral standby mode. Scepter will not intercept interactions.";
 		};
 
 		float scale = 0.82F;

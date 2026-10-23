@@ -4,6 +4,105 @@ All notable changes to **Sovereign Simulator: Arcane Strategy & Engineering** wi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-10-23
+
+### 🛠️ Builder Minion Survival Never-Stall Upgrade, Standby Default Mode, Quarry Flight & Supply Chains
+
+> **Release Overview**:
+> - 🕊️ **Neutral Standby Mode (`DEFAULT`)**: Keep your Sovereign Command Scepter equipped 24/7 in either your main hand or off-hand without interrupting normal gameplay! In Default mode, the scepter steps aside so you can open chests and doors, use crafting tables and furnaces, trade with villagers, breed animals, and eat food just like in vanilla Minecraft. Press `V` or Sneak + Right-Click in the air whenever you want to issue orders!
+> - 🦅 **Quarry Aerial Flight in Mining Mode**: Take flight in Survival mode while holding the scepter in Mining mode! Survey massive excavation quarries, check slope boundaries from above, and inspect deep mineshafts with smooth, unconstrained flight and safe touchdown landing.
+> - 💧 **Minion Water Gathering Outside Barriers**: Builder minions needing a water bucket for construction or crafting can now autonomously leave protected barrier walls to scoop water from exterior lakes, rivers, and oceans. Minions also recognize self-replenishing infinite water pools and cauldrons, and can even fetch empty buckets from nearby village storage chests so your blueprints never get stuck!
+> - 🛠️ **Never-Stall Survival Building**: Builder minions in Survival mode will no longer deadlock or freeze on complex structures. Missing materials trigger a 200-tick per-minion deficiency cooldown on that specific block so workers seamlessly claim and construct other ready tasks in the queue!
+> - 🌾 **Virtual Non-Item Transformations**: Blocks without direct item forms (Farmland, Dirt Paths, growing Crops, Redstone Wire, Tripwire) now map to real survival items (`Items.DIRT`, seeds, redstone, string) instead of impossible `Items.AIR` requirements.
+> - 🪓 **In-World Tool Transformations**: Builders autonomously craft and wield Hoes to till Farmland, Shovels to flatten Dirt Paths or smother campfires, Axes to strip logs, and Shears to carve pumpkins with realistic sound effects and tool durability.
+> - 📚 **Multi-Tier Non-Block to Block Synthesis**: Minions can process complete survival crafting pipelines: Sugar Cane $\to$ Paper $\to$ Books $\to$ Bookshelves $\to$ Lecterns; Sand/Gravel/Dye $\to$ Concrete Powder $\to$ Hydrated Solid Concrete; Dirt/Water/Wheat $\to$ Mud Bricks; Redstone mechanisms; Apiculture candles and waxed copper; and wild flora foraging.
+> - 🎒 **Automatic Backpack Hygiene**: Builders offload non-essential byproducts (seeds, excess dirt, saplings) into nearby containers when backpack free slots drop below 3, preventing full inventories from blocking builds.
+> - 🎨 **Creative-Only Block Purge & Safe Palette Fallbacks**: GUI block pickers and network packets strictly filter out creative-only and operator blocks (`Blocks.LIGHT` / "Light bulb", `BARRIER`, `COMMAND_BLOCK`, `SPAWNER`, `BEDROCK`, etc.) while whitelisting Farmland and Dirt Paths. Uncraftable exotic materials automatically fall back to harmonious palette substitutes.
+> - 🧱 **Physical Placement Safeguards**: Enforces solid foundations below falling blocks (sand, gravel, concrete powder) and agricultural substrates (Farmland for crops, Soul Sand for Nether Wart, Jungle Logs for Cocoa), forces `LeavesBlock.PERSISTENT = true` to stop leaf decay, and safely converts Nether water into Blue Stained Glass with steam VFX.
+
+### Added
+
+#### 🕊️ Neutral Standby Command Mode (`CommandMode.DEFAULT`, `CommandScepterItem`)
+- Added `DEFAULT("default", 0.6F, "Default", "§7")` as the 8th operational scepter mode.
+- In `DEFAULT` mode, `CommandScepterItem.useOnBlock` returns `ActionResult.PASS` for non-sneaking interactions, enabling vanilla interaction with chests, barrels, doors, trapdoors, crafting tables, furnaces, anvils, and redstone switches.
+- `CommandScepterItem.useOnEntity` returns `ActionResult.PASS`, enabling villager trading, animal breeding, shearing, milking, and riding mounts.
+- `CommandScepterItem.use` returns `TypedActionResult.pass(stack)` and `getMaxUseTime` returns `0` with `UseAction.NONE`, preventing channeled blocking or raycasting.
+- `MinionEntity.interactMob` yields to normal empty-hand station/follow toggling when the player holds a scepter in `DEFAULT` mode.
+- `ExampleMod.java` interaction callbacks (`AttackBlockCallback`, `AttackEntityCallback`) cleanly pass through in `DEFAULT` mode for normal melee combat and block breaking.
+
+#### 🦅 Quarry Flight in Mining Mode (`BuildFlightManager`, `CommandScepterItem`)
+- Extended survival flight mechanics to `CommandMode.MINE`, granting seamless 3D creative-style flight while holding the scepter.
+- Displays `§6✦ Quarry Aerial Surveyor` in the client action bar during flight in `MINE` mode.
+- Enforced server-side fall damage immunity and safe touchdown landing via `ACTIVE_SERVER_BUILD_FLIERS`.
+- Supports unrestricted marine flight over deep water and underwater excavation surveying.
+
+#### 💧 Exterior Water Gathering & Chest Bucket Retrieval (`MinionHarvestingHelper`, `MinionBuildGoal`)
+- Added two-pass geometric search in `MinionHarvestingHelper.gatherWaterBucket`: immediate 16-block cuboid scan followed by an extended 64-block horizontal and 32-block vertical scan.
+- Permitted water harvesting outside barrier defense perimeters (`!isPositionProtected(pos)`), allowing citadel builders to journey beyond base boundaries to collect water from surrounding biomes.
+- Added `isInfiniteWaterSource(world, pos)` detection ($\ge 2$ horizontal still water neighbors) and cauldron validation, permitting safe water retrieval inside barriers without depleting single-source decorative pools.
+- Added `withdrawBucketFromNearbyContainers` allowing minions needing a `WATER_BUCKET` to autonomously scavenge empty buckets (`Items.BUCKET`) or filled water buckets (`Items.WATER_BUCKET`) from nearby village chests up to 64 blocks away.
+
+#### 🖥️ Command Hub GUI 8-Mode Symmetrical Grid (`CommandScepterScreen`)
+- Updated Command Hub mode selection to an 8-mode 2x4 grid layout.
+- Added dedicated Neutral Standby Mode dashboard in the right pane when `DEFAULT` mode is selected.
+- Moved `targetFilterBtn` (`§c⚔ Targets`) symmetrically to the left header at `startX + 87, startY + 100` (width 65, height 15) mirroring `explorerBtn` (`§3🔍 3D View`) on the right.
+
+#### 🌾 Virtual Items & Tool Transformation Engine (`BlueprintBlock`, `MinionBuildGoal`)
+- **Virtual Non-Item Item Mappings**: Implemented virtual item resolution in `BlueprintBlock.getRequiredItem()` for blocks lacking item forms:
+  - `Blocks.FARMLAND` and `Blocks.DIRT_PATH` map to `Items.DIRT`.
+  - Agricultural crops (`WHEAT`, `CARROTS`, `POTATOES`, `BEETROOTS`, `PUMPKIN_STEM`, `MELON_STEM`, `NETHER_WART`, `SWEET_BERRY_BUSH`, `COCOA`) map to their respective seeds, vegetables, and berries.
+  - Mechanics and botanicals (`TRIPWIRE` $\to$ `Items.STRING`, `REDSTONE_WIRE` $\to$ `Items.REDSTONE`, `KELP_PLANT` $\to$ `Items.KELP`, `BAMBOO_SAPLING` $\to$ `Items.BAMBOO`, `CAVE_VINES` $\to$ `Items.GLOW_BERRIES`).
+  - Completely eliminates impossible `Items.AIR` material requests.
+- **In-World Tool Transformations (`ToolTransformationType`)**:
+  - Added tool transformation classification and base state resolution: `HOE_TILL` (Dirt/Grass $\to$ Farmland, dropping bonus wheat seeds on grass), `SHOVEL_FLATTEN` (Dirt/Grass $\to$ Dirt Path), `AXE_STRIP` (Logs/Wood $\to$ Stripped variants), `SHEAR_CARVE` (Pumpkin $\to$ Carved Pumpkin, dropping 4 Pumpkin Seeds), and `SHOVEL_EXTINGUISH` (Lit Campfire $\to$ Unlit Campfire).
+  - Implemented 2-phase execution in `MinionBuildGoal.executeBuildWork()`: the minion places the base block, equips the appropriate tool, plays tool usage sound effects (`ITEM_HOE_TILL`, `ITEM_SHOVEL_FLATTEN`, `ITEM_AXE_STRIP`, `PUMPKIN_CARVE`), applies 1 durability damage to the tool, and sets the transformed block state in the world.
+
+#### 🧰 Autonomous Tool Crafting, Wielding & Durability Management (`MinionHarvestingHelper`)
+- **Dynamic Tool Autonomy (`ensureTool`)**:
+  - Added `ensureTool(minion, world, toolClass)` which dynamically inspects the minion's inventory for a valid tool matching the required class (`HoeItem`, `ShearsItem`, `ShovelItem`, `AxeItem`, `PickaxeItem`, `FlintAndSteelItem`).
+  - Added durability check in `findToolSlot`: tools with less than 2 durability remaining are rejected so minions do not swing broken tools.
+  - Added autonomous tool crafting: `craftHoe` (2 Sticks + 2 Planks/Cobblestone/Iron), `craftShears` (2 Iron Ingots), and `craftFlintAndSteel` (1 Iron Ingot + 1 Flint).
+
+#### 📚 Multi-Tier Supply Chains & Crafting Pipelines (`MinionHarvestingHelper`)
+- **Non-Block to Block Synthesis**:
+  - *Scholastic Chain*: Sugar Cane $\to$ Paper $\to$ Book (+ Leather/Rabbit Hide) $\to$ Bookshelf $\to$ Lectern (Bookshelf + 4 Slabs) & Chiseled Bookshelf.
+  - *Concrete Hydration*: Sand + Gravel + Dye $\to$ Concrete Powder $\to$ hydrated into solid Concrete blocks.
+  - *Mud & Adobe*: Dirt + Water $\to$ Mud $\to$ Packed Mud (+ Wheat) $\to$ Mud Bricks $\to$ Stairs/Slabs/Walls.
+  - *Redstone Utility*: Hoppers, Pistons, Sticky Pistons, Observers, Dispensers, Droppers, Redstone Lamps, Target Blocks, Daylight Detectors, Repeaters, and Comparators.
+  - *Apiculture & Waxing*: Honeycomb + String $\to$ Candles (with 16 dye colors); Honeycomb + Copper $\to$ Waxed Copper.
+  - *Atmospheric Decor & Lighting*: Campfires, Soul Campfires, Chains, Flower Pots, Item Frames, Glow Item Frames, Armor Stands.
+  - *Wild Flora Foraging*: Autonomous foraging within 32 blocks for Sugar Cane, Bamboo, Pumpkins, Melons, Sweet Berries, Glow Berries, Cocoa Beans, Kelp, and Seeds.
+
+#### ⏱️ Non-Blocking Task Queueing & Deficiency Cooldown (`ConstructionTask`, `ConstructionSession`, `MinionBuildGoal`)
+- **Per-Minion Task Deficiency Cooldown**:
+  - Added `deficiencyCooldowns` map to `ConstructionTask` with `hasDeficiencyCooldown`, `setDeficiencyCooldown`, and `clearDeficiencyCooldown`.
+  - When a builder minion cannot resolve materials for a task, it tags that task with a 200-tick cooldown for itself and drops failure cooldown to 10 ticks.
+  - `ConstructionSession.claimNextTask()` skips tasks on deficiency cooldown for the requesting minion, allowing the worker to immediately claim other ready tasks in the queue rather than stalling the entire project.
+
+#### 🎒 Automatic Backpack Hygiene & Surplus Item Offload (`MinionHarvestingHelper`)
+- **Proactive Inventory Clearing (`maintainInventoryHygiene`)**:
+  - Evaluates minion backpack capacity before each build cycle.
+  - If free slots fall below 3, offloads excess byproducts (seeds, excess dirt/cobblestone, saplings) into nearby chests or barrels within 32 blocks, preventing inventory clogging.
+
+#### 🎨 Creative-Only Block Purge & Safe Palette Fallbacks (`BlueprintBlock`, `BlockPickerModalScreen`, `ModNetworking`)
+- **Survival Block Whitelist & Filtering (`isSurvivalPlaceableBlock`)**:
+  - Strictly purges creative-only, operator, and indestructible blocks (`Blocks.LIGHT`, `BARRIER`, `COMMAND_BLOCK`, `STRUCTURE_BLOCK`, `JIGSAW`, `SPAWNER`, `BEDROCK`, `END_PORTAL`, etc.) from block pickers and network payloads.
+  - Whitelists `Blocks.FARMLAND` and `Blocks.DIRT_PATH` in `BlockPickerModalScreen` with virtual tool placement.
+- **Harmonious Palette Fallbacks (`resolvePaletteFallback`)**:
+  - Allows builder minions to substitute unavailable exotic materials (Purpur, Nether Bricks, End Stone, Deepslate Bricks) with available harmonious palette blocks (Stone Bricks, Cobblestone, Planks) rather than stalling.
+
+#### 🧱 Physical Placement Safeguards (`ConstructionSession`, `MinionBuildGoal`)
+- **Solid Foundation Contract for Falling Blocks**:
+  - `ConstructionSession.isBuildTaskReady()` validates that gravity-affected blocks (Sand, Gravel, Concrete Powder, Anvils) have a solid block directly beneath them before scheduling placement.
+- **Substrate Readiness**:
+  - Enforces Farmland beneath crops, Soul Sand beneath Nether Wart, and Jungle Logs adjacent to Cocoa Beans.
+- **Physics & Dimension Safety**:
+  - Forces `LeavesBlock.PERSISTENT = true` on all placed tree leaves to prevent decay.
+  - Preserves fluid state when placing waterlogged blocks (`Properties.WATERLOGGED = true`).
+  - Nether Water Safety: Converts water placements in the Nether into Blue Stained Glass with cloud steam particles and hiss sound effects.
+
+---
+
 ## [1.2.2] - 2026-10-21
 
 ### ⚔️ Combat Cluster Assault, Auto Minion Mining Retention, Post-Build Escort & Aquatic Construction

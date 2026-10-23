@@ -82,18 +82,33 @@ public class BlockPickerModalScreen extends Screen {
 		List<BlockEntry> list = new ArrayList<>();
 		if (Registries.BLOCK != null && Registries.ITEM != null) {
 			for (Block block : Registries.BLOCK) {
-				if (block == null || block.getDefaultState().isAir()) {
+				if (block == null || block.getDefaultState().isAir() || !com.example.blueprint.BlueprintBlock.isSurvivalPlaceableBlock(block)) {
 					continue;
 				}
+				Identifier id = Registries.BLOCK.getId(block);
+				if (id == null) continue;
+
 				Item item = block.asItem();
-				if (item instanceof BlockItem blockItem && !blockItem.getBlock().getDefaultState().isAir()) {
-					Identifier id = Registries.BLOCK.getId(block);
-					if (id != null) {
-						String name = item.getName().getString().toLowerCase(Locale.ROOT);
-						String searchKey = id.toString().toLowerCase(Locale.ROOT) + " " + name;
-						list.add(new BlockEntry(id, block, item, new ItemStack(item), searchKey));
-					}
+				ItemStack stack;
+				String name;
+
+				if (block == net.minecraft.block.Blocks.FARMLAND) {
+					item = net.minecraft.item.Items.DIRT;
+					stack = new ItemStack(net.minecraft.item.Items.DIRT);
+					name = "Farmland (Tilled Dirt)";
+				} else if (block == net.minecraft.block.Blocks.DIRT_PATH) {
+					item = net.minecraft.item.Items.DIRT;
+					stack = new ItemStack(net.minecraft.item.Items.DIRT);
+					name = "Dirt Path (Flattened Dirt)";
+				} else if (item instanceof BlockItem blockItem && !blockItem.getBlock().getDefaultState().isAir()) {
+					stack = new ItemStack(item);
+					name = item.getName().getString();
+				} else {
+					continue;
 				}
+
+				String searchKey = id.toString().toLowerCase(Locale.ROOT) + " " + name.toLowerCase(Locale.ROOT);
+				list.add(new BlockEntry(id, block, item, stack, searchKey));
 			}
 			list.sort((a, b) -> a.stack().getName().getString().compareToIgnoreCase(b.stack().getName().getString()));
 		}

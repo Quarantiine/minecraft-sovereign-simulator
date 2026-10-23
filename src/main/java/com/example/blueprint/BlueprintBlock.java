@@ -106,8 +106,50 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 			if (this.state.isOf(net.minecraft.block.Blocks.SOUL_WALL_TORCH)) {
 				return net.minecraft.item.Items.SOUL_TORCH;
 			}
-			if (this.state.isOf(net.minecraft.block.Blocks.REDSTONE_WALL_TORCH)) {
-				return net.minecraft.item.Items.REDSTONE_TORCH;
+			if (this.state.isOf(net.minecraft.block.Blocks.FARMLAND) || this.state.isOf(net.minecraft.block.Blocks.DIRT_PATH)) {
+				return net.minecraft.item.Items.DIRT;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.WHEAT)) {
+				return net.minecraft.item.Items.WHEAT_SEEDS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.CARROTS)) {
+				return net.minecraft.item.Items.CARROT;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.POTATOES)) {
+				return net.minecraft.item.Items.POTATO;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.BEETROOTS)) {
+				return net.minecraft.item.Items.BEETROOT_SEEDS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.MELON_STEM) || this.state.isOf(net.minecraft.block.Blocks.ATTACHED_MELON_STEM)) {
+				return net.minecraft.item.Items.MELON_SEEDS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.PUMPKIN_STEM) || this.state.isOf(net.minecraft.block.Blocks.ATTACHED_PUMPKIN_STEM)) {
+				return net.minecraft.item.Items.PUMPKIN_SEEDS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.NETHER_WART)) {
+				return net.minecraft.item.Items.NETHER_WART;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.SWEET_BERRY_BUSH)) {
+				return net.minecraft.item.Items.SWEET_BERRIES;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.COCOA)) {
+				return net.minecraft.item.Items.COCOA_BEANS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.TRIPWIRE)) {
+				return net.minecraft.item.Items.STRING;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.REDSTONE_WIRE)) {
+				return net.minecraft.item.Items.REDSTONE;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.KELP_PLANT)) {
+				return net.minecraft.item.Items.KELP;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.BAMBOO_SAPLING)) {
+				return net.minecraft.item.Items.BAMBOO;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.CAVE_VINES) || this.state.isOf(net.minecraft.block.Blocks.CAVE_VINES_PLANT)) {
+				return net.minecraft.item.Items.GLOW_BERRIES;
 			}
 			Item item = this.state.getBlock().asItem();
 			if (item != null && item != net.minecraft.item.Items.AIR) {
@@ -213,6 +255,135 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 		} catch (Throwable ignored) {
 			return false;
 		}
+	}
+
+	public enum ToolTransformationType {
+		NONE,
+		HOE_TILL,          // Dirt -> Farmland
+		SHOVEL_FLATTEN,    // Dirt -> Dirt Path
+		AXE_STRIP,         // Log -> Stripped Log
+		SHEAR_CARVE,       // Pumpkin -> Carved Pumpkin
+		SHOVEL_EXTINGUISH  // Campfire -> Unlit Campfire
+	}
+
+	/**
+	 * Determines the tool transformation required to produce this block in survival mode.
+	 */
+	public ToolTransformationType getToolTransformation() {
+		try {
+			if (this.state == null) {
+				return ToolTransformationType.NONE;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.FARMLAND)) {
+				return ToolTransformationType.HOE_TILL;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.DIRT_PATH)) {
+				return ToolTransformationType.SHOVEL_FLATTEN;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.CARVED_PUMPKIN)) {
+				return ToolTransformationType.SHEAR_CARVE;
+			}
+			if (this.state.getBlock() != null) {
+				net.minecraft.util.Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(this.state.getBlock());
+				if (blockId != null && blockId.getPath().startsWith("stripped_")) {
+					return ToolTransformationType.AXE_STRIP;
+				}
+			}
+			if ((this.state.isOf(net.minecraft.block.Blocks.CAMPFIRE) || this.state.isOf(net.minecraft.block.Blocks.SOUL_CAMPFIRE))
+					&& this.state.contains(net.minecraft.state.property.Properties.LIT) && !this.state.get(net.minecraft.state.property.Properties.LIT)) {
+				return ToolTransformationType.SHOVEL_EXTINGUISH;
+			}
+		} catch (Throwable ignored) {
+		}
+		return ToolTransformationType.NONE;
+	}
+
+	/**
+	 * Returns the base block state that must be placed before applying the tool transformation.
+	 */
+	public BlockState getBaseStateForTransformation() {
+		ToolTransformationType type = getToolTransformation();
+		if (type == ToolTransformationType.HOE_TILL || type == ToolTransformationType.SHOVEL_FLATTEN) {
+			return net.minecraft.block.Blocks.DIRT.getDefaultState();
+		}
+		if (type == ToolTransformationType.SHEAR_CARVE) {
+			return net.minecraft.block.Blocks.PUMPKIN.getDefaultState();
+		}
+		if (type == ToolTransformationType.AXE_STRIP) {
+			try {
+				net.minecraft.util.Identifier blockId = net.minecraft.registry.Registries.BLOCK.getId(this.state.getBlock());
+				if (blockId != null && blockId.getPath().startsWith("stripped_")) {
+					String baseName = blockId.getPath().substring("stripped_".length());
+					net.minecraft.block.Block baseBlock = net.minecraft.registry.Registries.BLOCK.get(
+						net.minecraft.util.Identifier.of(blockId.getNamespace(), baseName)
+					);
+					if (baseBlock != null && baseBlock != net.minecraft.block.Blocks.AIR) {
+						BlockState baseState = baseBlock.getDefaultState();
+						if (this.state.contains(net.minecraft.state.property.Properties.AXIS) && baseState.contains(net.minecraft.state.property.Properties.AXIS)) {
+							baseState = baseState.with(net.minecraft.state.property.Properties.AXIS, this.state.get(net.minecraft.state.property.Properties.AXIS));
+						}
+						return baseState;
+					}
+				}
+			} catch (Throwable ignored) {
+			}
+			return net.minecraft.block.Blocks.OAK_LOG.getDefaultState();
+		}
+		if (type == ToolTransformationType.SHOVEL_EXTINGUISH) {
+			return this.state.with(net.minecraft.state.property.Properties.LIT, true);
+		}
+		return this.state;
+	}
+
+	/**
+	 * Determines whether a block can be legitimately obtained and placed in standard survival gameplay.
+	 * Strictly filters out creative-only, operator-only, bedrock, technical, and unobtainable blocks.
+	 */
+	public static boolean isSurvivalPlaceableBlock(net.minecraft.block.Block block) {
+		if (block == null) return false;
+		if (block.getDefaultState().isAir()) return false;
+
+		// Explicit survival-friendly blocks that lack a direct item form
+		if (block == net.minecraft.block.Blocks.FARMLAND || block == net.minecraft.block.Blocks.DIRT_PATH) {
+			return true;
+		}
+
+		// Strictly exclude creative/operator-only, unbreakable, and system-only blocks
+		if (block == net.minecraft.block.Blocks.LIGHT
+				|| block == net.minecraft.block.Blocks.BARRIER
+				|| block == net.minecraft.block.Blocks.STRUCTURE_BLOCK
+				|| block == net.minecraft.block.Blocks.STRUCTURE_VOID
+				|| block == net.minecraft.block.Blocks.JIGSAW
+				|| block == net.minecraft.block.Blocks.COMMAND_BLOCK
+				|| block == net.minecraft.block.Blocks.CHAIN_COMMAND_BLOCK
+				|| block == net.minecraft.block.Blocks.REPEATING_COMMAND_BLOCK
+				|| block == net.minecraft.block.Blocks.SPAWNER
+				|| block == net.minecraft.block.Blocks.TRIAL_SPAWNER
+				|| block == net.minecraft.block.Blocks.VAULT
+				|| block == net.minecraft.block.Blocks.BEDROCK
+				|| block == net.minecraft.block.Blocks.END_PORTAL
+				|| block == net.minecraft.block.Blocks.END_PORTAL_FRAME
+				|| block == net.minecraft.block.Blocks.END_GATEWAY
+				|| block == net.minecraft.block.Blocks.NETHER_PORTAL
+				|| block == net.minecraft.block.Blocks.REINFORCED_DEEPSLATE
+				|| block == net.minecraft.block.Blocks.MOVING_PISTON
+				|| block == net.minecraft.block.Blocks.PISTON_HEAD) {
+			return false;
+		}
+
+		try {
+			net.minecraft.util.Identifier id = net.minecraft.registry.Registries.BLOCK.getId(block);
+			if (id != null) {
+				String path = id.getPath();
+				if (path.contains("command_block") || path.contains("structure_") || path.contains("jigsaw") || path.equals("light")) {
+					return false;
+				}
+			}
+		} catch (Throwable ignored) {
+		}
+
+		net.minecraft.item.Item item = block.asItem();
+		return item instanceof net.minecraft.item.BlockItem;
 	}
 
 	@Override

@@ -211,7 +211,8 @@ public class PatrolRouteAndHierarchyTest {
 		Assertions.assertEquals(CommandMode.DESIGN, current.next().next().next().next());
 		Assertions.assertEquals(CommandMode.RECRUIT, current.next().next().next().next().next());
 		Assertions.assertEquals(CommandMode.PATHWAY, current.next().next().next().next().next().next());
-		Assertions.assertEquals(CommandMode.FOLLOW, current.next().next().next().next().next().next().next());
+		Assertions.assertEquals(CommandMode.DEFAULT, current.next().next().next().next().next().next().next());
+		Assertions.assertEquals(CommandMode.FOLLOW, current.next().next().next().next().next().next().next().next());
 	}
 
 	@Test

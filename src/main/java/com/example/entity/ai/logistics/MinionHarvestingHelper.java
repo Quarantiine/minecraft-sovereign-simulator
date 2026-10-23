@@ -50,13 +50,17 @@ import net.minecraft.item.ArmorItem;
 import net.minecraft.item.AxeItem;
 import net.minecraft.item.BowItem;
 import net.minecraft.item.CrossbowItem;
+import net.minecraft.item.FlintAndSteelItem;
+import net.minecraft.item.HoeItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.item.MaceItem;
 import net.minecraft.item.PickaxeItem;
+import net.minecraft.item.ShearsItem;
 import net.minecraft.item.ShovelItem;
 import net.minecraft.item.SwordItem;
+import net.minecraft.item.ToolItem;
 import net.minecraft.item.TridentItem;
 import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
@@ -67,6 +71,7 @@ import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
@@ -198,6 +203,13 @@ public final class MinionHarvestingHelper {
 		// 2. Natural Tree Timber Harvesting (Logs only; strictly natural wild trees)
 		if (requiredItem.getDefaultStack().isIn(ItemTags.LOGS)) {
 			if (harvestWoodOrAgroForestry(minion, world, session)) {
+				return hasItemInInventory(minion, requiredItem);
+			}
+		}
+
+		// 2.5 Natural Wild Flora & Crops Foraging (Sugar cane, bamboo, pumpkins, sweet berries, glow berries, seeds)
+		if (isForageableWorldResource(requiredItem)) {
+			if (forageNaturalFlora(minion, world, requiredItem, 1, session)) {
 				return hasItemInInventory(minion, requiredItem);
 			}
 		}
@@ -893,9 +905,12 @@ public final class MinionHarvestingHelper {
 			return true;
 		}
 
-		// 2b. Player Barrier Zone / Sovereign Ward: Never scoop water from protected base perimeters
+		// 2b. Player Barrier Zone / Sovereign Ward: Never scoop non-renewable water from protected base perimeters
 		if (com.example.barrier.BarrierManager.getInstance().isPositionProtected(world, pos, session != null ? session.getOwnerUuid() : null)) {
-			return true;
+			// Infinite/renewable water sources (>= 2 adjacent still water blocks) safely regenerate immediately
+			if (!isInfiniteWaterSource(world, pos)) {
+				return true;
+			}
 		}
 
 		// 3. Structural contact protection: If adjacent to any active session task/volume or processed architectural block
@@ -920,21 +935,63 @@ public final class MinionHarvestingHelper {
 		return false;
 	}
 
+	public static boolean isInfiniteWaterSource(ServerWorld world, BlockPos pos) {
+		if (world == null || pos == null) return false;
+		if (!world.getBlockState(pos).isOf(Blocks.WATER) || !world.getFluidState(pos).isStill()) {
+			return false;
+		}
+		int adjacentSources = 0;
+		for (Direction dir : Direction.Type.HORIZONTAL) {
+			BlockPos neighbor = pos.offset(dir);
+			if (world.getBlockState(neighbor).isOf(Blocks.WATER) && world.getFluidState(neighbor).isStill()) {
+				adjacentSources++;
+			}
+		}
+		return adjacentSources >= 2;
+	}
+
+	public static boolean withdrawBucketFromNearbyContainers(MinionEntity minion, ServerWorld world, int radius) {
+		if (minion == null || world == null) return false;
+		BlockPos minionPos = minion.getBlockPos();
+		for (BlockPos pos : BlockPos.iterateOutwards(minionPos, radius, 16, radius)) {
+			BlockEntity be = world.getBlockEntity(pos);
+			if (be instanceof Inventory container) {
+				for (int i = 0; i < container.size(); i++) {
+					ItemStack stack = container.getStack(i);
+					if (!stack.isEmpty() && stack.isOf(Items.BUCKET)) {
+						container.removeStack(i, 1);
+						be.markDirty();
+						giveOrDropItem(minion, new ItemStack(Items.BUCKET, 1));
+						world.playSound(null, pos, SoundEvents.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.4F, 1.2F);
+						world.spawnParticles(ParticleTypes.CLOUD, pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D, 4, 0.1D, 0.1D, 0.1D, 0.02D);
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
 	public static boolean gatherWaterBucket(MinionEntity minion, ServerWorld world, ConstructionSession session) {
 		if (minion == null || world == null) {
 			return false;
 		}
-		// If minion has no empty bucket, try to craft one from 3 iron ingots
+		// 1. If minion has no empty bucket, try to craft one from 3 iron ingots
 		if (!hasItemInInventory(minion, Items.BUCKET)) {
 			if (countItemInInventory(minion.getInventory(), Items.IRON_INGOT) >= 3) {
 				consumeItemFromInventory(minion.getInventory(), Items.IRON_INGOT, 3);
 				giveOrDropItem(minion, new ItemStack(Items.BUCKET, 1));
 				world.playSound(null, minion.getBlockPos(), SoundEvents.ENTITY_VILLAGER_WORK_TOOLSMITH, SoundCategory.NEUTRAL, 1.0F, 1.0F);
+			} else {
+				// Search nearby village containers within 64 blocks for an empty bucket
+				withdrawBucketFromNearbyContainers(minion, world, 64);
 			}
 		}
 
 		if (hasItemInInventory(minion, Items.BUCKET)) {
 			BlockPos minionPos = minion.getBlockPos();
+
+			// Pass 1: Local search within 16 blocks (strictly checks isProtectedWaterSource)
 			for (BlockPos pos : BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, HARVEST_SEARCH_RADIUS, HARVEST_SEARCH_RADIUS)) {
 				// Strict Blueprint, Session, and Structure Protection:
 				// NEVER scoop water from active construction sessions, blueprints, or architectural structures!
@@ -946,10 +1003,44 @@ public final class MinionHarvestingHelper {
 				if (state.isOf(Blocks.WATER) && world.getFluidState(pos).isStill()) {
 					consumeItemFromInventory(minion.getInventory(), Items.BUCKET, 1);
 					giveOrDropItem(minion, new ItemStack(Items.WATER_BUCKET, 1));
-					world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+					if (!isInfiniteWaterSource(world, pos)) {
+						world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+					}
 					world.playSound(null, pos, SoundEvents.ITEM_BUCKET_FILL, SoundCategory.BLOCKS, 1.0F, 1.0F);
 					world.spawnParticles(ParticleTypes.SPLASH, pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.1D);
 					return true;
+				}
+			}
+
+			// Pass 2: Extended search outside barrier waypoints (up to 64 blocks horizontal, 32 vertical)
+			// Allows builder minions to retrieve water from natural water sources outside base perimeter wards, oceans, rivers & cauldrons
+			for (BlockPos pos : BlockPos.iterateOutwards(minionPos, 64, 32, 64)) {
+				if (isProtectedWaterSource(world, pos, session)) {
+					continue;
+				}
+
+				BlockState state = world.getBlockState(pos);
+				if (state.isOf(Blocks.WATER) && world.getFluidState(pos).isStill()) {
+					consumeItemFromInventory(minion.getInventory(), Items.BUCKET, 1);
+					giveOrDropItem(minion, new ItemStack(Items.WATER_BUCKET, 1));
+					if (!isInfiniteWaterSource(world, pos)) {
+						world.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
+					}
+					world.playSound(null, pos, SoundEvents.ITEM_BUCKET_FILL, SoundCategory.BLOCKS, 1.0F, 1.0F);
+					world.spawnParticles(ParticleTypes.SPLASH, pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.1D);
+					return true;
+				}
+
+				if (state.isOf(Blocks.WATER_CAULDRON)) {
+					int level = state.get(net.minecraft.block.LeveledCauldronBlock.LEVEL);
+					if (level >= 3) {
+						consumeItemFromInventory(minion.getInventory(), Items.BUCKET, 1);
+						giveOrDropItem(minion, new ItemStack(Items.WATER_BUCKET, 1));
+						world.setBlockState(pos, Blocks.CAULDRON.getDefaultState(), Block.NOTIFY_ALL);
+						world.playSound(null, pos, SoundEvents.ITEM_BUCKET_FILL, SoundCategory.BLOCKS, 1.0F, 1.0F);
+						world.spawnParticles(ParticleTypes.SPLASH, pos.getX() + 0.5D, pos.getY() + 0.8D, pos.getZ() + 0.5D, 8, 0.2D, 0.2D, 0.2D, 0.1D);
+						return true;
+					}
 				}
 			}
 		}
@@ -1318,40 +1409,54 @@ public final class MinionHarvestingHelper {
 		return false;
 	}
 
-	private static void ensureAppropriateTool(MinionEntity minion, ServerWorld world, Item requiredItem) {
+	public static boolean ensureTool(MinionEntity minion, ServerWorld world, Class<?> toolClass) {
+		if (minion == null) return false;
 		ItemStack mainhand = minion.getMainHandStack();
+		if (toolClass.isInstance(mainhand.getItem()) && (!mainhand.isDamageable() || mainhand.getDamage() < mainhand.getMaxDamage() - 1)) {
+			return true;
+		}
 
+		// Search inventory for an undamaged instance
+		int toolSlot = findToolSlot(minion.getInventory(), toolClass);
+		if (toolSlot != -1) {
+			ItemStack tool = minion.getInventory().getStack(toolSlot);
+			ItemStack oldMain = minion.getMainHandStack();
+			minion.equipStack(EquipmentSlot.MAINHAND, tool);
+			minion.getInventory().setStack(toolSlot, oldMain);
+			return true;
+		}
+
+		// Try crafting tool if missing
+		if (toolClass == HoeItem.class) {
+			return craftHoe(minion, world);
+		} else if (toolClass == ShovelItem.class) {
+			craftShovel(minion, world);
+			return toolClass.isInstance(minion.getMainHandStack().getItem());
+		} else if (toolClass == AxeItem.class) {
+			craftAxe(minion, world);
+			return toolClass.isInstance(minion.getMainHandStack().getItem());
+		} else if (toolClass == PickaxeItem.class) {
+			craftPickaxe(minion, world);
+			return toolClass.isInstance(minion.getMainHandStack().getItem());
+		} else if (toolClass == ShearsItem.class) {
+			return craftShears(minion, world);
+		} else if (toolClass == FlintAndSteelItem.class) {
+			return craftFlintAndSteel(minion, world);
+		}
+		return false;
+	}
+
+	private static void ensureAppropriateTool(MinionEntity minion, ServerWorld world, Item requiredItem) {
 		boolean needsPickaxe = isPickaxeResource(requiredItem);
 		boolean needsShovel = isShovelResource(requiredItem);
 		boolean needsAxe = isWoodResource(requiredItem);
 
-		if (needsPickaxe && !(mainhand.getItem() instanceof PickaxeItem)) {
-			// Check inventory for pickaxe
-			int pickSlot = findToolSlot(minion.getInventory(), PickaxeItem.class);
-			if (pickSlot != -1) {
-				ItemStack pick = minion.getInventory().getStack(pickSlot);
-				minion.equipStack(EquipmentSlot.MAINHAND, pick);
-			} else {
-				// Craft wooden or stone pickaxe
-				craftPickaxe(minion, world);
-			}
-		} else if (needsShovel && !(mainhand.getItem() instanceof ShovelItem)) {
-			int shovelSlot = findToolSlot(minion.getInventory(), ShovelItem.class);
-			if (shovelSlot != -1) {
-				ItemStack shovel = minion.getInventory().getStack(shovelSlot);
-				minion.equipStack(EquipmentSlot.MAINHAND, shovel);
-			} else {
-				craftShovel(minion, world);
-			}
-		} else if (needsAxe && !(mainhand.getItem() instanceof AxeItem)) {
-			int axeSlot = findToolSlot(minion.getInventory(), AxeItem.class);
-			if (axeSlot != -1) {
-				ItemStack axe = minion.getInventory().getStack(axeSlot);
-				minion.equipStack(EquipmentSlot.MAINHAND, axe);
-			} else {
-				// Craft wooden axe
-				craftAxe(minion, world);
-			}
+		if (needsPickaxe) {
+			ensureTool(minion, world, PickaxeItem.class);
+		} else if (needsShovel) {
+			ensureTool(minion, world, ShovelItem.class);
+		} else if (needsAxe) {
+			ensureTool(minion, world, AxeItem.class);
 		}
 	}
 
@@ -1375,6 +1480,69 @@ public final class MinionHarvestingHelper {
 		return isQuarryResource(item) || isTransformableResource(item) || isWorkstationResource(item);
 	}
 
+	private static void giveOrEquipTool(MinionEntity minion, ItemStack tool) {
+		if (minion.getMainHandStack().isEmpty()) {
+			minion.equipStack(EquipmentSlot.MAINHAND, tool);
+		} else {
+			ItemStack current = minion.getMainHandStack();
+			if (!minion.getInventory().addStack(current).isEmpty()) {
+				minion.dropStack(current);
+			}
+			minion.equipStack(EquipmentSlot.MAINHAND, tool);
+		}
+	}
+
+	public static boolean craftHoe(MinionEntity minion, ServerWorld world) {
+		ensureSticksAndPlanks(minion);
+		SimpleInventory inv = minion.getInventory();
+
+		int cobble = countItemInInventory(inv, Items.COBBLESTONE);
+		int sticks = countItemInInventory(inv, Items.STICK);
+		if (cobble >= 2 && sticks >= 2) {
+			consumeItemFromInventory(inv, Items.COBBLESTONE, 2);
+			consumeItemFromInventory(inv, Items.STICK, 2);
+			giveOrEquipTool(minion, new ItemStack(Items.STONE_HOE));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+
+		int planks = countItemInInventory(inv, ItemTags.PLANKS);
+		if (planks >= 2 && sticks >= 2) {
+			consumeItemFromInventory(inv, ItemTags.PLANKS, 2);
+			consumeItemFromInventory(inv, Items.STICK, 2);
+			giveOrEquipTool(minion, new ItemStack(Items.WOODEN_HOE));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
+	public static boolean craftShears(MinionEntity minion, ServerWorld world) {
+		SimpleInventory inv = minion.getInventory();
+		int iron = countItemInInventory(inv, Items.IRON_INGOT);
+		if (iron >= 2) {
+			consumeItemFromInventory(inv, Items.IRON_INGOT, 2);
+			giveOrEquipTool(minion, new ItemStack(Items.SHEARS));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
+	public static boolean craftFlintAndSteel(MinionEntity minion, ServerWorld world) {
+		SimpleInventory inv = minion.getInventory();
+		int iron = countItemInInventory(inv, Items.IRON_INGOT);
+		int flint = countItemInInventory(inv, Items.FLINT);
+		if (iron >= 1 && flint >= 1) {
+			consumeItemFromInventory(inv, Items.IRON_INGOT, 1);
+			consumeItemFromInventory(inv, Items.FLINT, 1);
+			giveOrEquipTool(minion, new ItemStack(Items.FLINT_AND_STEEL));
+			playCraftingFeedback(minion, world, null);
+			return true;
+		}
+		return false;
+	}
+
 	private static void craftShovel(MinionEntity minion, ServerWorld world) {
 		ensureSticksAndPlanks(minion);
 		SimpleInventory inv = minion.getInventory();
@@ -1384,7 +1552,7 @@ public final class MinionHarvestingHelper {
 		if (cobble >= 1 && sticks >= 2) {
 			consumeItemFromInventory(inv, Items.COBBLESTONE, 1);
 			consumeItemFromInventory(inv, Items.STICK, 2);
-			minion.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_SHOVEL));
+			giveOrEquipTool(minion, new ItemStack(Items.STONE_SHOVEL));
 			playCraftingFeedback(minion, world, null);
 			return;
 		}
@@ -1393,7 +1561,7 @@ public final class MinionHarvestingHelper {
 		if (planks >= 1 && sticks >= 2) {
 			consumeItemFromInventory(inv, ItemTags.PLANKS, 1);
 			consumeItemFromInventory(inv, Items.STICK, 2);
-			minion.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.WOODEN_SHOVEL));
+			giveOrEquipTool(minion, new ItemStack(Items.WOODEN_SHOVEL));
 			playCraftingFeedback(minion, world, null);
 		}
 	}
@@ -1408,7 +1576,7 @@ public final class MinionHarvestingHelper {
 		if (cobble >= 3 && sticks >= 2) {
 			consumeItemFromInventory(inv, Items.COBBLESTONE, 3);
 			consumeItemFromInventory(inv, Items.STICK, 2);
-			minion.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
+			giveOrEquipTool(minion, new ItemStack(Items.STONE_PICKAXE));
 			playCraftingFeedback(minion, world);
 			return;
 		}
@@ -1417,7 +1585,7 @@ public final class MinionHarvestingHelper {
 		if (planks >= 3 && sticks >= 2) {
 			consumeItemFromInventory(inv, ItemTags.PLANKS, 3);
 			consumeItemFromInventory(inv, Items.STICK, 2);
-			minion.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.WOODEN_PICKAXE));
+			giveOrEquipTool(minion, new ItemStack(Items.WOODEN_PICKAXE));
 			playCraftingFeedback(minion, world);
 		}
 	}
@@ -1431,7 +1599,7 @@ public final class MinionHarvestingHelper {
 		if (planks >= 3 && sticks >= 2) {
 			consumeItemFromInventory(inv, ItemTags.PLANKS, 3);
 			consumeItemFromInventory(inv, Items.STICK, 2);
-			minion.equipStack(EquipmentSlot.MAINHAND, new ItemStack(Items.WOODEN_AXE));
+			giveOrEquipTool(minion, new ItemStack(Items.WOODEN_AXE));
 			playCraftingFeedback(minion, world);
 		}
 	}
@@ -1621,7 +1789,9 @@ public final class MinionHarvestingHelper {
 		for (int i = 0; i < inv.size(); i++) {
 			ItemStack stack = inv.getStack(i);
 			if (!stack.isEmpty() && toolClass.isInstance(stack.getItem())) {
-				return i;
+				if (!stack.isDamageable() || stack.getDamage() < stack.getMaxDamage() - 1) {
+					return i;
+				}
 			}
 		}
 		return -1;
@@ -1726,7 +1896,22 @@ public final class MinionHarvestingHelper {
 			|| item == Items.CLAY
 			|| item == Items.CLAY_BALL
 			|| item == Items.NETHERRACK
-			|| item == Items.BASALT;
+			|| item == Items.BASALT
+			|| item == Items.SUGAR_CANE
+			|| item == Items.BAMBOO
+			|| item == Items.PUMPKIN
+			|| item == Items.MELON
+			|| item == Items.WHEAT_SEEDS
+			|| item == Items.CARROT
+			|| item == Items.POTATO
+			|| item == Items.BEETROOT_SEEDS
+			|| item == Items.SWEET_BERRIES
+			|| item == Items.GLOW_BERRIES
+			|| item == Items.COCOA_BEANS
+			|| item == Items.KELP
+			|| item == Items.SEAGRASS
+			|| item == Items.VINE
+			|| item == Items.HONEYCOMB;
 	}
 
 	public static boolean isHarvestable(Item item) {
@@ -1948,6 +2133,12 @@ public final class MinionHarvestingHelper {
 			|| isEndStoneResource(item)
 			|| isPurpurResource(item)
 			|| isPrismarineResource(item)
+			|| isScholasticResource(item)
+			|| isConcreteResource(item)
+			|| isMudResource(item)
+			|| isRedstoneComponent(item)
+			|| isCandleResource(item)
+			|| isDecorResource(item)
 			|| item == Items.FLINT
 			|| item == Items.CHARCOAL
 			|| item == Items.TORCH
@@ -2119,6 +2310,26 @@ public final class MinionHarvestingHelper {
 	) {
 		if (minion == null || world == null || targetItem == null) return false;
 		SimpleInventory inv = minion.getInventory();
+
+		// Check new craftable categories
+		if (isScholasticResource(targetItem)) {
+			if (tryCraftScholasticResource(minion, world, targetItem, session)) return true;
+		}
+		if (isConcreteResource(targetItem)) {
+			if (tryCraftConcreteResource(minion, world, targetItem, session)) return true;
+		}
+		if (isMudResource(targetItem)) {
+			if (tryCraftMudResource(minion, world, targetItem, session)) return true;
+		}
+		if (isRedstoneComponent(targetItem)) {
+			if (tryCraftRedstoneComponent(minion, world, targetItem, session)) return true;
+		}
+		if (isCandleResource(targetItem)) {
+			if (tryCraftCandleResource(minion, world, targetItem, session)) return true;
+		}
+		if (isDecorResource(targetItem)) {
+			if (tryCraftDecorResource(minion, world, targetItem, session)) return true;
+		}
 
 		// 1. Flint: 3 Gravel -> 1 Flint
 		if (targetItem == Items.FLINT) {
@@ -3520,6 +3731,11 @@ public final class MinionHarvestingHelper {
 			if (countItemInInventory(inv, targetItem) > 0) return true;
 		}
 
+		// 5. Mob material synthesis (wool from string, slime blocks, bones, leather)
+		if (synthesizeMaterial(inv, targetItem)) {
+			if (countItemInInventory(inv, targetItem) > 0) return true;
+		}
+
 		return countItemInInventory(inv, targetItem) > 0;
 	}
 
@@ -3665,6 +3881,66 @@ public final class MinionHarvestingHelper {
 			ingredients.add(Items.SPRUCE_PLANKS);
 			ingredients.add(Items.OAK_LOG);
 			ingredients.add(Items.COBBLESTONE);
+			return ingredients;
+		}
+
+		if (isScholasticResource(targetItem)) {
+			if (targetItem == Items.LECTERN) {
+				ingredients.add(Items.BOOKSHELF);
+				ingredients.add(Items.OAK_SLAB);
+			}
+			if (targetItem == Items.BOOKSHELF || targetItem == Items.LECTERN) {
+				ingredients.add(Items.BOOK);
+				ingredients.add(Items.OAK_PLANKS);
+			}
+			ingredients.add(Items.PAPER);
+			ingredients.add(Items.LEATHER);
+			ingredients.add(Items.SUGAR_CANE);
+			return ingredients;
+		}
+
+		if (isConcreteResource(targetItem)) {
+			ingredients.add(Items.SAND);
+			ingredients.add(Items.GRAVEL);
+			return ingredients;
+		}
+
+		if (isMudResource(targetItem)) {
+			ingredients.add(Items.PACKED_MUD);
+			ingredients.add(Items.MUD);
+			ingredients.add(Items.DIRT);
+			ingredients.add(Items.WHEAT);
+			return ingredients;
+		}
+
+		if (isRedstoneComponent(targetItem)) {
+			ingredients.add(Items.REDSTONE);
+			ingredients.add(Items.IRON_INGOT);
+			ingredients.add(Items.COBBLESTONE);
+			ingredients.add(Items.OAK_PLANKS);
+			if (targetItem == Items.STICKY_PISTON) {
+				ingredients.add(Items.SLIME_BALL);
+				ingredients.add(Items.PISTON);
+			}
+			if (targetItem == Items.OBSERVER || targetItem == Items.DAYLIGHT_DETECTOR || targetItem == Items.COMPARATOR) {
+				ingredients.add(Items.QUARTZ);
+			}
+			return ingredients;
+		}
+
+		if (isCandleResource(targetItem)) {
+			ingredients.add(Items.HONEYCOMB);
+			ingredients.add(Items.STRING);
+			return ingredients;
+		}
+
+		if (isDecorResource(targetItem)) {
+			ingredients.add(Items.STICK);
+			ingredients.add(Items.OAK_LOG);
+			ingredients.add(Items.COAL);
+			ingredients.add(Items.CHARCOAL);
+			ingredients.add(Items.LEATHER);
+			ingredients.add(Items.BRICK);
 			return ingredients;
 		}
 
@@ -4495,5 +4771,909 @@ public final class MinionHarvestingHelper {
 			}
 		}
 		inv.markDirty();
+	}
+
+	// =========================================================================
+	// Wild Flora & Agricultural Foraging
+	// =========================================================================
+
+	public static boolean isForageableWorldResource(Item item) {
+		if (item == null) return false;
+		return item == Items.SUGAR_CANE
+			|| item == Items.BAMBOO
+			|| item == Items.PUMPKIN
+			|| item == Items.MELON
+			|| item == Items.SWEET_BERRIES
+			|| item == Items.GLOW_BERRIES
+			|| item == Items.COCOA_BEANS
+			|| item == Items.KELP
+			|| item == Items.SEAGRASS
+			|| item == Items.WHEAT_SEEDS
+			|| item == Items.CARROT
+			|| item == Items.POTATO
+			|| item == Items.BEETROOT_SEEDS;
+	}
+
+	private static boolean matchesFloraTarget(BlockState state, Item requiredItem) {
+		if (state == null || requiredItem == null) return false;
+		if (requiredItem == Items.SUGAR_CANE) return state.isOf(Blocks.SUGAR_CANE);
+		if (requiredItem == Items.BAMBOO) return state.isOf(Blocks.BAMBOO);
+		if (requiredItem == Items.PUMPKIN) return state.isOf(Blocks.PUMPKIN);
+		if (requiredItem == Items.MELON) return state.isOf(Blocks.MELON);
+		if (requiredItem == Items.SWEET_BERRIES) return state.isOf(Blocks.SWEET_BERRY_BUSH);
+		if (requiredItem == Items.GLOW_BERRIES) return state.isOf(Blocks.CAVE_VINES) || state.isOf(Blocks.CAVE_VINES_PLANT);
+		if (requiredItem == Items.COCOA_BEANS) return state.isOf(Blocks.COCOA);
+		if (requiredItem == Items.KELP) return state.isOf(Blocks.KELP) || state.isOf(Blocks.KELP_PLANT);
+		if (requiredItem == Items.SEAGRASS) return state.isOf(Blocks.SEAGRASS);
+		if (requiredItem == Items.WHEAT_SEEDS) return state.isOf(Blocks.SHORT_GRASS) || state.isOf(Blocks.TALL_GRASS);
+		if (requiredItem == Items.CARROT) return state.isOf(Blocks.CARROTS);
+		if (requiredItem == Items.POTATO) return state.isOf(Blocks.POTATOES);
+		if (requiredItem == Items.BEETROOT_SEEDS) return state.isOf(Blocks.BEETROOTS);
+		return false;
+	}
+
+	public static boolean forageNaturalFlora(
+		MinionEntity minion,
+		ServerWorld world,
+		Item requiredItem,
+		int maxCount,
+		ConstructionSession session
+	) {
+		BlockPos minionPos = minion.getBlockPos();
+		int harvested = 0;
+
+		for (BlockPos pos : BlockPos.iterateOutwards(minionPos, HARVEST_SEARCH_RADIUS, 8, HARVEST_SEARCH_RADIUS)) {
+			BlockState state = world.getBlockState(pos);
+			if (matchesFloraTarget(state, requiredItem) && !isProtectedBlock(world, pos, session, minion.getOwnerUuid())) {
+				BlockEntity be = world.getBlockEntity(pos);
+				List<ItemStack> drops = Block.getDroppedStacks(state, world, pos, be, minion, minion.getMainHandStack());
+				world.breakBlock(pos, false, minion);
+
+				if (drops.isEmpty()) {
+					giveOrDropItem(minion, new ItemStack(requiredItem, 1));
+				} else {
+					for (ItemStack drop : drops) {
+						if (!drop.isEmpty()) {
+							giveOrDropItem(minion, drop);
+						}
+					}
+				}
+				harvested++;
+				if (harvested >= maxCount) {
+					return true;
+				}
+			}
+		}
+		return harvested > 0;
+	}
+
+	// =========================================================================
+	// Multi-Tier Crafting Categories (Scholastic, Concrete, Mud, Redstone, Candles, Decor)
+	// =========================================================================
+
+	public static boolean isScholasticResource(Item item) {
+		if (item == null) return false;
+		return item == Items.PAPER
+			|| item == Items.BOOK
+			|| item == Items.BOOKSHELF
+			|| item == Items.LECTERN
+			|| item == Items.CHISELED_BOOKSHELF;
+	}
+
+	public static boolean tryCraftScholasticResource(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		if (minion == null || targetItem == null) return false;
+		SimpleInventory inv = minion.getInventory();
+
+		// 1. Paper: 3 Sugar Cane -> 3 Paper
+		if (targetItem == Items.PAPER) {
+			if (countItemInInventory(inv, Items.SUGAR_CANE) < 3) {
+				tryAutonomousHarvest(minion, world, Items.SUGAR_CANE, session);
+			}
+			if (countItemInInventory(inv, Items.SUGAR_CANE) >= 3) {
+				consumeItemFromInventory(inv, Items.SUGAR_CANE, 3);
+				inv.addStack(new ItemStack(Items.PAPER, 3));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// 2. Book: 3 Paper + 1 Leather -> 1 Book
+		if (targetItem == Items.BOOK) {
+			if (countItemInInventory(inv, Items.PAPER) < 3) {
+				tryCraftScholasticResource(minion, world, Items.PAPER, session);
+			}
+			if (countItemInInventory(inv, Items.LEATHER) < 1) {
+				synthesizeMaterial(inv, Items.LEATHER);
+				if (countItemInInventory(inv, Items.LEATHER) < 1) {
+					MinionEntity warrior = findNearbyAvailableWarrior(minion, world, 64.0D);
+					LivingEntity mob = findCandidateMobForProcurement(minion, world, Items.LEATHER, 64.0D);
+					if (warrior != null && mob != null) {
+						commissionWarriorHunt(minion, warrior, mob, Items.LEATHER, world);
+					}
+				}
+			}
+			if (countItemInInventory(inv, Items.PAPER) >= 3 && countItemInInventory(inv, Items.LEATHER) >= 1) {
+				consumeItemFromInventory(inv, Items.PAPER, 3);
+				consumeItemFromInventory(inv, Items.LEATHER, 1);
+				inv.addStack(new ItemStack(Items.BOOK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// 3. Bookshelf: 6 Planks + 3 Books -> 1 Bookshelf
+		if (targetItem == Items.BOOKSHELF) {
+			ensurePlanks(minion, world, session, 6);
+			while (countItemInInventory(inv, Items.BOOK) < 3) {
+				if (!tryCraftScholasticResource(minion, world, Items.BOOK, session)) break;
+			}
+			if (countPlanksInInventory(inv) >= 6 && countItemInInventory(inv, Items.BOOK) >= 3) {
+				consumePlanks(inv, 6);
+				consumeItemFromInventory(inv, Items.BOOK, 3);
+				inv.addStack(new ItemStack(Items.BOOKSHELF, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// 4. Lectern: 1 Bookshelf + 4 Slabs (or 2 Planks) -> 1 Lectern
+		if (targetItem == Items.LECTERN) {
+			if (countItemInInventory(inv, Items.BOOKSHELF) < 1) {
+				tryCraftScholasticResource(minion, world, Items.BOOKSHELF, session);
+			}
+			ensurePlanks(minion, world, session, 4);
+			if (countItemInInventory(inv, Items.BOOKSHELF) >= 1 && countPlanksInInventory(inv) >= 2) {
+				consumeItemFromInventory(inv, Items.BOOKSHELF, 1);
+				consumePlanks(inv, 2);
+				inv.addStack(new ItemStack(Items.LECTERN, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// 5. Chiseled Bookshelf: 6 Planks + 3 Slabs -> 1 Chiseled Bookshelf
+		if (targetItem == Items.CHISELED_BOOKSHELF) {
+			ensurePlanks(minion, world, session, 8);
+			if (countPlanksInInventory(inv) >= 8) {
+				consumePlanks(inv, 8);
+				inv.addStack(new ItemStack(Items.CHISELED_BOOKSHELF, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		return false;
+	}
+
+	public static boolean isConcreteResource(Item item) {
+		if (item == null) return false;
+		Identifier id = Registries.ITEM.getId(item);
+		return id != null && (id.getPath().endsWith("_concrete") || id.getPath().endsWith("_concrete_powder"));
+	}
+
+	public static boolean tryCraftConcreteResource(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		if (minion == null || targetItem == null) return false;
+		SimpleInventory inv = minion.getInventory();
+		String path = Registries.ITEM.getId(targetItem).getPath();
+
+		// If solid concrete requested, check if we have powder to hydrate
+		if (path.endsWith("_concrete")) {
+			String powderPath = path + "_powder";
+			Item powderItem = Registries.ITEM.get(Identifier.of("minecraft", powderPath));
+			if (countItemInInventory(inv, powderItem) < 1) {
+				tryCraftConcreteResource(minion, world, powderItem, session);
+			}
+			if (countItemInInventory(inv, powderItem) >= 1) {
+				consumeItemFromInventory(inv, powderItem, 1);
+				inv.addStack(new ItemStack(targetItem, 1));
+				world.playSound(null, minion.getX(), minion.getY(), minion.getZ(), SoundEvents.ITEM_BUCKET_EMPTY, SoundCategory.BLOCKS, 0.8F, 1.0F);
+				return true;
+			}
+		}
+
+		// Concrete Powder: 4 Sand + 4 Gravel -> 8 Powder
+		if (path.endsWith("_concrete_powder")) {
+			if (countItemInInventory(inv, Items.SAND) < 4) {
+				quarryNaturalStone(minion, world, Items.SAND, 4, session);
+			}
+			if (countItemInInventory(inv, Items.GRAVEL) < 4) {
+				quarryNaturalStone(minion, world, Items.GRAVEL, 4, session);
+			}
+			if (countItemInInventory(inv, Items.SAND) >= 4 && countItemInInventory(inv, Items.GRAVEL) >= 4) {
+				consumeItemFromInventory(inv, Items.SAND, 4);
+				consumeItemFromInventory(inv, Items.GRAVEL, 4);
+				inv.addStack(new ItemStack(targetItem, 8));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static boolean isMudResource(Item item) {
+		if (item == null) return false;
+		return item == Items.MUD
+			|| item == Items.PACKED_MUD
+			|| item == Items.MUD_BRICKS
+			|| item == Items.MUD_BRICK_STAIRS
+			|| item == Items.MUD_BRICK_SLAB
+			|| item == Items.MUD_BRICK_WALL;
+	}
+
+	public static boolean tryCraftMudResource(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		if (minion == null || targetItem == null) return false;
+		SimpleInventory inv = minion.getInventory();
+
+		// Mud: 1 Dirt + 1 Water Bucket (or moisture) -> 1 Mud
+		if (targetItem == Items.MUD) {
+			if (countItemInInventory(inv, Items.DIRT) < 1) {
+				quarryNaturalStone(minion, world, Items.DIRT, 1, session);
+			}
+			if (countItemInInventory(inv, Items.DIRT) >= 1) {
+				consumeItemFromInventory(inv, Items.DIRT, 1);
+				inv.addStack(new ItemStack(Items.MUD, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Packed Mud: 1 Mud + 1 Wheat -> 1 Packed Mud
+		if (targetItem == Items.PACKED_MUD) {
+			if (countItemInInventory(inv, Items.MUD) < 1) {
+				tryCraftMudResource(minion, world, Items.MUD, session);
+			}
+			if (countItemInInventory(inv, Items.MUD) >= 1) {
+				consumeItemFromInventory(inv, Items.MUD, 1);
+				if (countItemInInventory(inv, Items.WHEAT) >= 1) {
+					consumeItemFromInventory(inv, Items.WHEAT, 1);
+				}
+				inv.addStack(new ItemStack(Items.PACKED_MUD, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Mud Bricks: 4 Packed Mud -> 4 Mud Bricks
+		if (targetItem == Items.MUD_BRICKS) {
+			while (countItemInInventory(inv, Items.PACKED_MUD) < 4) {
+				if (!tryCraftMudResource(minion, world, Items.PACKED_MUD, session)) break;
+			}
+			if (countItemInInventory(inv, Items.PACKED_MUD) >= 4) {
+				consumeItemFromInventory(inv, Items.PACKED_MUD, 4);
+				inv.addStack(new ItemStack(Items.MUD_BRICKS, 4));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Mud Brick Variants: Stairs, Slab, Wall
+		if (targetItem == Items.MUD_BRICK_STAIRS || targetItem == Items.MUD_BRICK_SLAB || targetItem == Items.MUD_BRICK_WALL) {
+			if (countItemInInventory(inv, Items.MUD_BRICKS) < 1) {
+				tryCraftMudResource(minion, world, Items.MUD_BRICKS, session);
+			}
+			if (countItemInInventory(inv, Items.MUD_BRICKS) >= 1) {
+				consumeItemFromInventory(inv, Items.MUD_BRICKS, 1);
+				int yield = targetItem == Items.MUD_BRICK_SLAB ? 2 : 1;
+				inv.addStack(new ItemStack(targetItem, yield));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static boolean isRedstoneComponent(Item item) {
+		if (item == null) return false;
+		return item == Items.HOPPER
+			|| item == Items.DROPPER
+			|| item == Items.DISPENSER
+			|| item == Items.PISTON
+			|| item == Items.STICKY_PISTON
+			|| item == Items.OBSERVER
+			|| item == Items.REDSTONE_LAMP
+			|| item == Items.TARGET
+			|| item == Items.DAYLIGHT_DETECTOR
+			|| item == Items.REPEATER
+			|| item == Items.COMPARATOR
+			|| item == Items.REDSTONE_TORCH
+			|| item == Items.REDSTONE_BLOCK
+			|| item == Items.TRIPWIRE_HOOK
+			|| item == Items.LEVER;
+	}
+
+	public static boolean tryCraftRedstoneComponent(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		if (minion == null || targetItem == null) return false;
+		SimpleInventory inv = minion.getInventory();
+
+		// Redstone Torch: 1 Redstone + 1 Stick -> 1 Redstone Torch
+		if (targetItem == Items.REDSTONE_TORCH) {
+			ensureSticksAndPlanks(minion);
+			if (countItemInInventory(inv, Items.REDSTONE) >= 1 && countItemInInventory(inv, Items.STICK) >= 1) {
+				consumeItemFromInventory(inv, Items.REDSTONE, 1);
+				consumeItemFromInventory(inv, Items.STICK, 1);
+				inv.addStack(new ItemStack(Items.REDSTONE_TORCH, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Redstone Block: 9 Redstone -> 1 Redstone Block
+		if (targetItem == Items.REDSTONE_BLOCK) {
+			if (countItemInInventory(inv, Items.REDSTONE) >= 9) {
+				consumeItemFromInventory(inv, Items.REDSTONE, 9);
+				inv.addStack(new ItemStack(Items.REDSTONE_BLOCK, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Lever: 1 Cobblestone + 1 Stick -> 1 Lever
+		if (targetItem == Items.LEVER) {
+			ensureSticksAndPlanks(minion);
+			if (countItemInInventory(inv, Items.COBBLESTONE) >= 1 && countItemInInventory(inv, Items.STICK) >= 1) {
+				consumeItemFromInventory(inv, Items.COBBLESTONE, 1);
+				consumeItemFromInventory(inv, Items.STICK, 1);
+				inv.addStack(new ItemStack(Items.LEVER, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Tripwire Hook: 1 Iron Ingot + 1 Stick + 1 Plank -> 2 Tripwire Hooks
+		if (targetItem == Items.TRIPWIRE_HOOK) {
+			ensureSticksAndPlanks(minion);
+			if (countItemInInventory(inv, Items.IRON_INGOT) >= 1 && countItemInInventory(inv, Items.STICK) >= 1 && countPlanksInInventory(inv) >= 1) {
+				consumeItemFromInventory(inv, Items.IRON_INGOT, 1);
+				consumeItemFromInventory(inv, Items.STICK, 1);
+				consumePlanks(inv, 1);
+				inv.addStack(new ItemStack(Items.TRIPWIRE_HOOK, 2));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Hopper: 5 Iron Ingots + 1 Chest -> 1 Hopper
+		if (targetItem == Items.HOPPER) {
+			if (countItemInInventory(inv, Items.CHEST) < 1) {
+				synthesizeWorkstation(minion, world, Items.CHEST, session);
+			}
+			if (countItemInInventory(inv, Items.IRON_INGOT) >= 5 && countItemInInventory(inv, Items.CHEST) >= 1) {
+				consumeItemFromInventory(inv, Items.IRON_INGOT, 5);
+				consumeItemFromInventory(inv, Items.CHEST, 1);
+				inv.addStack(new ItemStack(Items.HOPPER, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Dropper: 7 Cobblestone + 1 Redstone -> 1 Dropper
+		if (targetItem == Items.DROPPER) {
+			if (countItemInInventory(inv, Items.COBBLESTONE) < 7) {
+				quarryNaturalStone(minion, world, Items.COBBLESTONE, 7, session);
+			}
+			if (countItemInInventory(inv, Items.COBBLESTONE) >= 7 && countItemInInventory(inv, Items.REDSTONE) >= 1) {
+				consumeItemFromInventory(inv, Items.COBBLESTONE, 7);
+				consumeItemFromInventory(inv, Items.REDSTONE, 1);
+				inv.addStack(new ItemStack(Items.DROPPER, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Dispenser: 1 Dropper + 1 Bow (or 7 Cobble + 1 Bow + 1 Redstone) -> 1 Dispenser
+		if (targetItem == Items.DISPENSER) {
+			if (countItemInInventory(inv, Items.DROPPER) < 1) {
+				tryCraftRedstoneComponent(minion, world, Items.DROPPER, session);
+			}
+			if (countItemInInventory(inv, Items.DROPPER) >= 1) {
+				consumeItemFromInventory(inv, Items.DROPPER, 1);
+				if (countItemInInventory(inv, Items.BOW) >= 1) {
+					consumeItemFromInventory(inv, Items.BOW, 1);
+				}
+				inv.addStack(new ItemStack(Items.DISPENSER, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Piston: 3 Planks + 4 Cobblestone + 1 Iron Ingot + 1 Redstone -> 1 Piston
+		if (targetItem == Items.PISTON) {
+			ensurePlanks(minion, world, session, 3);
+			if (countItemInInventory(inv, Items.COBBLESTONE) < 4) {
+				quarryNaturalStone(minion, world, Items.COBBLESTONE, 4, session);
+			}
+			if (countPlanksInInventory(inv) >= 3 && countItemInInventory(inv, Items.COBBLESTONE) >= 4
+					&& countItemInInventory(inv, Items.IRON_INGOT) >= 1 && countItemInInventory(inv, Items.REDSTONE) >= 1) {
+				consumePlanks(inv, 3);
+				consumeItemFromInventory(inv, Items.COBBLESTONE, 4);
+				consumeItemFromInventory(inv, Items.IRON_INGOT, 1);
+				consumeItemFromInventory(inv, Items.REDSTONE, 1);
+				inv.addStack(new ItemStack(Items.PISTON, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Sticky Piston: 1 Piston + 1 Slime Ball -> 1 Sticky Piston
+		if (targetItem == Items.STICKY_PISTON) {
+			if (countItemInInventory(inv, Items.PISTON) < 1) {
+				tryCraftRedstoneComponent(minion, world, Items.PISTON, session);
+			}
+			if (countItemInInventory(inv, Items.SLIME_BALL) < 1) {
+				synthesizeMaterial(inv, Items.SLIME_BALL);
+			}
+			if (countItemInInventory(inv, Items.PISTON) >= 1 && countItemInInventory(inv, Items.SLIME_BALL) >= 1) {
+				consumeItemFromInventory(inv, Items.PISTON, 1);
+				consumeItemFromInventory(inv, Items.SLIME_BALL, 1);
+				inv.addStack(new ItemStack(Items.STICKY_PISTON, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Observer: 6 Cobblestone + 2 Redstone + 1 Quartz -> 1 Observer
+		if (targetItem == Items.OBSERVER) {
+			if (countItemInInventory(inv, Items.COBBLESTONE) < 6) {
+				quarryNaturalStone(minion, world, Items.COBBLESTONE, 6, session);
+			}
+			if (countItemInInventory(inv, Items.COBBLESTONE) >= 6 && countItemInInventory(inv, Items.REDSTONE) >= 2) {
+				consumeItemFromInventory(inv, Items.COBBLESTONE, 6);
+				consumeItemFromInventory(inv, Items.REDSTONE, 2);
+				if (countItemInInventory(inv, Items.QUARTZ) >= 1) {
+					consumeItemFromInventory(inv, Items.QUARTZ, 1);
+				}
+				inv.addStack(new ItemStack(Items.OBSERVER, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Redstone Lamp: 1 Glowstone + 4 Redstone -> 1 Redstone Lamp
+		if (targetItem == Items.REDSTONE_LAMP) {
+			if (countItemInInventory(inv, Items.GLOWSTONE) >= 1 && countItemInInventory(inv, Items.REDSTONE) >= 4) {
+				consumeItemFromInventory(inv, Items.GLOWSTONE, 1);
+				consumeItemFromInventory(inv, Items.REDSTONE, 4);
+				inv.addStack(new ItemStack(Items.REDSTONE_LAMP, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Target: 1 Hay Block + 4 Redstone -> 1 Target Block
+		if (targetItem == Items.TARGET) {
+			if (countItemInInventory(inv, Items.HAY_BLOCK) >= 1 && countItemInInventory(inv, Items.REDSTONE) >= 4) {
+				consumeItemFromInventory(inv, Items.HAY_BLOCK, 1);
+				consumeItemFromInventory(inv, Items.REDSTONE, 4);
+				inv.addStack(new ItemStack(Items.TARGET, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Daylight Detector: 3 Planks + 3 Quartz + 3 Glass -> 1 Daylight Detector
+		if (targetItem == Items.DAYLIGHT_DETECTOR) {
+			ensurePlanks(minion, world, session, 3);
+			if (countPlanksInInventory(inv) >= 3 && countItemInInventory(inv, Items.QUARTZ) >= 3 && countItemInInventory(inv, Items.GLASS) >= 3) {
+				consumePlanks(inv, 3);
+				consumeItemFromInventory(inv, Items.QUARTZ, 3);
+				consumeItemFromInventory(inv, Items.GLASS, 3);
+				inv.addStack(new ItemStack(Items.DAYLIGHT_DETECTOR, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Repeater: 3 Stone + 2 Redstone Torches + 1 Redstone -> 1 Repeater
+		if (targetItem == Items.REPEATER) {
+			if (countItemInInventory(inv, Items.STONE) >= 3 && countItemInInventory(inv, Items.REDSTONE) >= 1) {
+				consumeItemFromInventory(inv, Items.STONE, 3);
+				consumeItemFromInventory(inv, Items.REDSTONE, 1);
+				if (countItemInInventory(inv, Items.REDSTONE_TORCH) >= 2) {
+					consumeItemFromInventory(inv, Items.REDSTONE_TORCH, 2);
+				}
+				inv.addStack(new ItemStack(Items.REPEATER, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Comparator: 3 Stone + 3 Redstone Torches + 1 Quartz -> 1 Comparator
+		if (targetItem == Items.COMPARATOR) {
+			if (countItemInInventory(inv, Items.STONE) >= 3 && countItemInInventory(inv, Items.QUARTZ) >= 1) {
+				consumeItemFromInventory(inv, Items.STONE, 3);
+				consumeItemFromInventory(inv, Items.QUARTZ, 1);
+				if (countItemInInventory(inv, Items.REDSTONE_TORCH) >= 3) {
+					consumeItemFromInventory(inv, Items.REDSTONE_TORCH, 3);
+				}
+				inv.addStack(new ItemStack(Items.COMPARATOR, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		return false;
+	}
+
+	public static boolean isCandleResource(Item item) {
+		if (item == null) return false;
+		Identifier id = Registries.ITEM.getId(item);
+		return id != null && (id.getPath().endsWith("_candle") || id.getPath().equals("candle") || id.getPath().startsWith("waxed_"));
+	}
+
+	public static boolean tryCraftCandleResource(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		if (minion == null || targetItem == null) return false;
+		SimpleInventory inv = minion.getInventory();
+		String path = Registries.ITEM.getId(targetItem).getPath();
+
+		// Candles: 1 Honeycomb + 1 String -> 1 Candle
+		if (path.endsWith("candle")) {
+			if (countItemInInventory(inv, Items.HONEYCOMB) >= 1 && countItemInInventory(inv, Items.STRING) >= 1) {
+				consumeItemFromInventory(inv, Items.HONEYCOMB, 1);
+				consumeItemFromInventory(inv, Items.STRING, 1);
+				inv.addStack(new ItemStack(targetItem, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Waxed Copper: 1 Copper Block + 1 Honeycomb -> 1 Waxed Copper Block
+		if (path.startsWith("waxed_")) {
+			String unwaxedPath = path.substring("waxed_".length());
+			Item unwaxedItem = Registries.ITEM.get(Identifier.of("minecraft", unwaxedPath));
+			if (countItemInInventory(inv, unwaxedItem) >= 1 && countItemInInventory(inv, Items.HONEYCOMB) >= 1) {
+				consumeItemFromInventory(inv, unwaxedItem, 1);
+				consumeItemFromInventory(inv, Items.HONEYCOMB, 1);
+				inv.addStack(new ItemStack(targetItem, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static boolean isDecorResource(Item item) {
+		if (item == null) return false;
+		return item == Items.CAMPFIRE
+			|| item == Items.SOUL_CAMPFIRE
+			|| item == Items.CHAIN
+			|| item == Items.FLOWER_POT
+			|| item == Items.ITEM_FRAME
+			|| item == Items.GLOW_ITEM_FRAME
+			|| item == Items.ARMOR_STAND;
+	}
+
+	public static boolean tryCraftDecorResource(
+		MinionEntity minion,
+		ServerWorld world,
+		Item targetItem,
+		ConstructionSession session
+	) {
+		if (minion == null || targetItem == null) return false;
+		SimpleInventory inv = minion.getInventory();
+
+		// Campfire: 3 Logs + 3 Sticks + 1 Coal/Charcoal -> 1 Campfire
+		if (targetItem == Items.CAMPFIRE) {
+			ensureSticksAndPlanks(minion);
+			Item fuel = countItemInInventory(inv, Items.COAL) >= 1 ? Items.COAL : (countItemInInventory(inv, Items.CHARCOAL) >= 1 ? Items.CHARCOAL : null);
+			if (countItemInInventory(inv, ItemTags.LOGS) >= 3 && countItemInInventory(inv, Items.STICK) >= 3 && fuel != null) {
+				consumeItemFromInventory(inv, ItemTags.LOGS, 3);
+				consumeItemFromInventory(inv, Items.STICK, 3);
+				consumeItemFromInventory(inv, fuel, 1);
+				inv.addStack(new ItemStack(Items.CAMPFIRE, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Soul Campfire: 3 Logs + 3 Sticks + 1 Soul Sand/Soil -> 1 Soul Campfire
+		if (targetItem == Items.SOUL_CAMPFIRE) {
+			ensureSticksAndPlanks(minion);
+			Item soul = countItemInInventory(inv, Items.SOUL_SAND) >= 1 ? Items.SOUL_SAND : (countItemInInventory(inv, Items.SOUL_SOIL) >= 1 ? Items.SOUL_SOIL : null);
+			if (countItemInInventory(inv, ItemTags.LOGS) >= 3 && countItemInInventory(inv, Items.STICK) >= 3 && soul != null) {
+				consumeItemFromInventory(inv, ItemTags.LOGS, 3);
+				consumeItemFromInventory(inv, Items.STICK, 3);
+				consumeItemFromInventory(inv, soul, 1);
+				inv.addStack(new ItemStack(Items.SOUL_CAMPFIRE, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Chain: 1 Iron Ingot + 2 Iron Nuggets -> 1 Chain
+		if (targetItem == Items.CHAIN) {
+			if (countItemInInventory(inv, Items.IRON_INGOT) >= 1) {
+				consumeItemFromInventory(inv, Items.IRON_INGOT, 1);
+				inv.addStack(new ItemStack(Items.CHAIN, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Flower Pot: 3 Bricks -> 1 Flower Pot
+		if (targetItem == Items.FLOWER_POT) {
+			if (countItemInInventory(inv, Items.BRICK) >= 3) {
+				consumeItemFromInventory(inv, Items.BRICK, 3);
+				inv.addStack(new ItemStack(Items.FLOWER_POT, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Item Frame: 8 Sticks + 1 Leather -> 1 Item Frame
+		if (targetItem == Items.ITEM_FRAME) {
+			ensureSticksAndPlanks(minion);
+			if (countItemInInventory(inv, Items.LEATHER) < 1) {
+				synthesizeMaterial(inv, Items.LEATHER);
+			}
+			if (countItemInInventory(inv, Items.STICK) >= 8 && countItemInInventory(inv, Items.LEATHER) >= 1) {
+				consumeItemFromInventory(inv, Items.STICK, 8);
+				consumeItemFromInventory(inv, Items.LEATHER, 1);
+				inv.addStack(new ItemStack(Items.ITEM_FRAME, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Glow Item Frame: 1 Item Frame + 1 Glow Ink Sac -> 1 Glow Item Frame
+		if (targetItem == Items.GLOW_ITEM_FRAME) {
+			if (countItemInInventory(inv, Items.ITEM_FRAME) < 1) {
+				tryCraftDecorResource(minion, world, Items.ITEM_FRAME, session);
+			}
+			if (countItemInInventory(inv, Items.ITEM_FRAME) >= 1 && countItemInInventory(inv, Items.GLOW_INK_SAC) >= 1) {
+				consumeItemFromInventory(inv, Items.ITEM_FRAME, 1);
+				consumeItemFromInventory(inv, Items.GLOW_INK_SAC, 1);
+				inv.addStack(new ItemStack(Items.GLOW_ITEM_FRAME, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		// Armor Stand: 6 Sticks + 1 Smooth Stone Slab -> 1 Armor Stand
+		if (targetItem == Items.ARMOR_STAND) {
+			ensureSticksAndPlanks(minion);
+			if (countItemInInventory(inv, Items.SMOOTH_STONE_SLAB) < 1) {
+				trySmartTransformation(minion, world, Items.SMOOTH_STONE_SLAB, session);
+			}
+			if (countItemInInventory(inv, Items.STICK) >= 6 && countItemInInventory(inv, Items.SMOOTH_STONE_SLAB) >= 1) {
+				consumeItemFromInventory(inv, Items.STICK, 6);
+				consumeItemFromInventory(inv, Items.SMOOTH_STONE_SLAB, 1);
+				inv.addStack(new ItemStack(Items.ARMOR_STAND, 1));
+				playCraftingFeedback(minion, world, null);
+				return true;
+			}
+			return false;
+		}
+
+		return false;
+	}
+
+	// =========================================================================
+	// Inventory Hygiene Auto-Offload & Substitute With Palette Fallback
+	// =========================================================================
+
+	public static void maintainInventoryHygiene(MinionEntity minion, ServerWorld world, ConstructionSession session) {
+		if (minion == null || world == null) return;
+		SimpleInventory inv = minion.getInventory();
+
+		int emptySlots = 0;
+		for (int i = 0; i < inv.size(); i++) {
+			if (inv.getStack(i).isEmpty()) {
+				emptySlots++;
+			}
+		}
+
+		// If minion has plenty of space (3 or more empty slots), hygiene check passes
+		if (emptySlots >= 3) {
+			return;
+		}
+
+		// Find nearby storage container (chest or barrel)
+		BlockPos containerPos = findNearbyToolBlock(world, minion.getBlockPos(), 32, Blocks.CHEST);
+		if (containerPos == null) {
+			containerPos = findNearbyToolBlock(world, minion.getBlockPos(), 32, Blocks.BARREL);
+		}
+		if (containerPos == null) {
+			return;
+		}
+
+		net.minecraft.block.entity.BlockEntity be = world.getBlockEntity(containerPos);
+		if (be instanceof net.minecraft.inventory.Inventory targetInv) {
+			for (int i = 0; i < inv.size(); i++) {
+				ItemStack stack = inv.getStack(i);
+				if (stack.isEmpty()) continue;
+				Item item = stack.getItem();
+
+				// Never deposit equipped tools, weapons, or armor
+				if (item instanceof ToolItem || item instanceof ArmorItem) {
+					continue;
+				}
+
+				// Check if item is non-essential byproduct (excess seeds, saplings, cobblestone, dirt, rotten flesh)
+				boolean isByproduct = item == Items.WHEAT_SEEDS || item == Items.BEETROOT_SEEDS
+					|| item == Items.PUMPKIN_SEEDS || item == Items.MELON_SEEDS
+					|| item == Items.ROTTEN_FLESH || item == Items.STRING
+					|| item.getDefaultStack().isIn(ItemTags.SAPLINGS);
+
+				// Excess building materials beyond 64
+				if (isByproduct || countItemInInventory(inv, item) > 64) {
+					ItemStack toTransfer = stack.copy();
+					for (int t = 0; t < targetInv.size() && !toTransfer.isEmpty(); t++) {
+						ItemStack targetStack = targetInv.getStack(t);
+						if (targetStack.isEmpty()) {
+							targetInv.setStack(t, toTransfer);
+							toTransfer = ItemStack.EMPTY;
+						} else if (ItemStack.areItemsAndComponentsEqual(targetStack, toTransfer)) {
+							int space = targetStack.getMaxCount() - targetStack.getCount();
+							int transferAmt = Math.min(space, toTransfer.getCount());
+							if (transferAmt > 0) {
+								targetStack.increment(transferAmt);
+								toTransfer.decrement(transferAmt);
+							}
+						}
+					}
+					inv.setStack(i, toTransfer);
+				}
+			}
+			targetInv.markDirty();
+			world.playSound(null, containerPos, SoundEvents.BLOCK_CHEST_CLOSE, SoundCategory.BLOCKS, 0.5F, 1.0F);
+		}
+	}
+
+	public static Item resolvePaletteFallback(Item missingItem) {
+		if (missingItem == null) return Items.STONE_BRICKS;
+
+		// 1. Exotic end/nether stones
+		if (missingItem == Items.CRYING_OBSIDIAN || missingItem == Items.RESPAWN_ANCHOR) {
+			return Items.OBSIDIAN;
+		}
+		if (missingItem == Items.NETHERITE_BLOCK) {
+			return Items.IRON_BLOCK;
+		}
+		if (missingItem == Items.ANCIENT_DEBRIS) {
+			return Items.NETHERRACK;
+		}
+		if (missingItem == Items.END_ROD) {
+			return Items.LANTERN;
+		}
+		if (missingItem == Items.SEA_LANTERN || missingItem == Items.GLOWSTONE
+				|| missingItem == Items.OCHRE_FROGLIGHT || missingItem == Items.VERDANT_FROGLIGHT || missingItem == Items.PEARLESCENT_FROGLIGHT) {
+			return Items.TORCH;
+		}
+		if (missingItem == Items.SHULKER_BOX) {
+			return Items.CHEST;
+		}
+		if (missingItem == Items.SPONGE || missingItem == Items.WET_SPONGE) {
+			return Items.YELLOW_WOOL;
+		}
+		if (missingItem == Items.AMETHYST_BLOCK || missingItem == Items.BUDDING_AMETHYST) {
+			return Items.PURPLE_CONCRETE;
+		}
+		if (missingItem == Items.TINTED_GLASS) {
+			return Items.GLASS;
+		}
+		if (missingItem == Items.SPORE_BLOSSOM) {
+			return Items.AZALEA;
+		}
+		if (missingItem == Items.SCULK || missingItem == Items.SCULK_CATALYST || missingItem == Items.SCULK_SHRIEKER || missingItem == Items.SCULK_VEIN) {
+			return Items.BLACK_CONCRETE;
+		}
+		if (missingItem == Items.BEACON) {
+			return Items.DIAMOND_BLOCK;
+		}
+		if (missingItem == Items.CONDUIT) {
+			return Items.PRISMARINE_BRICKS;
+		}
+		if (missingItem == Items.GILDED_BLACKSTONE) {
+			return Items.POLISHED_BLACKSTONE;
+		}
+
+		// 2. Concrete colors fallback to wool or terracotta of same color or white concrete/wool
+		String path = Registries.ITEM.getId(missingItem).getPath();
+		if (path.contains("concrete")) {
+			return Items.WHITE_CONCRETE;
+		}
+		if (path.contains("wool")) {
+			return Items.WHITE_WOOL;
+		}
+		if (path.contains("terracotta")) {
+			return Items.TERRACOTTA;
+		}
+		if (path.contains("stained_glass")) {
+			return Items.GLASS;
+		}
+
+		// 3. Wood derivatives fallback to Oak equivalent
+		if (path.endsWith("_planks")) {
+			return Items.OAK_PLANKS;
+		}
+		if (path.endsWith("_log") || path.endsWith("_wood") || path.endsWith("_stem") || path.endsWith("_hyphae")) {
+			return Items.OAK_LOG;
+		}
+		if (path.endsWith("_stairs")) {
+			return Items.OAK_STAIRS;
+		}
+		if (path.endsWith("_slab")) {
+			return Items.OAK_SLAB;
+		}
+		if (path.endsWith("_door")) {
+			return Items.OAK_DOOR;
+		}
+		if (path.endsWith("_trapdoor")) {
+			return Items.OAK_TRAPDOOR;
+		}
+		if (path.endsWith("_fence")) {
+			return Items.OAK_FENCE;
+		}
+		if (path.endsWith("_fence_gate")) {
+			return Items.OAK_FENCE_GATE;
+		}
+
+		// 4. Stone derivatives fallback to Cobblestone or Stone Bricks
+		if (path.contains("deepslate") || path.contains("blackstone") || path.contains("tuff") || path.contains("basalt")) {
+			return Items.COBBLESTONE;
+		}
+		if (path.contains("brick")) {
+			return Items.STONE_BRICKS;
+		}
+
+		return Items.COBBLESTONE;
 	}
 }

@@ -4,7 +4,7 @@
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-775%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-793%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -80,9 +80,10 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 3. **🔨 Builder (`MinionRole.BUILDER`)**:
    - **Master Architect & Demolition Specialist**: Autonomously constructs captured blueprints, deconstructs designated volumes, and quarries stone top-to-bottom.
+   - **Never-Stall Survival Autonomy Engine**: Multi-tier non-block to block crafting pipelines (Sugar Cane $\to$ Paper $\to$ Books $\to$ Bookshelves $\to$ Lecterns; Sand/Gravel/Dye $\to$ Concrete; Mud $\to$ Mud Bricks; Redstone mechanisms; Waxing & Candles), autonomous tool crafting & in-world transformations (Hoe tilling, Shovel flattening, Axe stripping, Shear carving), virtual non-item mapping without `Items.AIR` deadlocks, deficiency queue cooldowns, automatic backpack hygiene, and harmonious palette fallbacks.
    - **Absolute Non-Combatant & Combat Immunity**: Builders strictly never engage in combat, acquire targets, or retaliate when struck. They are immune to assault commands, Sentinel echolocation alarms, and patrol breach alerts, and actively building minions never drop tools to fight.
    - **Builder Block Phasing & Anti-Entombment**: Seamlessly passes through blocks (`noClip = true`) while actively building or evacuating completed structures. Continuous server-side anti-suffocation safeguards guarantee minions are never trapped inside solid blocks or stranded underground.
-   - **Logistics Autonomy**: Agro-forestry timber harvesting (using bone meal for instant sapling maturation), tool self-crafting, supply depot chest drops, peer-to-peer wireless block transfers, and expanded 32-block container search radius (16 vertical) with chunk-level indexing to pull materials or store excess.
+   - **Logistics Autonomy**: Agro-forestry timber harvesting (using bone meal for instant sapling maturation), tool self-crafting, supply depot chest drops, peer-to-peer wireless block transfers, and expanded 128-block container search radius (64 vertical) with chunk-level indexing to pull materials or store excess.
    - **Intelligent Post-Work Evacuation & Free Roaming Relocation**: Automatically evacuates to the surface rim on surface quarries, cleared interior room floors on underground mines, and exterior safe ground around buildings with beacon beams and fanfare chimes, releasing minions to roam freely on foot until the next blueprint is placed.
 
 4. **⚙ Auto (`MinionRole.AUTO`)**:
@@ -96,10 +97,12 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 ### Core Strategic Systems
 
-- **Free Survival Arcane Build Flight & Aquatic Construction**:
-  - Enjoy unconstrained 3D creative-style flight in Survival mode while holding the Scepter in **`BUILD`** mode (Space to ascend, Shift to descend, full WASD navigation).
+- **Free Survival Arcane Build & Mining Flight & Aquatic Construction**:
+  - Enjoy unconstrained 3D creative-style flight in Survival mode while holding the Scepter in **`BUILD`** or **`MINE`** mode (Space to ascend, Shift to descend, full WASD navigation). In `MINE` mode, the action bar displays `§6✦ Quarry Aerial Surveyor` for seamless pit inspection.
   - Unrestricted flight over water bodies of any depth (oceans, deep lakes, rivers) and underwater, enabling seamless construction of bridges, docks, and submerged ocean bases.
   - Minions possess underwater breathing protection (`setAir(getMaxAir())`) and swimming suppression while building, preventing drowning or surface bouncing.
+- **Neutral Standby Mode (`DEFAULT`)**:
+  - Keep the Command Scepter held in your main hand or off-hand 24/7 without hindering standard Minecraft gameplay. In `DEFAULT` mode, the scepter passes all interactions through to vanilla systems (chests, crafting tables, doors, trading, breeding, eating). Sneak + Right-Click in air or press `V` to switch modes.
 - **Anti-Suffocation, Anti-Entombment & Safe Evacuation**:
   - Minions safely phase through blocks while building (`noClip = true`), with automatic server-side anti-suffocation safeguards (`unstuckIfInSolidWall`) ensuring units are never stuck in walls or underground rock.
   - Mining sessions evacuate minions intelligently: surface quarries evacuate workers to the open-sky rim overlooking the pit, while underground room excavations station workers onto the cleared interior floor (`box.getMinY()`), never clipping into solid perimeter rock.
@@ -161,6 +164,12 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - **Unified Controls**: Left-click places consecutive waypoints, extends existing barriers, or snaps the circuit closed on Point 1 to seal. Right-click targets and removes individual waypoints, or opens the Confirm Seal modal when clicking non-waypoints/air (only once $\ge 2$ waypoints exist).
   - **Uncluttered Clean Interior**: Village interiors and courtyards remain 100% open and unobstructed with zero central pillars, boxes, or middle text.
   - **Command Hub Dashboard**: Manage, rename (`[ ✎ ]`), or one-click delete (`[ ✕ ]`) sealed barriers with persistent world storage (`data/sovereign_barrier_zones.dat`).
+- **Never-Stall Builder Survival Autonomy & Tool Transformations**:
+  - Eliminates impossible `Items.AIR` material requirements by mapping virtual non-item blocks (Farmland, Dirt Paths, crops, redstone wire, tripwire) to obtainable survival items.
+  - Builders autonomously craft and wield Hoes to till Farmland, Shovels to flatten Paths, Axes to strip logs, and Shears to carve pumpkins with authentic tool wear and audio.
+  - Resolves multi-tier non-block to block crafting pipelines (Sugar Cane $\to$ Paper $\to$ Books $\to$ Bookshelves $\to$ Lecterns; Sand/Gravel $\to$ Concrete; Mud $\to$ Mud Bricks; Redstone mechanisms; Waxing & Candles) and autonomous wild flora foraging.
+  - Non-blocking task queueing with deficiency cooldowns ensures builders continue working on available blocks when materials are missing, while proactive backpack hygiene prevents inventory clogging.
+  - Automatic creative-only block purges and harmonious palette substitutions keep construction moving forward in any survival biome.
 
 ---
 
@@ -182,7 +191,7 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 | :--------------------- | :----------------- | :-------------------------------------------------------------------------------------------------- |
 | **`V` Key**            | Scepter in Hand    | Opens the **Command Hub GUI** (squad channels, modes, patrol dashboard, blueprints, target filter). |
 | **`H` Key**            | Scepter in `BUILD` | Toggles the elevated **Tactical RTS Build Camera**.                                                 |
-| **Arcane Flight**      | Scepter in `BUILD` | **Survival 3D Flight**: Space/Shift/WASD flight; shallow water $\le 5$ blocks high permitted.       |
+| **Arcane Flight**      | Scepter in `BUILD` or `MINE` | **Survival 3D Flight**: Space/Shift/WASD flight; aerial surveying and quarry inspection. |
 | **Sneak (Hold Shift)** | Leading Minions    | **Tactical Squad Sneak**: Minions crouch in sync; hides nametags and all overhead HUD badges.       |
 
 #### ⚔️ Squad & Tactical Combat Directives

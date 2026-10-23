@@ -69,7 +69,7 @@ public class BuildFlightManager {
 			heldStack = player.getOffHandStack();
 		}
 
-		boolean shouldFly = !heldStack.isEmpty() && CommandScepterItem.getMode(heldStack) == CommandMode.BUILD;
+		boolean shouldFly = !heldStack.isEmpty() && (CommandScepterItem.getMode(heldStack) == CommandMode.BUILD || CommandScepterItem.getMode(heldStack) == CommandMode.MINE);
 
 		boolean overWater = CommandScepterItem.isPlayerOverWater(world, player);
 		if (overWater && shouldFly) {
@@ -80,17 +80,23 @@ public class BuildFlightManager {
 				player.getAbilities().allowFlying = false;
 			}
 			CommandScepterItem.setMode(heldStack, CommandMode.FOLLOW);
-			player.sendMessage(Text.literal("§c⚠ Build mode cancelled: Flying over deep water is prohibited! (Minions will continue building)§r"), true);
+			player.sendMessage(Text.literal("§c⚠ Flight cancelled: Flying over deep water is prohibited!§r"), true);
 			return;
 		}
 
 		if (shouldFly) {
-			String bpId = CommandScepterItem.getBlueprintId(heldStack);
+			boolean isMineMode = CommandScepterItem.getMode(heldStack) == CommandMode.MINE;
+			String bpId = isMineMode ? "" : CommandScepterItem.getBlueprintId(heldStack);
 
 			if (!flightActive) {
 				initialGroundY = findGroundBelow(world, player.getBlockPos());
-				int bpHeight = resolveBlueprintHeight(bpId);
-				double targetY = initialGroundY + Math.max(6.0D, bpHeight + 3.0D);
+				double targetY;
+				if (isMineMode) {
+					targetY = initialGroundY + 12.0D;
+				} else {
+					int bpHeight = resolveBlueprintHeight(bpId);
+					targetY = initialGroundY + Math.max(6.0D, bpHeight + 3.0D);
+				}
 				double ceilingClamp = checkCeilingClearance(world, player, player.getEyePos(), targetY);
 				lockedHoverY = Math.min(targetY, ceilingClamp);
 
@@ -101,10 +107,10 @@ public class BuildFlightManager {
 				player.getAbilities().allowFlying = true;
 				player.getAbilities().flying = true;
 
-				player.sendMessage(
-					Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R/L-Click] Rotate"),
-					true
-				);
+				Text welcomeMsg = isMineMode
+					? Text.literal("§6✦ Quarry Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt")
+					: Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R/L-Click] Rotate");
+				player.sendMessage(welcomeMsg, true);
 				statusMessageCooldown = 40;
 			} else {
 				if (!bpId.equalsIgnoreCase(lastBlueprintId)) {
@@ -128,10 +134,10 @@ public class BuildFlightManager {
 				statusMessageCooldown--;
 				if (statusMessageCooldown <= 0) {
 					statusMessageCooldown = 50;
-					player.sendMessage(
-						Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R] Rotate"),
-						true
-					);
+					Text statusMsg = isMineMode
+						? Text.literal("§6✦ Quarry Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt")
+						: Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R] Rotate");
+					player.sendMessage(statusMsg, true);
 				}
 			}
 		} else {

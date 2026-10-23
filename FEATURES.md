@@ -39,7 +39,7 @@ This document provides a comprehensive technical breakdown of all gameplay featu
 13. [Builder Minion Stability, Anti-Oscillation & Placement Idempotency](#13-builder-minion-stability-anti-oscillation--placement-idempotency)
 14. [Multi-Modal Blueprint Rotation & Arcane Build Flight Altitude Controls](#14-multi-modal-blueprint-rotation--arcane-build-flight-altitude-controls)
 15. [Builder Block Phasing, Post-Construction Structure Egress & Guaranteed Perimeter Flank Spread](#15-builder-block-phasing-post-construction-structure-egress--guaranteed-perimeter-flank-spread)
-16. [Free Survival Build Flight & Water Flight Cancellation Safeguard](#16-free-survival-build-flight--water-flight-cancellation-safeguard)
+16. [Free Survival Build & Mining Flight & Aquatic Safeguards](#16-free-survival-build--mining-flight--aquatic-safeguards)
 17. [Visual Pathway Patrol System & Minion Escort Hierarchy](#17-visual-pathway-patrol-system--minion-escort-hierarchy)
     - [Autonomous Waypoint Patrol Engine](#autonomous-waypoint-patrol-engine-minionpatrolgoal-patrolroutemanager-patrolroute)
     - [Minion Escort Hierarchy & Squad Leaders](#minion-escort-hierarchy--squad-leaders-minionfollowleadergoal)
@@ -87,6 +87,24 @@ This document provides a comprehensive technical breakdown of all gameplay featu
     - [30.2 Overlapping Job Gating & Whole-Job Completion Guarantees](#302-overlapping-job-gating--whole-job-completion-guarantees)
     - [30.3 Zero-Hitch Mid-Air Transition Between Blueprint & Mining](#303-zero-hitch-mid-air-transition-between-blueprint--mining)
     - [30.4 Multiblock Bed Sanitation & Paired Completion](#304-multiblock-bed-sanitation--paired-completion)
+31. [Advanced Combat Queuing, Survival Logistics, Escort Continuity & Aquatic Engineering](#31-advanced-combat-queuing-survival-logistics-escort-continuity--aquatic-engineering)
+    - [31.1 Clustered Multi-Target Attack System & Non-Interrupting Target Chaining](#311-clustered-multi-target-attack-system--non-interrupting-target-chaining-commandscepteritem-minionentity)
+    - [31.2 Auto Mode Survival Mining Inventory Retention & Unified Builder Logistics](#312-auto-mode-survival-mining-inventory-retention--unified-builder-logistics-minionharvestinghelper-minionbuildgoal-constructionmanager)
+    - [31.3 Post-Build & Post-Mine Follow State & Escort Preservation](#313-post-build--post-mine-follow-state--escort-preservation-constructionmanager-minionformationfollowgoal)
+    - [31.4 Recent Picked Blocks Sidebar Panel in Design Block Picker](#314-recent-picked-blocks-sidebar-panel-in-design-block-picker-blockpickermodalscreen)
+    - [31.5 Unrestricted Marine Flight & Underwater Construction Protections](#315-unrestricted-marine-flight--underwater-construction-protections-commandscepteritem-buildflightmanager-minionentity-minionbuildgoal)
+32. [Builder Minion Survival Never-Stall Engine, Virtual Transformations & Palette Fallbacks](#32-builder-minion-survival-never-stall-engine-virtual-transformations--palette-fallbacks)
+    - [32.1 Non-Block to Block Multi-Tier Supply Chains & Crafting Pipelines](#321-non-block-to-block-multi-tier-supply-chains--crafting-pipelines)
+    - [32.2 Virtual Items & In-World Tool Transformations](#322-virtual-items--in-world-tool-transformations)
+    - [32.3 Smart Task Queueing & Deficiency Cooldown](#323-smart-task-queueing--deficiency-cooldown)
+    - [32.4 Automatic Backpack Hygiene & Surplus Item Offload](#324-automatic-backpack-hygiene--surplus-item-offload)
+    - [32.5 Survival Block Filtering & Safe Palette Fallbacks](#325-survival-block-filtering--safe-palette-fallbacks)
+    - [32.6 Physical Placement Safeguards](#326-physical-placement-safeguards)
+    - [32.7 Autonomous Water Procurement & Barrier Bypass Safeguards](#327-autonomous-water-procurement--barrier-bypass-safeguards)
+33. [Neutral Standby Mode (DEFAULT) & Pass-Through Architecture](#33-neutral-standby-mode-default--pass-through-architecture)
+    - [33.1 Complete Vanilla Pass-Through Execution](#331-complete-vanilla-pass-through-execution)
+    - [33.2 Dual-Hand Off-Hand & Main-Hand Invariance](#332-dual-hand-off-hand--main-hand-invariance)
+    - [33.3 Standby Hub GUI Integration & Symmetrical 8-Mode Grid](#333-standby-hub-gui-integration--symmetrical-8-mode-grid)
 
 ---
 
@@ -112,17 +130,18 @@ The **Sovereign Command Scepter** is a high-tier tactical relic allowing players
 - **Rarity**: `Rarity.EPIC` (purple item name with persistent enchanted glint)
 - **Max Stack Size**: `1` (single handheld focus)
 
-### 7 Operating Modes (`CommandMode`)
+### 8 Operating Modes (`CommandMode`)
 
-The scepter cycles through 7 distinct operational modes via **Sneak + Right-Click** (in air) or the Command Hub GUI:
+The scepter cycles through 8 distinct operational modes via **Sneak + Right-Click** (in air) or the Command Hub GUI:
 
 1. **`FOLLOW`** (`0.8F` pitch, `§aFollow`): Directs matching squad thralls to break stationary posts, assemble into formation, and escort the commander.
 2. **`STAY`** (`1.0F` pitch, `§eStay`): Directs matching squad thralls to halt movement and hold ground at attention.
-3. **`MINE`** (`1.4F` pitch, `§6Mine`): Directs builders to begin top-down deconstruction of clicked multiblock structures or 3D terrain volumes. Supports dual sub-modes: **`DIRECT`** (instant point-and-click structure/ground dismantle up to 96m) and **`AREA`** (configurable 3D boundary mining with sequential corner selection `Pos1` ➔ `Pos2`, real-time height adjustment, and confirmation modal).
-4. **`BUILD`** (`1.6F` pitch, `§bBuild`): Projects blueprint holographic wireframes and anchors new multiblock construction sessions.
+3. **`MINE`** (`1.4F` pitch, `§6Mine`): Directs builders to begin top-down deconstruction of clicked multiblock structures or 3D terrain volumes. Supports dual sub-modes: **`DIRECT`** (instant point-and-click structure/ground dismantle up to 96m) and **`AREA`** (configurable 3D boundary mining with sequential corner selection `Pos1` ➔ `Pos2`, real-time height adjustment, and confirmation modal). Grants the commander **Arcane Mining Flight** (`§6✦ Quarry Aerial Surveyor`) in Survival mode.
+4. **`BUILD`** (`1.6F` pitch, `§bBuild`): Projects blueprint holographic wireframes and anchors new multiblock construction sessions. Grants the commander **Arcane Build Flight** (`§b✦ Arcane Build Flight Active`) in Survival mode.
 5. **`DESIGN`** (`1.7F` pitch, `§dDesign`): Sequential left-click spatial corner selection (1st left-click sets `Pos1`, 2nd left-click sets `Pos2`, subsequent left-clicks restart a new selection cycle) with real-time in-world holographic ghost grid structure rendering (semantic color-coded block outlines for doors, lighting, containers, stairs, and masonry) to capture, normalize, and compile existing world structures into custom blueprints.
 6. **`RECRUIT`** (`1.8F` pitch, `§dRecruit`): Targets wild or enemy mobs to transfigure them into loyal minion thralls.
 7. **`PATHWAY`** (`2.0F` pitch, `§3Pathway`): Projects 3D block wireframe checkpoints and establishes autonomous looping patrol routes across customizable color channels (starting with single default Route 1 🟡 Gold and newest-first custom route creation).
+8. **`DEFAULT`** (`0.6F` pitch, `§7Default`): **Neutral Standby Mode**. Scepter completely suppresses tactical overrides, passing 100% of block, mob, and item interactions through to vanilla Minecraft gameplay in both main hand and off-hand. Open chests, operate crafting tables/furnaces, trade with villagers, breed animals, and eat food normally while holding the scepter. Press **`V`** or Sneak + Right-Click in air to access tactical commands.
 
 > [!TIP]
 > **Contextual Combat Control**:
@@ -1399,15 +1418,18 @@ The commander's active game mode dynamically dictates minion logistics, resource
 
 ---
 
-## 16. Free Survival Build Flight & Water Flight Cancellation Safeguard
+## 16. Free Survival Build & Mining Flight & Aquatic Safeguards
 
-### Unconstrained 3D Survival Flight (`BuildFlightManager`)
+### Unconstrained 3D Survival Flight (`BuildFlightManager`, `CommandScepterItem`)
 
-- **Vanilla Flight Mechanics**: Holding the Command Scepter in `BUILD` mode grants the player true physical flight in Survival mode matching Creative flight freedom:
+- **Vanilla Flight Mechanics Across BUILD & MINE Modes**: Holding the Command Scepter in either `BUILD` or `MINE` mode grants the player true physical flight in Survival mode matching Creative flight freedom:
   - **Space (Jump)**: Ascend smoothly without altitude caps.
   - **Shift (Sneak)**: Descend smoothly toward the ground.
   - **WASD**: Complete, unconstrained horizontal navigation.
-- **Elimination of Velocity Clamping**: Rigid hover altitude locking and vertical velocity zeroing have been eliminated, allowing the commander to survey, position, and inspect blueprints at any angle or altitude.
+- **Dedicated HUD Mode Overlays**:
+  - `BUILD` mode displays `§b✦ Arcane Build Flight Active` in the action bar.
+  - `MINE` mode displays `§6✦ Quarry Aerial Surveyor` in the action bar, providing instant tactical aerial perspective when staging quarries, measuring surface boundaries, or surveying excavation pits.
+- **Elimination of Velocity Clamping**: Rigid hover altitude locking and vertical velocity zeroing have been eliminated, allowing the commander to survey, position, and inspect blueprints and quarry volumes at any angle or altitude.
 - **Graceful Descent & Zero Fall Damage**: Switching scepter modes, stowing the scepter, or touching down gently restores normal ground physics with complete fall damage immunity enforced server-side (`ACTIVE_SERVER_BUILD_FLIERS`).
 
 ### Unrestricted Aquatic & Marine Flight, Underwater Construction & Minion Breathing (`CommandScepterItem`, `BuildFlightManager`, `MinionEntity`, `MinionBuildGoal`)
@@ -2484,5 +2506,158 @@ The **Sovereign Barrier Mode** (`BuildingMode.BARRIER`) is a defensive territory
   - Minions engaged in construction or levitation dynamically yield `SwimGoal` so they do not bob to the surface while working.
   - Air supply is continuously replenished (`setAir(getMaxAir())`) while building underwater, granting full drowning immunity.
   - Water fluid blocks are recognized as valid operational hover stations in `MinionBuildGoal`.
+
+---
+
+## 32. Builder Minion Survival Never-Stall Engine, Virtual Transformations & Palette Fallbacks
+
+To ensure that builder minions operating in Survival mode achieve 100% completion of any architectural blueprint or area fill without deadlocking or stalling, the builder AI and resource harvesting subsystems (`MinionBuildGoal`, `MinionHarvestingHelper`, `ConstructionSession`, `ConstructionTask`, `BlueprintBlock`) implement an end-to-end survival autonomy pipeline:
+
+### 32.1 Non-Block to Block Multi-Tier Supply Chains & Crafting Pipelines
+
+Builder minions resolve complex, multi-tiered dependency chains transitioning seamlessly from raw non-block ingredients to intermediary components and final multiblock structural blocks:
+
+- **Scholastic & Enchanter Supply Chain**:
+  - **Reeds to Repertoire**: Autonomous harvesting of wild Sugar Cane $\to$ crafting into Paper ($3 \text{ Cane} \to 3 \text{ Paper}$) $\to$ combining Paper with Leather or Rabbit Hide into Books $\to$ crafting Wood Planks + Books into Bookshelves ($6 \text{ Planks} + 3 \text{ Books} \to 1 \text{ Bookshelf}$) $\to$ crafting into Lecterns (Bookshelf + 4 Wooden Slabs) or Chiseled Bookshelves (6 Planks + 3 Slabs).
+  - Handles leather procurement through warrior hunting contracts or container scavenging.
+- **Hydrated Concrete Processing**:
+  - Combines harvested Sand, Gravel, and Dye into Concrete Powder ($4 \text{ Sand} + 4 \text{ Gravel} + 1 \text{ Dye} \to 8 \text{ Powder}$).
+  - Autonomously hydrates Concrete Powder with nearby water (or carries water buckets) to solidify it into solid Concrete blocks before placing into structures.
+- **Mud, Packed Mud & Adobe Brick Architecture**:
+  - Combines natural Dirt with Water (using water bottles or buckets) to create Mud.
+  - Mixes Mud with harvested Wheat into Packed Mud ($1 \text{ Mud} + 1 \text{ Wheat} \to 1 \text{ Packed Mud}$).
+  - Crafts Packed Mud into Mud Bricks ($4 \text{ Packed Mud} \to 4 \text{ Mud Bricks}$), Mud Brick Stairs, Slabs, and Walls.
+- **Advanced Redstone Machinery & Mechanisms**:
+  - Synthesizes mechanical utility blocks: Hoppers (5 Iron Ingots + Chest), Pistons (3 Planks + 4 Cobblestone + 1 Iron Ingot + 1 Redstone Dust), Sticky Pistons (Piston + Slimeball), Observers (6 Cobblestone + 2 Redstone Dust + 1 Nether Quartz), Dispensers (7 Cobblestone + Bow + Redstone Dust), Droppers (7 Cobblestone + Redstone Dust), Redstone Lamps (Glowstone + 4 Redstone Dust), Target Blocks (Hay Bale + 4 Redstone Dust), Daylight Detectors (3 Glass + 3 Nether Quartz + 3 Wooden Slabs), Repeaters, and Comparators.
+- **Apiculture, Honeycomb Waxing & Candles**:
+  - Combines Honeycomb and String into Candles ($1 \text{ Honeycomb} + 1 \text{ String} \to 1 \text{ Candle}$), with dynamic dye tinting across all 16 color variants.
+  - Combines Honeycomb with Copper blocks to craft Waxed Copper variants, preventing oxidation.
+- **Atmospheric Decor, Lighting & Furnishings**:
+  - Crafts Campfires (3 Sticks + 1 Coal/Charcoal + 3 Logs) and Soul Campfires (Soul Sand/Soil base).
+  - Crafts Chains (2 Iron Nuggets + 1 Iron Ingot), Flower Pots (3 Clay Bricks), Item Frames (8 Sticks + 1 Leather), Glow Item Frames (Item Frame + Glow Ink Sac), and Armor Stands (6 Sticks + 1 Smooth Stone Slab).
+- **Autonomous Wild Flora Foraging**:
+  - Scans up to 32 blocks in the wild to gather natural botanical resources: Sugar Cane, Bamboo, Pumpkins, Melons, Sweet Berries, Glow Berries, Cocoa Beans, Kelp, and Seeds.
+  - Seeds obtained from grass or tilling are planted or repurposed for agricultural multi-tier synthesis.
+
+### 32.2 Virtual Items & In-World Tool Transformations
+
+Vanilla Minecraft contains numerous block states that do not possess a direct item form in survival mode (e.g., Farmland, Dirt Path, growing Crops, Redstone Wire, Tripwire). Previously, these resolved to `Items.AIR`, creating impossible material requirements that stalled builder minions:
+
+- **Virtual Item Mapping (`BlueprintBlock.getRequiredItem`)**:
+  - `Blocks.FARMLAND` & `Blocks.DIRT_PATH` $\to$ `Items.DIRT`.
+  - Agricultural Crops (`Blocks.WHEAT` $\to$ `Items.WHEAT_SEEDS`, `Blocks.CARROTS` $\to$ `Items.CARROT`, `Blocks.POTATOES` $\to$ `Items.POTATO`, `Blocks.BEETROOTS` $\to$ `Items.BEETROOT_SEEDS`, `Blocks.PUMPKIN_STEM` $\to$ `Items.PUMPKIN_SEEDS`, `Blocks.MELON_STEM` $\to$ `Items.MELON_SEEDS`, `Blocks.NETHER_WART` $\to$ `Items.NETHER_WART`, `Blocks.SWEET_BERRY_BUSH` $\to$ `Items.SWEET_BERRIES`, `Blocks.COCOA` $\to$ `Items.COCOA_BEANS`).
+  - Mechanics & Botanical Strands (`Blocks.TRIPWIRE` $\to$ `Items.STRING`, `Blocks.REDSTONE_WIRE` $\to$ `Items.REDSTONE`, `Blocks.KELP_PLANT` $\to$ `Items.KELP`, `Blocks.BAMBOO_SAPLING` $\to$ `Items.BAMBOO`, `Blocks.CAVE_VINES` $\to$ `Items.GLOW_BERRIES`).
+  - Completely eliminates false `Items.AIR` material requests from blueprints and Bill of Materials.
+- **In-World Tool Transformations (`ToolTransformationType`)**:
+  - `HOE_TILL`: Dirt/Grass $\to$ Hoe tilling $\to$ Farmland. Drops bonus wheat seeds if tilling grass.
+  - `SHOVEL_FLATTEN`: Dirt/Grass $\to$ Shovel flattening $\to$ Dirt Path.
+  - `AXE_STRIP`: Wood Logs/Wood $\to$ Axe stripping $\to$ Stripped Log/Wood variants.
+  - `SHEAR_CARVE`: Placed Pumpkin $\to$ Shear carving $\to$ Carved Pumpkin (spawns 4 Pumpkin Seeds).
+  - `SHOVEL_EXTINGUISH`: Lit Campfire $\to$ Shovel smothering $\to$ Unlit Campfire.
+- **Autonomous Tool Crafting, Wielding & Durability Management**:
+  - Builders evaluate required tools dynamically via `ensureTool(minion, world, toolClass)`.
+  - Autonomously crafts Hoes (`craftHoe`), Shears (`craftShears`), Flint & Steel (`craftFlintAndSteel`), Shovels, and Pickaxes from available inventory materials.
+  - Validates remaining tool durability (`stack.getDamage() < stack.getMaxDamage() - 1`) before use; automatically crafts replacement tools when depleted.
+  - Plays realistic tool usage audio cues (`ITEM_HOE_TILL`, `ITEM_SHOVEL_FLATTEN`, `ITEM_AXE_STRIP`, `PUMPKIN_CARVE`) and inflicts realistic durability damage.
+
+### 32.3 Smart Task Queueing & Deficiency Cooldown
+
+- **Non-Blocking Deficiency Queueing**:
+  - When a builder minion evaluates a task for which required resources cannot be obtained immediately, that specific task is tagged with a 200-tick deficiency cooldown (`deficiencyCooldowns.put(minionUuid, tick + 200)`).
+  - In `ConstructionSession.claimNextTask()`, candidate tasks with an active deficiency cooldown for the requesting minion are skipped.
+  - The minion's failure cooldown is set to a brief 10 ticks, allowing the worker to immediately claim and construct other ready tasks in the queue rather than stalling the entire workforce or freezing the build session.
+- **Automatic Cooldown Clearing**:
+  - As soon as missing materials are harvested, crafted, or transferred, the deficiency cooldown clears and workers complete the deferred task.
+
+### 32.4 Automatic Backpack Hygiene & Surplus Item Offload
+
+- **Preventing Inventory Deadlocks**:
+  - During extended survival builds, minions accumulate harvesting byproducts (seeds, excess cobblestone, excess dirt, tree saplings) that can fill all 9 backpack slots and prevent picking up required materials.
+  - `MinionHarvestingHelper.maintainInventoryHygiene()` checks backpack capacity before each build cycle.
+  - If free inventory slots fall below 3, the builder scans for nearby chests or barrels within 32 blocks and offloads non-essential byproducts, preserving essential building supplies and tools.
+
+### 32.5 Survival Block Filtering & Safe Palette Fallbacks
+
+- **Creative-Only Block Purge (`BlueprintBlock.isSurvivalPlaceableBlock`)**:
+  - Filters out creative-only, non-obtainable, and operator blocks (`Blocks.LIGHT` / "Light bulb", `Blocks.BARRIER`, `Blocks.COMMAND_BLOCK`, `Blocks.CHAIN_COMMAND_BLOCK`, `Blocks.REPEATING_COMMAND_BLOCK`, `Blocks.STRUCTURE_BLOCK`, `Blocks.STRUCTURE_VOID`, `Blocks.JIGSAW`, `Blocks.SPAWNER`, `Blocks.BEDROCK`, `Blocks.END_PORTAL`, `Blocks.END_PORTAL_FRAME`, `Blocks.NETHER_PORTAL`, `Blocks.DEBUG_STICK`, `Blocks.KNOWLEDGE_BOOK`).
+  - Whitelists vital survival transformable blocks (`Blocks.FARMLAND`, `Blocks.DIRT_PATH`) so they can be selected in pickers and constructed via tool transformations.
+  - Enforced across client block selection modals (`BlockPickerModalScreen`) and server network packet handlers (`ModNetworking`), guaranteeing players and minions never encounter uncraftable ghost items in Survival.
+- **Harmonious Palette Fallback Substitution (`resolvePaletteFallback`)**:
+  - If a required exotic block (such as Purpur, Nether Bricks, End Stone Bricks, or Deepslate Bricks) is unavailable in the current dimension/biome and cannot be crafted, builder minions query palette fallbacks.
+  - Substitutes aesthetically compatible materials (Stone Bricks, Cobblestone, Wood Planks) rather than stalling the construction process indefinitely.
+
+### 32.6 Physical Placement Safeguards
+
+- **Falling Block Solid Foundation Guard**:
+  - `ConstructionSession.isBuildTaskReady()` enforces that gravity-affected blocks (Sand, Red Sand, Gravel, Concrete Powder, Anvils) cannot be placed unless a solid block already exists directly beneath them (`world.getBlockState(pos.down()).isSolid()`). Prevents falling blocks from collapsing into voids or unbuilt basements.
+- **Agricultural & Botanical Substrate Contracts**:
+  - Enforces Farmland directly below wheat, carrots, potatoes, and beetroots.
+  - Enforces Soul Sand directly below Nether Wart.
+  - Enforces Jungle Logs adjacent to Cocoa Beans.
+- **Decay & Fluid Physical Integrity**:
+  - Placed tree leaves enforce `LeavesBlock.PERSISTENT = true`, permanently preventing leaf decay on minion-built structures.
+  - Waterlogged blocks preserve water fluid states when `Properties.WATERLOGGED` is present.
+  - Nether Water Safety Conversion: Any water bucket placement attempted in the Nether dimension (`world.getDimension().ultrawarm()`) is safely converted to Blue Stained Glass accompanied by cloud steam particles and extinguishing hiss sound effects, preventing illegal water placement while preserving aesthetic intent.
+
+### 32.7 Autonomous Water Procurement & Barrier Bypass Safeguards
+
+- **Autonomous Water Bucket Fetching (`MinionHarvestingHelper.gatherWaterBucket`)**:
+  - When a blueprint placement task or survival crafting recipe (such as mud synthesis) requires a `WATER_BUCKET` and the worker possesses an empty `BUCKET`, the minion automatically navigates to water sources and scoops them into buckets.
+  - **Two-Pass Geometric Search**:
+    - *Pass 1 (Immediate Vicinity)*: Scans a 16-block cuboid around the worker.
+    - *Pass 2 (Extended Exploration)*: Expands to a **64-block horizontal and 32-block vertical** radius to reach natural water bodies beyond the immediate build site.
+- **Barrier Perimeter Bypass (`!isPositionProtected`)**:
+  - Standard barrier defenses protect player bases from griefing and unwanted minion harvesting (`isPositionProtected(pos)`).
+  - Water harvesting specifically targets water sources **outside** the barrier perimeter, allowing builder minions stationed inside a fortified citadel to journey outside the perimeter, fill buckets from surrounding rivers or oceans, and return safely.
+- **Infinite Water & Cauldron Harvesting Inside Perimeters**:
+  - Minions are permitted to scoop water from sources inside barrier waypoints if:
+    1. The water source block has $\ge 2$ adjacent horizontal water source neighbors (`isInfiniteWaterSource`), guaranteeing the water immediately regenerates without leaving holes or currents.
+    2. The source is a filled water cauldron (`Blocks.WATER_CAULDRON`).
+  - Decorative single-source fountains, moats, and aquariums are strictly preserved.
+- **Autonomous Village Chest Bucket Scavenging (`withdrawBucketFromNearbyContainers`)**:
+  - If a minion needs a `WATER_BUCKET` but carries no bucket (and lacks iron ingots to craft one), the worker scans nearby chests and containers within 64 blocks for empty buckets (`Items.BUCKET`) or filled water buckets (`Items.WATER_BUCKET`), withdraws them into their backpack, and immediately proceeds with the task.
+
+---
+
+## 33. Neutral Standby Mode (DEFAULT) & Pass-Through Architecture
+
+```
+                                    [Command Scepter: DEFAULT Mode]
+                                                   │
+         ┌───────────────────┬─────────────────────┼─────────────────────┬───────────────────┐
+         ▼                   ▼                     ▼                     ▼                   ▼
+    [Right-Click Chest]  [Right-Click Door]    [Right-Click Mob]     [Channeled Attack]   [Sneak + Right-Click]
+     Opens Container      Opens / Closes Door   Trades with Villager  Normal Melee Strike   Open Command Hub GUI
+     (ActionResult.PASS)  (ActionResult.PASS)   or Breeds Animals     (UseAction.NONE)      (Or press [V] key)
+```
+
+### 33.1 Complete Vanilla Pass-Through Execution (`CommandScepterItem`, `ExampleMod`)
+
+- **Zero Interaction Interception**:
+  - In `DEFAULT` mode, `CommandScepterItem.useOnBlock()` returns `ActionResult.PASS` unless the player is actively sneaking. Right-clicking interactable blocks (chests, barrels, crafting tables, furnaces, anvils, enchanting tables, brewing stands, doors, trapdoors, fence gates, levers, and buttons) triggers 100% normal vanilla behavior.
+  - `CommandScepterItem.useOnEntity()` returns `ActionResult.PASS`, allowing players to trade with villagers, shear sheep, breed farm animals, milk cows, and ride saddled horses/boats/minecarts without triggering scepter directives.
+  - `CommandScepterItem.use()` returns `TypedActionResult.pass(stack)` and `getMaxUseTime()` returns `0` with `UseAction.NONE`. This completely prevents channeled blocking animations, banner charging, or raycasting when right-clicking open air.
+  - Attack hooks (`AttackBlockCallback`, `AttackEntityCallback`) in `ExampleMod.java` pass through cleanly in `DEFAULT` mode, enabling standard melee hits and block breaking.
+  - Minion interaction (`MinionEntity.interactMob`): Minions treat right-clicks from a scepter in `DEFAULT` mode identically to empty-hand interactions, allowing quick follow/station toggles without scepter mode overrides.
+
+### 33.2 Dual-Hand Off-Hand & Main-Hand Invariance
+
+- **24/7 Scepter Carriage**:
+  - Players can keep the Command Scepter permanently equipped in either the main hand or off-hand throughout daily survival gameplay without hindering routine activities.
+  - Holding a food item, shield, or tool in the main hand while holding the Scepter in the off-hand allows seamless eating, blocking, and digging.
+  - **Tactical Access**: Whenever tactical intervention is required, the player can instantly switch modes or open the Command Hub GUI by pressing **`V`** or by **Sneak + Right-Clicking into open air**.
+
+### 33.3 Standby Hub GUI Integration & Symmetrical 8-Mode Grid (`CommandScepterScreen`)
+
+- **8-Mode 2x4 Layout**:
+  - The Command Hub GUI seamlessly incorporates `DEFAULT` as the 8th operational mode.
+  - Grid Layout:
+    - *Row 1*: `FOLLOW` (`#00FF66`), `STAY` (`#FFD700`), `MINE` (`#FF8800`), `BUILD` (`#00E5FF`).
+    - *Row 2*: `DESIGN` (`#FF77FF`), `RECRUIT` (`#B300FF`), `PATHWAY` (`#00AACC`), `DEFAULT` (`#AAAAAA`).
+- **Symmetrical Header Action Buttons**:
+  - The `targetFilterBtn` (`§c⚔ Targets`) has been moved symmetrically to the left header (`startX + 87, startY + 100`, width 65, height 15), perfectly mirroring the `explorerBtn` (`§3🔍 3D View`) on the right.
+- **Dedicated Standby Dashboard**:
+  - Selecting `DEFAULT` displays a clean Neutral Standby Mode info card in the right pane with tactical tooltips and completely hides construction blueprint buttons, preventing visual clutter when in standby.
+
 
 

@@ -3438,10 +3438,15 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			return ActionResult.success(world.isClient());
 		}
 
-		// 2. Command Scepter priority (if held in main hand or off-hand, yield to scepter commands)
-		if (itemStack.getItem() instanceof com.example.item.custom.CommandScepterItem
-			|| (hand == Hand.MAIN_HAND && player.getOffHandStack().getItem() instanceof com.example.item.custom.CommandScepterItem)) {
-			return ActionResult.PASS;
+		// 2. Command Scepter priority (if held in main hand or off-hand, yield to scepter commands,
+		// unless in DEFAULT mode where scepter is passive and default interactions take precedence)
+		boolean mainIsScepter = itemStack.getItem() instanceof com.example.item.custom.CommandScepterItem;
+		boolean offIsScepter = hand == Hand.MAIN_HAND && player.getOffHandStack().getItem() instanceof com.example.item.custom.CommandScepterItem;
+		if (mainIsScepter || offIsScepter) {
+			ItemStack scepter = mainIsScepter ? itemStack : player.getOffHandStack();
+			if (com.example.item.custom.CommandScepterItem.getMode(scepter) != com.example.component.CommandMode.DEFAULT) {
+				return ActionResult.PASS;
+			}
 		}
 
 		// 3. Empty Hand: toggle stationed / following

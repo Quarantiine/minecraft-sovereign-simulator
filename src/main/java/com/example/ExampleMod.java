@@ -95,6 +95,9 @@ public class ExampleMod implements ModInitializer {
 			ItemStack stack = CommandScepterItem.getHeldScepter(player);
 			if (!stack.isEmpty()) {
 				CommandMode mode = CommandScepterItem.getMode(stack);
+				if (mode == CommandMode.DEFAULT) {
+					return ActionResult.PASS;
+				}
 				if (mode == CommandMode.DESIGN) {
 					if (world.isClient()) {
 						boolean sneaking = player.isSneaking();
@@ -179,6 +182,10 @@ public class ExampleMod implements ModInitializer {
 		AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
 			ItemStack stack = CommandScepterItem.getHeldScepter(player);
 			if (!stack.isEmpty()) {
+				CommandMode mode = CommandScepterItem.getMode(stack);
+				if (mode == CommandMode.DEFAULT) {
+					return ActionResult.PASS;
+				}
 				// Friendly-fire prevention: left-clicking an owned minion
 				if (entity instanceof MinionEntity minion && minion.isOwner(player)) {
 					if (player.isSneaking()) {
@@ -205,7 +212,6 @@ public class ExampleMod implements ModInitializer {
 					return ActionResult.SUCCESS;
 				}
 
-				CommandMode mode = CommandScepterItem.getMode(stack);
 				if (mode == CommandMode.DESIGN) {
 					if (world.isClient()) {
 						BlockPos entityPos = entity.getBlockPos();

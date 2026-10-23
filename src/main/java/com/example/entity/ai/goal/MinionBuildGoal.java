@@ -30,9 +30,14 @@ import net.minecraft.entity.ai.goal.Goal;
 import net.minecraft.entity.ai.pathing.NavigationType;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
+import net.minecraft.item.AxeItem;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.HoeItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.item.ShearsItem;
+import net.minecraft.item.ShovelItem;
 import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -721,8 +726,19 @@ public class MinionBuildGoal extends Goal {
 				consumeResourceFromInventory(minionInv, minionSlot, requiredItem);
 				hasResources = true;
 			} else {
+				// 1.4 If task requires WATER_BUCKET and minion carries an empty BUCKET, autonomously gather water from outside barrier waypoints or springs
+				if (requiredItem == Items.WATER_BUCKET && com.example.entity.ai.logistics.MinionHarvestingHelper.hasItemInInventory(this.minion, Items.BUCKET)) {
+					if (com.example.entity.ai.logistics.MinionHarvestingHelper.gatherWaterBucket(this.minion, serverWorld, this.currentSession)) {
+						int waterSlot = findItemSlot(minionInv, Items.WATER_BUCKET);
+						if (waterSlot != -1) {
+							consumeResourceFromInventory(minionInv, waterSlot, requiredItem);
+							hasResources = true;
+						}
+					}
+				}
+
 				// 1.5 Craft on-demand from existing blocks in minion inventory (e.g. planks -> stairs, logs -> planks, stone -> stone bricks)
-				if (com.example.entity.ai.logistics.MinionHarvestingHelper.tryCraftBlockFromInventory(this.minion, serverWorld, requiredItem, this.currentSession)) {
+				if (!hasResources && com.example.entity.ai.logistics.MinionHarvestingHelper.tryCraftBlockFromInventory(this.minion, serverWorld, requiredItem, this.currentSession)) {
 					int craftedSlot = findItemSlot(minionInv, requiredItem);
 					if (craftedSlot != -1) {
 						consumeResourceFromInventory(minionInv, craftedSlot, requiredItem);
@@ -758,7 +774,34 @@ public class MinionBuildGoal extends Goal {
 					}
 				}
 			}
+
+			// 5. Palette fallback substitution (survival safety net for unobtainable/exotic materials)
+			if (!hasResources) {
+				Item fallbackItem = com.example.entity.ai.logistics.MinionHarvestingHelper.resolvePaletteFallback(requiredItem);
+				if (fallbackItem != null && fallbackItem != requiredItem) {
+					int fallbackSlot = findItemSlot(minionInv, fallbackItem);
+					if (fallbackSlot != -1) {
+						consumeResourceFromInventory(minionInv, fallbackSlot, fallbackItem);
+						hasResources = true;
+						if (fallbackItem instanceof BlockItem bi) {
+							targetState = bi.getBlock().getDefaultState();
+						}
+					} else if (com.example.entity.ai.logistics.MinionHarvestingHelper.tryCraftBlockFromInventory(this.minion, serverWorld, fallbackItem, this.currentSession)) {
+						int craftedSlot = findItemSlot(minionInv, fallbackItem);
+						if (craftedSlot != -1) {
+							consumeResourceFromInventory(minionInv, craftedSlot, fallbackItem);
+							hasResources = true;
+							if (fallbackItem instanceof BlockItem bi) {
+								targetState = bi.getBlock().getDefaultState();
+							}
+						}
+					}
+				}
+			}
 		}
+
+		// Periodic inventory hygiene auto-offload: dumps excess seeds, saplings, cobblestone into nearby storage
+		com.example.entity.ai.logistics.MinionHarvestingHelper.maintainInventoryHygiene(this.minion, serverWorld, this.currentSession);
 
 		// If resources could not be found in inventory or nearby containers
 		if (!hasResources) {
@@ -774,7 +817,9 @@ public class MinionBuildGoal extends Goal {
 			// Pre-clearing existing obstacles (water, lava, fluids) at target block before placement
 			BlockState currentWorldState = serverWorld.getBlockState(targetPos);
 			if (!targetState.isOf(Blocks.WATER) && (currentWorldState.isOf(Blocks.WATER) || !currentWorldState.getFluidState().isEmpty())) {
-				removeFluidSource(serverWorld, targetPos, currentWorldState, currentWorldState.isOf(Blocks.WATER));
+				if (!targetState.contains(net.minecraft.state.property.Properties.WATERLOGGED)) {
+					removeFluidSource(serverWorld, targetPos, currentWorldState, currentWorldState.isOf(Blocks.WATER));
+				}
 			}
 
 			// Zero-drop pre-clearing in creative mode
@@ -782,7 +827,82 @@ public class MinionBuildGoal extends Goal {
 				cleanPreExistingObstacles(serverWorld, targetPos);
 			}
 
-			if (targetState.getBlock() instanceof DoorBlock) {
+			// Nether water evaporation safeguard: prevent infinite vaporizing loops
+			if (targetState.isOf(Blocks.WATER) && serverWorld.getDimension().ultrawarm()) {
+				serverWorld.playSound(null, targetPos, net.minecraft.sound.SoundEvents.BLOCK_FIRE_EXTINGUISH, net.minecraft.sound.SoundCategory.BLOCKS, 0.5F, 2.6F);
+				serverWorld.spawnParticles(net.minecraft.particle.ParticleTypes.CLOUD, targetPos.getX() + 0.5D, targetPos.getY() + 0.5D, targetPos.getZ() + 0.5D, 8, 0.3D, 0.3D, 0.3D, 0.05D);
+				targetState = Blocks.BLUE_STAINED_GLASS.getDefaultState();
+			}
+
+			// Leaf persistence: guarantee placed leaves never decay naturally without logs
+			if (targetState.contains(net.minecraft.block.LeavesBlock.PERSISTENT)) {
+				targetState = targetState.with(net.minecraft.block.LeavesBlock.PERSISTENT, true);
+			}
+
+			// Waterlogging preservation
+			if (targetState.contains(net.minecraft.state.property.Properties.WATERLOGGED)) {
+				boolean isCurrentWater = currentWorldState.isOf(Blocks.WATER) || currentWorldState.getFluidState().isOf(net.minecraft.fluid.Fluids.WATER);
+				if (isCurrentWater) {
+					targetState = targetState.with(net.minecraft.state.property.Properties.WATERLOGGED, true);
+				}
+			}
+
+			com.example.blueprint.BlueprintBlock.ToolTransformationType transformType =
+				this.currentTask != null && this.currentTask.getBlueprintBlock() != null ? this.currentTask.getBlueprintBlock().getToolTransformation() : com.example.blueprint.BlueprintBlock.ToolTransformationType.NONE;
+
+			if (transformType == com.example.blueprint.BlueprintBlock.ToolTransformationType.HOE_TILL) {
+				// Till dirt/grass into farmland
+				if (!currentWorldState.isOf(Blocks.DIRT) && !currentWorldState.isOf(Blocks.GRASS_BLOCK)) {
+					serverWorld.setBlockState(targetPos, Blocks.DIRT.getDefaultState(), Block.NOTIFY_ALL);
+				}
+				com.example.entity.ai.logistics.MinionHarvestingHelper.ensureTool(this.minion, serverWorld, HoeItem.class);
+				ItemStack held = this.minion.getMainHandStack();
+				if (held.isDamageable()) {
+					held.damage(1, this.minion, EquipmentSlot.MAINHAND);
+				}
+				serverWorld.playSound(null, targetPos, SoundEvents.ITEM_HOE_TILL, SoundCategory.BLOCKS, 1.0F, 1.0F);
+				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+			} else if (transformType == com.example.blueprint.BlueprintBlock.ToolTransformationType.SHOVEL_FLATTEN) {
+				// Flatten dirt/grass into dirt path
+				if (!currentWorldState.isOf(Blocks.DIRT) && !currentWorldState.isOf(Blocks.GRASS_BLOCK)) {
+					serverWorld.setBlockState(targetPos, Blocks.DIRT.getDefaultState(), Block.NOTIFY_ALL);
+				}
+				com.example.entity.ai.logistics.MinionHarvestingHelper.ensureTool(this.minion, serverWorld, ShovelItem.class);
+				ItemStack held = this.minion.getMainHandStack();
+				if (held.isDamageable()) {
+					held.damage(1, this.minion, EquipmentSlot.MAINHAND);
+				}
+				serverWorld.playSound(null, targetPos, SoundEvents.ITEM_SHOVEL_FLATTEN, SoundCategory.BLOCKS, 1.0F, 1.0F);
+				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+			} else if (transformType == com.example.blueprint.BlueprintBlock.ToolTransformationType.SHEAR_CARVE) {
+				// Carve pumpkin with shears
+				com.example.entity.ai.logistics.MinionHarvestingHelper.ensureTool(this.minion, serverWorld, ShearsItem.class);
+				ItemStack held = this.minion.getMainHandStack();
+				if (held.isDamageable()) {
+					held.damage(1, this.minion, EquipmentSlot.MAINHAND);
+				}
+				serverWorld.playSound(null, targetPos, SoundEvents.BLOCK_PUMPKIN_CARVE, SoundCategory.BLOCKS, 1.0F, 1.0F);
+				this.minion.getInventory().addStack(new ItemStack(Items.PUMPKIN_SEEDS, 4));
+				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+			} else if (transformType == com.example.blueprint.BlueprintBlock.ToolTransformationType.AXE_STRIP) {
+				// Strip log with axe
+				com.example.entity.ai.logistics.MinionHarvestingHelper.ensureTool(this.minion, serverWorld, AxeItem.class);
+				ItemStack held = this.minion.getMainHandStack();
+				if (held.isDamageable()) {
+					held.damage(1, this.minion, EquipmentSlot.MAINHAND);
+				}
+				serverWorld.playSound(null, targetPos, SoundEvents.ITEM_AXE_STRIP, SoundCategory.BLOCKS, 1.0F, 1.0F);
+				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+			} else if (transformType == com.example.blueprint.BlueprintBlock.ToolTransformationType.SHOVEL_EXTINGUISH) {
+				// Extinguish campfire with shovel
+				com.example.entity.ai.logistics.MinionHarvestingHelper.ensureTool(this.minion, serverWorld, ShovelItem.class);
+				ItemStack held = this.minion.getMainHandStack();
+				if (held.isDamageable()) {
+					held.damage(1, this.minion, EquipmentSlot.MAINHAND);
+				}
+				serverWorld.playSound(null, targetPos, SoundEvents.ENTITY_GENERIC_EXTINGUISH_FIRE, SoundCategory.BLOCKS, 1.0F, 1.0F);
+				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+			} else if (targetState.getBlock() instanceof DoorBlock) {
 				if (targetState.get(DoorBlock.HALF) == DoubleBlockHalf.LOWER) {
 					// Also nudge away if intersecting upper door block
 					nudgeMinionAwayFromTargetBlock(serverWorld, targetPos.up());
@@ -1049,6 +1169,25 @@ public class MinionBuildGoal extends Goal {
 							);
 							return true;
 						}
+
+						// If requiredItem is WATER_BUCKET and minion has no empty bucket, check for empty BUCKET in container
+						if (requiredItem == Items.WATER_BUCKET && !com.example.entity.ai.logistics.MinionHarvestingHelper.hasItemInInventory(this.minion, Items.BUCKET)) {
+							int bucketSlot = findItemSlot(containerInv, Items.BUCKET);
+							if (bucketSlot != -1) {
+								ItemStack bStack = containerInv.removeStack(bucketSlot, 1);
+								be.markDirty();
+								this.minion.getInventory().addStack(bStack);
+								this.minion.getInventory().markDirty();
+								// Immediately scoop water from outside barrier waypoints or springs
+								if (com.example.entity.ai.logistics.MinionHarvestingHelper.gatherWaterBucket(this.minion, world, this.currentSession)) {
+									int waterSlot = findItemSlot(this.minion.getInventory(), Items.WATER_BUCKET);
+									if (waterSlot != -1) {
+										consumeResourceFromInventory(this.minion.getInventory(), waterSlot, Items.WATER_BUCKET);
+										return true;
+									}
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1201,8 +1340,9 @@ public class MinionBuildGoal extends Goal {
 			}
 		}
 
-		// Release the task so other minions or later retries can pick it up
+		// Tag task with deficiency cooldown so this minion skips it to build other ready tasks!
 		if (this.currentTask != null) {
+			this.currentTask.setDeficiencyCooldown(this.minion.getUuid(), world.getTime() + 200L);
 			this.currentSession.releaseTask(this.currentTask, this.minion.getUuid());
 			this.currentTask = null;
 		}
@@ -1214,8 +1354,8 @@ public class MinionBuildGoal extends Goal {
 		this.minion.getNavigation().stop();
 		this.minion.fallDistance = 0.0F;
 
-		// 60-tick retry interval to give player time to deposit materials without churn
-		this.failureCooldownUntilTick = world.getTime() + 60L;
+		// 10-tick brief cooldown before checking if other ready tasks can be claimed in this session
+		this.failureCooldownUntilTick = world.getTime() + 10L;
 	}
 	/**
 	 * Checks if solid ceiling blocks exist directly above the minion within checkBlocks height.

@@ -267,6 +267,9 @@ public class ExampleModClient implements ClientModInitializer {
 			}
 
 			CommandMode mode = CommandScepterItem.getMode(stack);
+			if (mode == CommandMode.DEFAULT) {
+				return TypedActionResult.pass(stack);
+			}
 			if (mode == CommandMode.DESIGN) {
 				BlockPos p1 = CommandScepterItem.getDesignPos1(stack);
 				if (p1 == null) p1 = ClientDesignCaptureTracker.getPos1();
