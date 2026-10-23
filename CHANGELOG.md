@@ -10,7 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 > **Release Overview**:
 > - 🕊️ **Neutral Standby Mode (`DEFAULT`)**: Keep your Sovereign Command Scepter equipped 24/7 in either your main hand or off-hand without interrupting normal gameplay! In Default mode, the scepter steps aside so you can open chests and doors, use crafting tables and furnaces, trade with villagers, breed animals, and eat food just like in vanilla Minecraft. Press `V` or Sneak + Right-Click in the air whenever you want to issue orders!
-> - 🦅 **Quarry Aerial Flight in Mining Mode**: Take flight in Survival mode while holding the scepter in Mining mode! Survey massive excavation quarries, check slope boundaries from above, and inspect deep mineshafts with smooth, unconstrained flight and safe touchdown landing.
+> - 🦅 **Quarry & Architect Aerial Flight (Mining & Design Modes)**: Take flight in Survival mode while holding the scepter in either Mining or Design mode! Survey massive excavation quarries, check slope boundaries from above, frame custom blueprint selection boxes (`Pos1`/`Pos2`), and capture sprawling structures from high altitude with smooth, unconstrained 3D flight and safe touchdown landing.
+> - 🛡️ **Airborne Minion Ground-Tracking & Anti-Fall Teleportation**: When following you while you fly high in the air, minions no longer spawn in thin air and plummet to their death! If there is no safe elevated platform of at least 2x2 solid blocks near your altitude, minions safely track you from the ground below—teleporting along the (X, Z) coordinates directly onto safe solid terrain or water surfaces. If you fly over a lethal lava sea, minions strictly refuse to teleport into the fire and remain patiently waiting on the shore!
 > - 💧 **Minion Water Gathering Outside Barriers**: Builder minions needing a water bucket for construction or crafting can now autonomously leave protected barrier walls to scoop water from exterior lakes, rivers, and oceans. Minions also recognize self-replenishing infinite water pools and cauldrons, and can even fetch empty buckets from nearby village storage chests so your blueprints never get stuck!
 > - 🌱 **Organic Substrates & Living Growth Biology**: Builder minions understand that Grass Blocks and Mycelium cannot be crafted and drop Dirt without Silk Touch. Minions prefer silk-touch grass/mycelium if present in storage, but seamlessly accept `Items.DIRT` as the precursor. In construction sessions, placed dirt is recognized as a satisfied precursor. If the minion holds Bone Meal and is adjacent to existing grass, the minion accelerates the spread with bone meal particles!
 > - 🔥 **Nylium Substrate & Bone Meal Transformation**: `Blocks.CRIMSON_NYLIUM` and `Blocks.WARPED_NYLIUM` map to `Items.NETHERRACK`. When Netherrack is placed adjacent to existing Nylium and the minion carries Bone Meal, the minion consumes 1 Bone Meal to trigger instant vanilla Nylium conversion!
@@ -39,6 +40,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Displays `§6✦ Quarry Aerial Surveyor` in the client action bar during flight in `MINE` mode.
 - Enforced server-side fall damage immunity and safe touchdown landing via `ACTIVE_SERVER_BUILD_FLIERS`.
 - Supports unrestricted marine flight over deep water and underwater excavation surveying.
+
+#### 📐 Architect Aerial Flight in Design Mode (`BuildFlightManager`, `CommandScepterItem`)
+- Extended 3D survival flight to `CommandMode.DESIGN` while holding the Command Scepter.
+- Displays `§d✦ Architect Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[Pos1/Pos2] Capture` in the action bar.
+- Initial hover height targets `initialGroundY + 10.0D` (clamped below ceilings), allowing commanders to survey, frame, and capture blueprints with unconstrained vantage angles without placing temporary dirt towers.
+- Safe descent glide and server fall damage immunity on landing or mode exit.
+
+#### 🛡️ Airborne Minion Ground-Tracking & Safe Teleportation (`MinionEntity.teleportToPlayer`)
+- **2x2 Platform Validation (`hasAtLeast2x2Platform`)**: When the commander is elevated, verifies candidate positions have at least a 2x2 solid base beneath them, preventing minions from teleporting onto 1x1 needles or slippery edges.
+- **Air-to-Ground Vertical Scanning (`findSafeTeleportDestination`)**: If the player is airborne in `BUILD`, `MINE`, `DESIGN`, or Creative flight with no 2x2 platform nearby ($|\Delta Y| > 3$), minions do NOT teleport into mid-air. Instead, they scan downward vertically to locate the highest safe solid ground directly beneath the player, matching the player's X and Z coordinates on ground level with zero fall distance!
+- **Safe Water Landing (`isSafeWaterLanding`)**: If the airborne player is hovering over open water (ocean, river, lake) without solid land below, minions safely teleport to the surface of the water, utilizing their water breathing protection and buoyant swimming.
+- **Lava Refusal Guard**: If the player is flying over lava (e.g. the Nether lava sea), minions search up to 16 blocks horizontally for safe shore. If no safe land or water exists, minions strictly refuse to teleport into lava or mid-air, remaining safely stationed on the bank.
 
 #### 💧 Exterior Water Gathering & Chest Bucket Retrieval (`MinionHarvestingHelper`, `MinionBuildGoal`)
 - Added two-pass geometric search in `MinionHarvestingHelper.gatherWaterBucket`: immediate 16-block cuboid scan followed by an extended 64-block horizontal and 32-block vertical scan.

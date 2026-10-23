@@ -4,7 +4,7 @@
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-798%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-801%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -97,10 +97,14 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
 
 ### Core Strategic Systems
 
-- **Free Survival Arcane Build & Mining Flight & Aquatic Construction**:
-  - Enjoy unconstrained 3D creative-style flight in Survival mode while holding the Scepter in **`BUILD`** or **`MINE`** mode (Space to ascend, Shift to descend, full WASD navigation). In `MINE` mode, the action bar displays `§6✦ Quarry Aerial Surveyor` for seamless pit inspection.
+- **Free Survival Arcane Build, Mining & Design Flight & Aquatic Construction**:
+  - Enjoy unconstrained 3D creative-style flight in Survival mode while holding the Scepter in **`BUILD`**, **`MINE`**, or **`DESIGN`** mode (Space to ascend, Shift to descend, full WASD navigation). In `MINE` mode, the action bar displays `§6✦ Quarry Aerial Surveyor`; in `DESIGN` mode, it displays `§d✦ Architect Aerial Surveyor` for seamless aerial blueprint framing and inspection.
   - Unrestricted flight over water bodies of any depth (oceans, deep lakes, rivers) and underwater, enabling seamless construction of bridges, docks, and submerged ocean bases.
   - Minions possess underwater breathing protection (`setAir(getMaxAir())`) and swimming suppression while building, preventing drowning or surface bouncing.
+- **Airborne Minion Anti-Fall Ground-Tracking & Safe Teleportation**:
+  - Minions following an airborne commander never spawn in thin air and plummet to their death!
+  - If no safe elevated platform of at least 2x2 solid blocks exists near player altitude, minions safely track from the ground below—teleporting along the (X, Z) coordinates directly onto solid land or water surfaces.
+  - Over lava oceans, minions strictly refuse to teleport into lava or mid-air, remaining safely stationed on the shore until the commander returns or reaches safe ground.
 - **Neutral Standby Mode (`DEFAULT`)**:
   - Keep the Command Scepter held in your main hand or off-hand 24/7 without hindering standard Minecraft gameplay. In `DEFAULT` mode, the scepter passes all interactions through to vanilla systems (chests, crafting tables, doors, trading, breeding, eating). Sneak + Right-Click in air or press `V` to switch modes.
 - **Living Substrates, Organic Growth & Survival Precursor Biology**:

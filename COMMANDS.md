@@ -685,6 +685,13 @@ Click the **`[ 🎨 Remap ]`** button to open the **`BlueprintPaletteRemapModalS
 - **Newest-First Catalog Ordering**: Newly captured blueprints immediately appear at Slot 1 on Slide 1 by default, automatically armed on your held Scepter.
 - **Survival Bill of Materials (BOM)**: Substituted blocks immediately update resource requirements in the live Resource Estimator and BOM.
 
+### 5. Arcane Design Flight (Architect Aerial Surveyor)
+
+Holding the Sovereign Command Scepter in **`DESIGN`** mode grants the commander 3D survival flight:
+- **Free 3D Architectural Flight**: Ascend with **`Space`**, descend with **`Shift`**, and glide in any direction with WASD without velocity clamps or altitude ceilings.
+- **Aerial Blueprint Capture**: Action bar displays `§d✦ Architect Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[Pos1/Pos2] Capture`. Effortlessly inspect towering castles, cathedrals, and watchtowers from any vantage angle without placing dirt scaffolding.
+- **Fall Damage Immunity & Safe Touchdown**: Switching modes, putting away the scepter, or touching ground cleanly transitions back to normal gravity with server-enforced fall damage immunity.
+
 ---
 
 ## ⛏️ 9. Mining & Area Clearance (`MINE` Mode)
@@ -822,6 +829,11 @@ Holding the Sovereign Command Scepter in **`MINE`** mode grants the commander tr
 - **Dynamic Obstacle Clearance & Solid Ground Landing**: Minions can scale obstacles of any height (3, 5, 10, or 20+ blocks high) without artificial altitude caps or premature timers. Upward lift carries minions cleanly over barriers, and the instant a minion's feet reach solid ground without a taller obstacle ahead (e.g. stepping atop a 3-block ledge or reaching the other side), levitation deactivates immediately and restores normal gravity, ground walking, and step height (1.25D). In mid-air, downward glide carries minions to earth. Melee warriors in ground combat never launch into the air.
 - **Formation Follow Anti-Jitter**: Allied minions suppress mutual physical collision shoving (`pushAwayFrom`) when idle, guarding, or standing in formation ranks. Consistent walkable ground elevation checks and arrival velocity zeroing eliminate endless station-hunting jitter.
 - **Operational Leash Freedom**: Stationed and held minions enjoy an expanded **128-block leash**, while unselected free workers have simulation-chunk freedom without snap-teleporting to players while working on active construction sessions.
+- **Airborne Minion Ground-Tracking & Anti-Fall Teleportation**:
+  - **Elevated 2x2 Platform Detection**: When the commander is standing at an elevated position, minions only teleport to platforms that are at least a 2x2 solid area within safe fall height ($\le 3$ blocks below the player), preventing minions from teleporting onto 1x1 needles or slippery edges.
+  - **Air-to-Ground Tracking**: When the commander is flying high in the air (`BUILD`, `MINE`, `DESIGN`, or Creative flight) where no 2x2 platform exists nearby, minions do NOT teleport into mid-air at the commander's Y level. Instead, minions scan downward vertically to find the highest safe solid ground directly beneath the commander's X and Z coordinates and teleport there with zero fall distance—allowing minions to faithfully follow and escort the flying commander from the ground without ever falling from the sky!
+  - **Safe Water Landing**: If the commander flies over an ocean, river, or lake with no solid ground beneath, minions safely teleport to the surface of the water, utilizing their water breathing protection and swimming buoyancy.
+  - **Lava Refusal Guard**: If the space below the commander is lava (e.g. flying over the Nether lava ocean), minions search up to 16 blocks for a safe shoreline. If no safe land or water exists, minions strictly refuse to teleport into lava or mid-air, remaining safely stationed on the bank until the commander returns or reaches safe ground.
 - **Panic Retreat (`R` key)**: Instantly dismisses all 3D holographic wireframes, cancels active construction sessions for the commander, clears combat targets, and recalls all minions to formation.
 
 ---

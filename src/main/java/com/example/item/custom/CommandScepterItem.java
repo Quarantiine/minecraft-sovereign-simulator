@@ -2458,7 +2458,7 @@ public class CommandScepterItem extends Item {
 		}
 
 		boolean isHeld = selected || player.getOffHandStack() == stack;
-		boolean isFlightMode = isHeld && (getMode(stack) == CommandMode.BUILD || getMode(stack) == CommandMode.MINE);
+		boolean isFlightMode = isHeld && (getMode(stack) == CommandMode.BUILD || getMode(stack) == CommandMode.MINE || getMode(stack) == CommandMode.DESIGN);
 
 		if (entity instanceof net.minecraft.server.network.ServerPlayerEntity serverPlayer) {
 			java.util.UUID uuid = serverPlayer.getUuid();

@@ -2741,5 +2741,57 @@ Vanilla Minecraft contains numerous block states that do not possess a direct it
   - `Blocks.PETRIFIED_OAK_SLAB` $\to$ `Items.OAK_SLAB`
   - `Blocks.INFESTED_STONE` variants $\to$ standard stone counterparts.
 
+---
+
+## 35. Architect Design Flight & Airborne Minion Anti-Fall Ground-Tracking
+
+```
+                              [Player Airborne in Flight / High Sky]
+                                                │
+                                                ▼
+                         [Check Elevation for Solid 2x2 Platform]
+                                                │
+                     ┌──────────────────────────┴──────────────────────────┐
+                     ▼ (YES)                                               ▼ (NO)
+       [Teleport Minion to 2x2 Platform]                       [Scan Downward to Ground (X, Z)]
+       (|ΔY| <= 3, Zero Fall Damage)                                       │
+                                                ┌──────────────────────────┴──────────────────────────┐
+                                                ▼ (Solid Land Below)                                  ▼ (No Land / Ocean)
+                                   [Teleport to Safe Ground (X, Z)]                      [Check for Water Landing]
+                                   (Minion tracks flying player)                                       │
+                                                                            ┌──────────────────────────┴──────────────────────────┐
+                                                                            ▼ (Water Surface)                                     ▼ (Lava Ocean)
+                                                               [Teleport to Water Surface]                              [Scan Shore <= 16 blocks]
+                                                               (Buoyant swimming & breath)                                        │
+                                                                                                        ┌─────────────────────────┴─────────────────────────┐
+                                                                                                        ▼ (Shore Found)                                     ▼ (Pure Lava)
+                                                                                           [Teleport to Safe Shore]                             [STAY IN PLACE / REFUSE]
+                                                                                           (Avoids all burning)                                 (Never suicides in lava)
+```
+
+### 35.1 Architect Aerial Flight in Design Mode (`DESIGN`)
+
+- **Free Flight Mechanics**:
+  - Holding the Command Scepter in `DESIGN` mode activates Arcane Flight in both Creative and Survival modes.
+  - Automatically elevates to an ideal framing height (`initialGroundY + 10.0D`), smoothly clamped below interior ceilings.
+  - Controls: Ascend with **`Space`**, descend with **`Shift`**, and move in any direction with **`WASD`**.
+  - Action bar displays: `§d✦ Architect Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[Pos1/Pos2] Capture`.
+  - Server-side fall damage immunity and safe glide descent upon switching modes, stowing the scepter, or touching ground.
+
+### 35.2 Minion Anti-Fall Teleportation & Airborne Ground-Tracking
+
+- **The Problem**:
+  - In vanilla Minecraft and older mod versions, when a player flies high into the air, following pets/minions teleport to the player's elevated Y altitude and plummet to their death, suffering fatal fall damage.
+- **The Solution: Ground-Locked Tracking**:
+  - `MinionEntity.findSafeTeleportDestination()` checks if the player is standing on or near ($\le 3$ blocks) a safe platform with at least a $2\times 2$ solid base.
+  - If no platform exists (e.g. the player is flying in the air), minions **never** spawn in mid-air. Instead, they project vertically downward at the player's $(X, Z)$ coordinate and find the highest safe solid ground level.
+  - The minion teleports directly onto that safe ground at $(X, Z)$, tracking the commander smoothly across the landscape as they fly overhead.
+- **Water Landing Fallback**:
+  - If the player is airborne over an ocean, river, or lake with no solid ground directly beneath, minions safely land on the water's surface, utilizing their natural water breathing protection and swimming buoyancy.
+- **Lava Refusal Guard**:
+  - If the space below is lava (such as flying across the Nether lava sea), minions search up to 16 blocks horizontally for safe land.
+  - If the entire area is pure lava with no safe land or water, minions **refuse to teleport** into lava, remaining patiently stationed on the shore where they were last safe. Minions never jump into lava or commit suicide.
+
+
 
 

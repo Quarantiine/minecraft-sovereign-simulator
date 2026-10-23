@@ -3602,6 +3602,13 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 			return false;
 		}
 
+		Vec3d dest = findSafeTeleportDestination(serverWorld, player);
+		if (dest == null) {
+			// No safe landing site (e.g. over lava ocean with no platform or shore)
+			// Do not teleport minion into lava or mid-air
+			return false;
+		}
+
 		this.climbingScaffolding = false;
 		this.setArcaneLevitating(false);
 		this.clearActiveTraversalDestination();
@@ -3611,27 +3618,9 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		double originY = this.getY();
 		double originZ = this.getZ();
 
-		BlockPos playerPos = player.getBlockPos();
-		BlockPos safePos = null;
-
-		int[] offsets = { 0, 1, -1, 2, -2 };
-		for (int dx : offsets) {
-			for (int dz : offsets) {
-				for (int dy = 1; dy >= -2; dy--) {
-					BlockPos candidate = playerPos.add(dx, dy, dz);
-					if (isSafeTeleportTarget(serverWorld, candidate)) {
-						safePos = candidate;
-						break;
-					}
-				}
-				if (safePos != null) break;
-			}
-			if (safePos != null) break;
-		}
-
-		double destX = safePos != null ? safePos.getX() + 0.5D : player.getX();
-		double destY = safePos != null ? safePos.getY() : player.getY();
-		double destZ = safePos != null ? safePos.getZ() + 0.5D : player.getZ();
+		double destX = dest.x;
+		double destY = dest.y;
+		double destZ = dest.z;
 
 		// Origin teleport VFX & SFX
 		serverWorld.spawnParticles(ParticleTypes.PORTAL, originX, originY + 0.5D, originZ, 20, 0.3D, 0.5D, 0.3D, 0.1D);
@@ -3649,6 +3638,160 @@ public class MinionEntity extends TameableEntity implements InventoryOwner, Rang
 		serverWorld.spawnParticles(ParticleTypes.REVERSE_PORTAL, destX, destY + 0.2D, destZ, 10, 0.2D, 0.2D, 0.2D, 0.02D);
 		serverWorld.playSound(null, destX, destY, destZ, SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.NEUTRAL, 1.0F, 1.0F);
 
+		return true;
+	}
+
+	/**
+	 * Finds a safe landing destination for minion teleportation when recalling to the player.
+	 *
+	 * Logic:
+	 * 1. Player is on ground or near an elevated platform:
+	 *    If a safe position exists near the player (|dy| <= 3) with at least a 2x2 solid platform,
+	 *    teleports adjacent to the player on that platform.
+	 *
+	 * 2. Player is airborne (flying in BUILD, MINE, DESIGN, or Creative mode, or high in the air):
+	 *    Minions do NOT teleport into mid-air at player Y to prevent catastrophic fall damage.
+	 *    Instead, scans vertically downward at the player's X and Z to locate the nearest solid ground.
+	 *    Teleports to that ground position on (X, Z).
+	 *
+	 * 3. Water Landing:
+	 *    If no solid platform/land is below the player, but there is water (ocean, river, lake),
+	 *    teleports to the water surface at (X, Z). Minions float and have underwater breathing.
+	 *
+	 * 4. Lava Safety Refusal:
+	 *    If the surface below is lava (e.g. flying over Nether lava sea), searches horizontal radius (up to 16 blocks)
+	 *    for safe shore. If no safe land or water exists, the minion refuses to teleport into lava and remains safely stationed.
+	 *
+	 * @return Safe landing Vec3d, or null if no safe destination exists.
+	 */
+	public static Vec3d findSafeTeleportDestination(ServerWorld world, ServerPlayerEntity player) {
+		if (player == null || world == null) {
+			return null;
+		}
+
+		BlockPos playerPos = player.getBlockPos();
+		int[] offsets = { 0, 1, -1, 2, -2 };
+
+		// 1. Check for a safe elevated platform near the player (within 3 blocks of player Y so no fall damage)
+		for (int dx : offsets) {
+			for (int dz : offsets) {
+				for (int dy = 1; dy >= -3; dy--) {
+					BlockPos candidate = playerPos.add(dx, dy, dz);
+					if (isSafeStandingPosition(world, candidate) && hasAtLeast2x2Platform(world, candidate)) {
+						return new Vec3d(candidate.getX() + 0.5D, candidate.getY(), candidate.getZ() + 0.5D);
+					}
+				}
+			}
+		}
+
+		// 2. Player is airborne / no safe 2x2 platform at player altitude!
+		// Scan downward at player X and Z to find ground level
+		int bottomY = world.getBottomY();
+		int startY = playerPos.getY();
+
+		// Priority 2A: Solid ground directly under player X and Z
+		for (int dx : offsets) {
+			for (int dz : offsets) {
+				for (int y = startY; y > bottomY; y--) {
+					BlockPos candidate = new BlockPos(playerPos.getX() + dx, y, playerPos.getZ() + dz);
+					if (isSafeStandingPosition(world, candidate)) {
+						return new Vec3d(candidate.getX() + 0.5D, candidate.getY(), candidate.getZ() + 0.5D);
+					}
+				}
+			}
+		}
+
+		// Priority 2B: Water below player (safe water landing, only if no solid platform/land)
+		for (int dx : offsets) {
+			for (int dz : offsets) {
+				for (int y = startY; y > bottomY; y--) {
+					BlockPos candidate = new BlockPos(playerPos.getX() + dx, y, playerPos.getZ() + dz);
+					if (isSafeWaterLanding(world, candidate)) {
+						return new Vec3d(candidate.getX() + 0.5D, candidate.getY(), candidate.getZ() + 0.5D);
+					}
+				}
+			}
+		}
+
+		// Priority 2C: Expanded shore search around hazards/lava (up to 16 blocks horizontally)
+		for (int r = 3; r <= 16; r += 2) {
+			for (int dx = -r; dx <= r; dx += 2) {
+				for (int dz = -r; dz <= r; dz += 2) {
+					if (Math.abs(dx) != r && Math.abs(dz) != r) continue;
+					for (int y = startY + 5; y > bottomY; y--) {
+						BlockPos candidate = new BlockPos(playerPos.getX() + dx, y, playerPos.getZ() + dz);
+						if (isSafeStandingPosition(world, candidate)) {
+							return new Vec3d(candidate.getX() + 0.5D, candidate.getY(), candidate.getZ() + 0.5D);
+						}
+					}
+				}
+			}
+		}
+
+		// No safe land or water exists anywhere within range (e.g. flying over the middle of a vast Nether lava sea)
+		// Strictly refuse teleportation into lava
+		return null;
+	}
+
+	/**
+	 * Checks if a candidate standing position has a platform of at least 2x2 solid blocks beneath it.
+	 * Prevents minions from teleporting onto 1x1 pillars, edges, or scaffolding needles where they could slip and fall.
+	 */
+	public static boolean hasAtLeast2x2Platform(World world, BlockPos pos) {
+		if (world == null || pos == null) {
+			return false;
+		}
+		int[][] quadOffsets = {
+			{0, 0, 1, 0, 0, 1, 1, 1},
+			{-1, 0, 0, 0, -1, 1, 0, 1},
+			{0, -1, 1, -1, 0, 0, 1, 0},
+			{-1, -1, 0, -1, -1, 0, 0, 0}
+		};
+		for (int[] q : quadOffsets) {
+			boolean allSolid = true;
+			for (int i = 0; i < 8; i += 2) {
+				BlockPos checkPos = pos.add(q[i], 0, q[i + 1]);
+				if (!isSafeStandingPosition(world, checkPos)) {
+					allSolid = false;
+					break;
+				}
+			}
+			if (allSolid) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Validates whether the block position is a safe water landing site.
+	 * The feet position is in water or water source, head position has air or water, and no harmful lava/magma below.
+	 */
+	public static boolean isSafeWaterLanding(World world, BlockPos pos) {
+		if (world == null || pos == null) {
+			return false;
+		}
+		int y = pos.getY();
+		if (y <= world.getBottomY() || y >= world.getTopY()) {
+			return false;
+		}
+		if (!world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+			return false;
+		}
+		FluidState feetFluid = world.getFluidState(pos);
+		if (feetFluid == null || !feetFluid.isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
+			return false;
+		}
+		// Ensure head position is not a suffocating solid block
+		BlockState headState = world.getBlockState(pos.up());
+		if (headState.isSolidBlock(world, pos.up()) && !headState.getCollisionShape(world, pos.up()).isEmpty()) {
+			return false;
+		}
+		// Ensure block below is not magma or lava or fire
+		BlockState groundState = world.getBlockState(pos.down());
+		if (groundState.isOf(Blocks.MAGMA_BLOCK) || groundState.isOf(Blocks.LAVA) || groundState.isIn(BlockTags.FIRE)) {
+			return false;
+		}
 		return true;
 	}
 

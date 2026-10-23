@@ -69,7 +69,7 @@ public class BuildFlightManager {
 			heldStack = player.getOffHandStack();
 		}
 
-		boolean shouldFly = !heldStack.isEmpty() && (CommandScepterItem.getMode(heldStack) == CommandMode.BUILD || CommandScepterItem.getMode(heldStack) == CommandMode.MINE);
+		boolean shouldFly = !heldStack.isEmpty() && (CommandScepterItem.getMode(heldStack) == CommandMode.BUILD || CommandScepterItem.getMode(heldStack) == CommandMode.MINE || CommandScepterItem.getMode(heldStack) == CommandMode.DESIGN);
 
 		boolean overWater = CommandScepterItem.isPlayerOverWater(world, player);
 		if (overWater && shouldFly) {
@@ -86,13 +86,16 @@ public class BuildFlightManager {
 
 		if (shouldFly) {
 			boolean isMineMode = CommandScepterItem.getMode(heldStack) == CommandMode.MINE;
-			String bpId = isMineMode ? "" : CommandScepterItem.getBlueprintId(heldStack);
+			boolean isDesignMode = CommandScepterItem.getMode(heldStack) == CommandMode.DESIGN;
+			String bpId = (isMineMode || isDesignMode) ? "" : CommandScepterItem.getBlueprintId(heldStack);
 
 			if (!flightActive) {
 				initialGroundY = findGroundBelow(world, player.getBlockPos());
 				double targetY;
 				if (isMineMode) {
 					targetY = initialGroundY + 12.0D;
+				} else if (isDesignMode) {
+					targetY = initialGroundY + 10.0D;
 				} else {
 					int bpHeight = resolveBlueprintHeight(bpId);
 					targetY = initialGroundY + Math.max(6.0D, bpHeight + 3.0D);
@@ -109,7 +112,9 @@ public class BuildFlightManager {
 
 				Text welcomeMsg = isMineMode
 					? Text.literal("§6✦ Quarry Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt")
-					: Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R/L-Click] Rotate");
+					: (isDesignMode
+						? Text.literal("§d✦ Architect Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[Pos1/Pos2] Capture")
+						: Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R/L-Click] Rotate"));
 				player.sendMessage(welcomeMsg, true);
 				statusMessageCooldown = 40;
 			} else {
@@ -136,7 +141,9 @@ public class BuildFlightManager {
 					statusMessageCooldown = 50;
 					Text statusMsg = isMineMode
 						? Text.literal("§6✦ Quarry Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt")
-						: Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R] Rotate");
+						: (isDesignMode
+							? Text.literal("§d✦ Architect Aerial Surveyor §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[Pos1/Pos2] Capture")
+							: Text.literal("§b✦ Arcane Build Flight §8| §fFree Flight §8| §7[Space/Shift] Alt §8| §7[R] Rotate"));
 					player.sendMessage(statusMsg, true);
 				}
 			}
