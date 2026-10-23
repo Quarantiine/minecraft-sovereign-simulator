@@ -14,6 +14,7 @@
   "mode.modid-mmcli-agent-modding.design": "Design",
   "mode.modid-mmcli-agent-modding.recruit": "Recruit",
   "mode.modid-mmcli-agent-modding.pathway": "Pathway",
+  "mode.modid-mmcli-agent-modding.default": "Default",
 
   "mining_mode.modid-mmcli-agent-modding.direct": "Direct / Structure",
   "mining_mode.modid-mmcli-agent-modding.area": "Custom Area",

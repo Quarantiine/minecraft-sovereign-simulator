@@ -27,6 +27,7 @@ public class CommandScepterDefaultModeAndMiningFlightTest {
 		Assertions.assertEquals("Default", defaultMode.getDisplayName());
 		Assertions.assertEquals("§7", defaultMode.getColorCode());
 		Assertions.assertEquals("§7Default", defaultMode.getFormattedName());
+		Assertions.assertEquals("mode.modid-mmcli-agent-modding.default", defaultMode.getTranslationKey());
 
 		// Cyclic sequencing: PATHWAY -> DEFAULT -> FOLLOW
 		Assertions.assertEquals(CommandMode.DEFAULT, CommandMode.PATHWAY.next(),

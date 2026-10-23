@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `CommandScepterItem.use` returns `TypedActionResult.pass(stack)` and `getMaxUseTime` returns `0` with `UseAction.NONE`, preventing channeled blocking or raycasting.
 - `MinionEntity.interactMob` yields to normal empty-hand station/follow toggling when the player holds a scepter in `DEFAULT` mode.
 - `ExampleMod.java` interaction callbacks (`AttackBlockCallback`, `AttackEntityCallback`) cleanly pass through in `DEFAULT` mode for normal melee combat and block breaking.
+- Added localization key `mode.modid-mmcli-agent-modding.default` in `en_us.json` and implemented `CommandMode.getTranslationKey()`.
 
 #### 🦅 Quarry Flight in Mining Mode (`BuildFlightManager`, `CommandScepterItem`)
 - Extended survival flight mechanics to `CommandMode.MINE`, granting seamless 3D creative-style flight while holding the scepter.

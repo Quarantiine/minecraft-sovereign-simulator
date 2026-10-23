@@ -69,6 +69,10 @@ public enum CommandMode implements StringIdentifiable {
 		return this.colorCode + this.displayName;
 	}
 
+	public String getTranslationKey() {
+		return "mode.modid-mmcli-agent-modding." + this.id;
+	}
+
 	/**
 	 * Cycles to the next command mode in ordinal sequence.
 	 *
