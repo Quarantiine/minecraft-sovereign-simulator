@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 > - 🕊️ **Neutral Standby Mode (`DEFAULT`)**: Keep your Sovereign Command Scepter equipped 24/7 in either your main hand or off-hand without interrupting normal gameplay! In Default mode, the scepter steps aside so you can open chests and doors, use crafting tables and furnaces, trade with villagers, breed animals, and eat food just like in vanilla Minecraft. Press `V` or Sneak + Right-Click in the air whenever you want to issue orders!
 > - 🦅 **Quarry Aerial Flight in Mining Mode**: Take flight in Survival mode while holding the scepter in Mining mode! Survey massive excavation quarries, check slope boundaries from above, and inspect deep mineshafts with smooth, unconstrained flight and safe touchdown landing.
 > - 💧 **Minion Water Gathering Outside Barriers**: Builder minions needing a water bucket for construction or crafting can now autonomously leave protected barrier walls to scoop water from exterior lakes, rivers, and oceans. Minions also recognize self-replenishing infinite water pools and cauldrons, and can even fetch empty buckets from nearby village storage chests so your blueprints never get stuck!
+> - 🌱 **Organic Substrates & Living Growth Biology**: Builder minions understand that Grass Blocks and Mycelium cannot be crafted and drop Dirt without Silk Touch. Minions prefer silk-touch grass/mycelium if present in storage, but seamlessly accept `Items.DIRT` as the precursor. In construction sessions, placed dirt is recognized as a satisfied precursor. If the minion holds Bone Meal and is adjacent to existing grass, the minion accelerates the spread with bone meal particles!
+> - 🔥 **Nylium Substrate & Bone Meal Transformation**: `Blocks.CRIMSON_NYLIUM` and `Blocks.WARPED_NYLIUM` map to `Items.NETHERRACK`. When Netherrack is placed adjacent to existing Nylium and the minion carries Bone Meal, the minion consumes 1 Bone Meal to trigger instant vanilla Nylium conversion!
+> - 🪴 **Compound & Multi-Block Placements**: Potted flowers (`FlowerPotBlock`) require `Items.FLOWER_POT` (and consume the flower item if present). Double-block structures (doors, tall flowers, bed heads, piston heads) require 0 extra items for the upper half/head. Double slabs consume a second slab item from inventory.
 > - 🛠️ **Never-Stall Survival Building**: Builder minions in Survival mode will no longer deadlock or freeze on complex structures. Missing materials trigger a 200-tick per-minion deficiency cooldown on that specific block so workers seamlessly claim and construct other ready tasks in the queue!
 > - 🌾 **Virtual Non-Item Transformations**: Blocks without direct item forms (Farmland, Dirt Paths, growing Crops, Redstone Wire, Tripwire) now map to real survival items (`Items.DIRT`, seeds, redstone, string) instead of impossible `Items.AIR` requirements.
 > - 🪓 **In-World Tool Transformations**: Builders autonomously craft and wield Hoes to till Farmland, Shovels to flatten Dirt Paths or smother campfires, Axes to strip logs, and Shears to carve pumpkins with realistic sound effects and tool durability.
@@ -57,6 +60,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **In-World Tool Transformations (`ToolTransformationType`)**:
   - Added tool transformation classification and base state resolution: `HOE_TILL` (Dirt/Grass $\to$ Farmland, dropping bonus wheat seeds on grass), `SHOVEL_FLATTEN` (Dirt/Grass $\to$ Dirt Path), `AXE_STRIP` (Logs/Wood $\to$ Stripped variants), `SHEAR_CARVE` (Pumpkin $\to$ Carved Pumpkin, dropping 4 Pumpkin Seeds), and `SHOVEL_EXTINGUISH` (Lit Campfire $\to$ Unlit Campfire).
   - Implemented 2-phase execution in `MinionBuildGoal.executeBuildWork()`: the minion places the base block, equips the appropriate tool, plays tool usage sound effects (`ITEM_HOE_TILL`, `ITEM_SHOVEL_FLATTEN`, `ITEM_AXE_STRIP`, `PUMPKIN_CARVE`), applies 1 durability damage to the tool, and sets the transformed block state in the world.
+
+- **Living & Organic Substrates (`Blocks.GRASS_BLOCK`, `Blocks.MYCELIUM`, `Blocks.CRIMSON_NYLIUM`, `Blocks.WARPED_NYLIUM`)**:
+  - `BlueprintBlock.getRequiredItem()` maps Grass Blocks and Mycelium to `Items.DIRT`, and Crimson/Warped Nylium to `Items.NETHERRACK`.
+  - Minions automatically check for Silk Touch blocks (`Items.GRASS_BLOCK`, `Items.MYCELIUM`, `Items.CRIMSON_NYLIUM`, `Items.WARPED_NYLIUM`) in their inventory and nearby storage first. If available, they consume the silk block and place it directly.
+  - If Silk Touch blocks are not available, minions consume the survival precursor (`Items.DIRT` or `Items.NETHERRACK`).
+  - **Bone Meal Catalysis**: If a minion places Dirt adjacent to an existing Grass Block or Mycelium and carries Bone Meal, it consumes 1 Bone Meal to accelerate spread. When placing Netherrack adjacent to Crimson or Warped Nylium with Bone Meal in inventory, the minion instantly converts the Netherrack into the respective Nylium block!
+  - `ConstructionSession.isSatisfiedBlockState()` recognizes `Blocks.DIRT` at a `Blocks.GRASS_BLOCK` coordinate as a satisfied growing precursor, preventing endless replacement or deconstruction loops.
+- **Compound, Multi-Block & Potted Plants**:
+  - `FlowerPotBlock` correctly passes `isSurvivalPlaceableBlock()` and maps to `Items.FLOWER_POT`. When placing a potted flower, minions consume the flower pot and also consume the contained flower or sapling from inventory if available.
+  - Double-block structures (`DoubleBlockHalf.UPPER` doors, tall flowers, sunflowers) and bed heads (`BedPart.HEAD`) cost `Items.AIR` as their placement is handled automatically by the base item.
+  - Double Slabs (`SlabType.DOUBLE`) consume a second slab from the minion's inventory when placed.
+- **Survival Unobtainable Fallbacks**:
+  - `Blocks.BUDDING_AMETHYST` $\to$ `Items.AMETHYST_BLOCK`
+  - `Blocks.SUSPICIOUS_SAND` / `Blocks.SUSPICIOUS_GRAVEL` $\to$ `Items.SAND` / `Items.GRAVEL`
+  - `Blocks.FROSTED_ICE` $\to$ `Items.ICE`
+  - `Blocks.PETRIFIED_OAK_SLAB` $\to$ `Items.OAK_SLAB`
+  - `Blocks.INFESTED_STONE` variants $\to$ standard stone item counterparts.
+- **Dynamic BlockState Equality**:
+  - `ConstructionSession.isSatisfiedBlockState()` tolerates runtime properties that naturally vary in survival: dynamic leaf decay distance (`LeavesBlock`), composter fill levels, chest double-connection left/right flags, redstone wire power fluctuations, and cauldron liquid levels.
 
 #### 🧰 Autonomous Tool Crafting, Wielding & Durability Management (`MinionHarvestingHelper`)
 - **Dynamic Tool Autonomy (`ensureTool`)**:

@@ -711,21 +711,48 @@ public class MinionBuildGoal extends Goal {
 		} else if (ConstructionSession.isConnectableBlock(targetState)) {
 			alreadyPlaced = ConstructionSession.isConnectableMatching(serverWorld.getBlockState(targetPos), targetState);
 		} else {
-			alreadyPlaced = serverWorld.getBlockState(targetPos).equals(targetState);
+			alreadyPlaced = ConstructionSession.isSatisfiedBlockState(serverWorld.getBlockState(targetPos), targetState);
 		}
 		boolean hasResources = false;
+		Item itemToConsume = requiredItem;
 
-		if (alreadyPlaced || this.currentSession.isCreative() || requiredItem == Items.SCAFFOLDING) {
-			// Already in place, creative mode, or zero-cost scaffolding: free placement
+		if (alreadyPlaced || this.currentSession.isCreative() || requiredItem == Items.SCAFFOLDING || requiredItem == Items.AIR) {
+			// Already in place, creative mode, or zero-cost scaffolding/upper-half/head: free placement
 			hasResources = true;
 		} else {
 			// Survival mode: 1. Check minion's 9-slot inventory
 			SimpleInventory minionInv = this.minion.getInventory();
+
+			// 0. Organic substrate priority check: if silk-touch block exists, prefer it over base precursor
+			Item preferredItem = requiredItem;
+			if (targetState.isOf(Blocks.GRASS_BLOCK)) {
+				preferredItem = Items.GRASS_BLOCK;
+			} else if (targetState.isOf(Blocks.MYCELIUM)) {
+				preferredItem = Items.MYCELIUM;
+			} else if (targetState.isOf(Blocks.CRIMSON_NYLIUM)) {
+				preferredItem = Items.CRIMSON_NYLIUM;
+			} else if (targetState.isOf(Blocks.WARPED_NYLIUM)) {
+				preferredItem = Items.WARPED_NYLIUM;
+			}
+
+			if (preferredItem != requiredItem) {
+				int preferredSlot = findItemSlot(minionInv, preferredItem);
+				if (preferredSlot != -1) {
+					consumeResourceFromInventory(minionInv, preferredSlot, preferredItem);
+					hasResources = true;
+					itemToConsume = preferredItem;
+				} else if (scavengeNearbyContainers(serverWorld, preferredItem)) {
+					hasResources = true;
+					itemToConsume = preferredItem;
+				}
+			}
+
 			int minionSlot = findItemSlot(minionInv, requiredItem);
-			if (minionSlot != -1) {
+			if (!hasResources && minionSlot != -1) {
 				consumeResourceFromInventory(minionInv, minionSlot, requiredItem);
 				hasResources = true;
-			} else {
+				itemToConsume = requiredItem;
+			} else if (!hasResources) {
 				// 1.4 If task requires WATER_BUCKET and minion carries an empty BUCKET, autonomously gather water from outside barrier waypoints or springs
 				if (requiredItem == Items.WATER_BUCKET && com.example.entity.ai.logistics.MinionHarvestingHelper.hasItemInInventory(this.minion, Items.BUCKET)) {
 					if (com.example.entity.ai.logistics.MinionHarvestingHelper.gatherWaterBucket(this.minion, serverWorld, this.currentSession)) {
@@ -955,11 +982,59 @@ public class MinionBuildGoal extends Goal {
 				BlockState otherState = targetState.with(TallPlantBlock.HALF, otherHalf);
 				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_LISTENERS);
 				serverWorld.setBlockState(otherPos, otherState, Block.NOTIFY_ALL);
+			} else if (targetState.isOf(Blocks.GRASS_BLOCK) && itemToConsume == Items.DIRT) {
+				// Organic Substrate: Dirt placed as precursor. Accelerate with Bone Meal if adjacent grass exists!
+				boolean hasAdjacentGrass = hasAdjacentBlock(serverWorld, targetPos, Blocks.GRASS_BLOCK);
+				if (hasAdjacentGrass && consumeBoneMealIfPresent(this.minion.getInventory())) {
+					serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+					serverWorld.playSound(null, targetPos, SoundEvents.ITEM_BONE_MEAL_USE, SoundCategory.BLOCKS, 1.0F, 1.0F);
+					serverWorld.spawnParticles(ParticleTypes.HAPPY_VILLAGER, targetPos.getX() + 0.5, targetPos.getY() + 1.0, targetPos.getZ() + 0.5, 6, 0.2, 0.2, 0.2, 0.02);
+				} else {
+					serverWorld.setBlockState(targetPos, Blocks.DIRT.getDefaultState(), Block.NOTIFY_ALL);
+				}
+			} else if (targetState.isOf(Blocks.MYCELIUM) && itemToConsume == Items.DIRT) {
+				boolean hasAdjacentMycelium = hasAdjacentBlock(serverWorld, targetPos, Blocks.MYCELIUM);
+				if (hasAdjacentMycelium && consumeBoneMealIfPresent(this.minion.getInventory())) {
+					serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+					serverWorld.playSound(null, targetPos, SoundEvents.ITEM_BONE_MEAL_USE, SoundCategory.BLOCKS, 1.0F, 1.0F);
+					serverWorld.spawnParticles(ParticleTypes.HAPPY_VILLAGER, targetPos.getX() + 0.5, targetPos.getY() + 1.0, targetPos.getZ() + 0.5, 6, 0.2, 0.2, 0.2, 0.02);
+				} else {
+					serverWorld.setBlockState(targetPos, Blocks.DIRT.getDefaultState(), Block.NOTIFY_ALL);
+				}
+			} else if ((targetState.isOf(Blocks.CRIMSON_NYLIUM) || targetState.isOf(Blocks.WARPED_NYLIUM)) && itemToConsume == Items.NETHERRACK) {
+				Block nyliumType = targetState.getBlock();
+				boolean hasAdjacentNylium = hasAdjacentBlock(serverWorld, targetPos, nyliumType);
+				if (hasAdjacentNylium && consumeBoneMealIfPresent(this.minion.getInventory())) {
+					serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+					serverWorld.playSound(null, targetPos, SoundEvents.ITEM_BONE_MEAL_USE, SoundCategory.BLOCKS, 1.0F, 1.0F);
+					serverWorld.spawnParticles(ParticleTypes.HAPPY_VILLAGER, targetPos.getX() + 0.5, targetPos.getY() + 1.0, targetPos.getZ() + 0.5, 6, 0.2, 0.2, 0.2, 0.02);
+				} else {
+					serverWorld.setBlockState(targetPos, Blocks.NETHERRACK.getDefaultState(), Block.NOTIFY_ALL);
+				}
 			} else {
 				if (ConstructionSession.isConnectableBlock(targetState)) {
 					targetState = Block.postProcessState(targetState, serverWorld, targetPos);
 				}
 				serverWorld.setBlockState(targetPos, targetState, Block.NOTIFY_ALL);
+			}
+
+			// Potted Plant assembly: if minion carries the target plant, consume it for the pot
+			if (targetState.getBlock() instanceof net.minecraft.block.FlowerPotBlock fpb && fpb != Blocks.FLOWER_POT) {
+				Item contentItem = fpb.getContent().asItem();
+				if (contentItem != null && contentItem != Items.AIR) {
+					int plantSlot = findItemSlot(this.minion.getInventory(), contentItem);
+					if (plantSlot != -1) {
+						consumeResourceFromInventory(this.minion.getInventory(), plantSlot, contentItem);
+					}
+				}
+			}
+
+			// Double slab assembly: consume second slab if in inventory
+			if (targetState.getBlock() instanceof net.minecraft.block.SlabBlock && targetState.get(net.minecraft.block.SlabBlock.TYPE) == net.minecraft.block.enums.SlabType.DOUBLE) {
+				int secondSlabSlot = findItemSlot(this.minion.getInventory(), requiredItem);
+				if (secondSlabSlot != -1) {
+					consumeResourceFromInventory(this.minion.getInventory(), secondSlabSlot, requiredItem);
+				}
 			}
 
 			// Post-placement bidirectional clipping: notify adjacent connectable blocks (fences, glass panes, walls, stairs)
@@ -2508,6 +2583,29 @@ public class MinionBuildGoal extends Goal {
 				}
 			}
 		}
+	}
+
+	private static boolean hasAdjacentBlock(ServerWorld world, BlockPos pos, Block block) {
+		for (Direction dir : Direction.values()) {
+			if (world.getBlockState(pos.offset(dir)).isOf(block)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static boolean consumeBoneMealIfPresent(SimpleInventory inv) {
+		for (int i = 0; i < inv.size(); i++) {
+			ItemStack stack = inv.getStack(i);
+			if (!stack.isEmpty() && stack.isOf(Items.BONE_MEAL)) {
+				stack.decrement(1);
+				if (stack.isEmpty()) {
+					inv.setStack(i, ItemStack.EMPTY);
+				}
+				return true;
+			}
+		}
+		return false;
 	}
 
 }

@@ -106,8 +106,62 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 			if (this.state.isOf(net.minecraft.block.Blocks.SOUL_WALL_TORCH)) {
 				return net.minecraft.item.Items.SOUL_TORCH;
 			}
-			if (this.state.isOf(net.minecraft.block.Blocks.FARMLAND) || this.state.isOf(net.minecraft.block.Blocks.DIRT_PATH)) {
+			if (this.state.isOf(net.minecraft.block.Blocks.FARMLAND) || this.state.isOf(net.minecraft.block.Blocks.DIRT_PATH)
+					|| this.state.isOf(net.minecraft.block.Blocks.GRASS_BLOCK) || this.state.isOf(net.minecraft.block.Blocks.MYCELIUM)) {
 				return net.minecraft.item.Items.DIRT;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.CRIMSON_NYLIUM) || this.state.isOf(net.minecraft.block.Blocks.WARPED_NYLIUM)) {
+				return net.minecraft.item.Items.NETHERRACK;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.BUDDING_AMETHYST)) {
+				return net.minecraft.item.Items.AMETHYST_BLOCK;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.SUSPICIOUS_SAND)) {
+				return net.minecraft.item.Items.SAND;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.SUSPICIOUS_GRAVEL)) {
+				return net.minecraft.item.Items.GRAVEL;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.FROSTED_ICE)) {
+				return net.minecraft.item.Items.ICE;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.PETRIFIED_OAK_SLAB)) {
+				return net.minecraft.item.Items.OAK_SLAB;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.INFESTED_STONE)) {
+				return net.minecraft.item.Items.STONE;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.INFESTED_COBBLESTONE)) {
+				return net.minecraft.item.Items.COBBLESTONE;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.INFESTED_STONE_BRICKS)) {
+				return net.minecraft.item.Items.STONE_BRICKS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.INFESTED_MOSSY_STONE_BRICKS)) {
+				return net.minecraft.item.Items.MOSSY_STONE_BRICKS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.INFESTED_CRACKED_STONE_BRICKS)) {
+				return net.minecraft.item.Items.CRACKED_STONE_BRICKS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.INFESTED_CHISELED_STONE_BRICKS)) {
+				return net.minecraft.item.Items.CHISELED_STONE_BRICKS;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.INFESTED_DEEPSLATE)) {
+				return net.minecraft.item.Items.DEEPSLATE;
+			}
+			if (this.state.isOf(net.minecraft.block.Blocks.PISTON_HEAD)) {
+				return net.minecraft.item.Items.AIR;
+			}
+			if (this.state.contains(net.minecraft.state.property.Properties.DOUBLE_BLOCK_HALF)
+					&& this.state.get(net.minecraft.state.property.Properties.DOUBLE_BLOCK_HALF) == net.minecraft.block.enums.DoubleBlockHalf.UPPER) {
+				return net.minecraft.item.Items.AIR;
+			}
+			if (this.state.contains(net.minecraft.block.BedBlock.PART)
+					&& this.state.get(net.minecraft.block.BedBlock.PART) == net.minecraft.block.enums.BedPart.HEAD) {
+				return net.minecraft.item.Items.AIR;
+			}
+			if (this.state.getBlock() instanceof net.minecraft.block.FlowerPotBlock) {
+				return net.minecraft.item.Items.FLOWER_POT;
 			}
 			if (this.state.isOf(net.minecraft.block.Blocks.WHEAT)) {
 				return net.minecraft.item.Items.WHEAT_SEEDS;
@@ -344,7 +398,8 @@ public record BlueprintBlock(BlockPos offset, BlockState state) implements Compa
 		if (block.getDefaultState().isAir()) return false;
 
 		// Explicit survival-friendly blocks that lack a direct item form
-		if (block == net.minecraft.block.Blocks.FARMLAND || block == net.minecraft.block.Blocks.DIRT_PATH) {
+		if (block == net.minecraft.block.Blocks.FARMLAND || block == net.minecraft.block.Blocks.DIRT_PATH
+				|| block instanceof net.minecraft.block.FlowerPotBlock) {
 			return true;
 		}
 

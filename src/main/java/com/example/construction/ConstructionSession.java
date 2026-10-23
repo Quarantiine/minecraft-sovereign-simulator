@@ -14,16 +14,21 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.AbstractCauldronBlock;
+import net.minecraft.block.ChestBlock;
 import net.minecraft.block.ConnectingBlock;
 import net.minecraft.block.BedBlock;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.FenceGateBlock;
+import net.minecraft.block.FlowerPotBlock;
 import net.minecraft.block.HorizontalConnectingBlock;
+import net.minecraft.block.LeavesBlock;
 import net.minecraft.block.RedstoneWireBlock;
 import net.minecraft.block.StairsBlock;
 import net.minecraft.block.TripwireBlock;
 import net.minecraft.block.WallBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
+import net.minecraft.state.property.Properties;
 import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.RegistryKey;
@@ -509,6 +514,7 @@ public class ConstructionSession {
 				boolean isMatchingBlock = isChunkLoaded && (
 					world.getBlockState(task.getWorldPos()).equals(task.getBlueprintBlock().state())
 					|| (isConnectableBlock(task.getBlueprintBlock().state()) && isConnectableMatching(world.getBlockState(task.getWorldPos()), task.getBlueprintBlock().state()))
+					|| isSatisfiedBlockState(world.getBlockState(task.getWorldPos()), task.getBlueprintBlock().state())
 				);
 				boolean isMatchingFluid = isChunkLoaded && (
 					(task.getBlueprintBlock().state().isOf(Blocks.WATER) && world.getBlockState(task.getWorldPos()).isOf(Blocks.WATER) && world.getFluidState(task.getWorldPos()).isStill())
@@ -650,6 +656,33 @@ public class ConstructionSession {
 				BlockPos underneath = targetPos.down();
 				BlockState underState = world.getBlockState(underneath);
 				if (underState.isAir() || !underState.isSolidBlock(world, underneath)) {
+					return false;
+				}
+			}
+
+			// Double-block upper halves: require lower half placed underneath
+			if (targetState.contains(net.minecraft.state.property.Properties.DOUBLE_BLOCK_HALF)
+					&& targetState.get(net.minecraft.state.property.Properties.DOUBLE_BLOCK_HALF) == net.minecraft.block.enums.DoubleBlockHalf.UPPER) {
+				BlockPos underneath = targetPos.down();
+				if (world.getBlockState(underneath).isAir()) {
+					return false;
+				}
+			}
+
+			// Bed head: requires foot block placed
+			if (targetState.contains(net.minecraft.block.BedBlock.PART)
+					&& targetState.get(net.minecraft.block.BedBlock.PART) == net.minecraft.block.enums.BedPart.HEAD) {
+				Direction facing = targetState.get(net.minecraft.block.BedBlock.FACING);
+				BlockPos footPos = targetPos.offset(facing.getOpposite());
+				if (world.getBlockState(footPos).isAir()) {
+					return false;
+				}
+			}
+
+			// Potted plants: require solid support underneath
+			if (targetState.getBlock() instanceof net.minecraft.block.FlowerPotBlock) {
+				BlockPos underneath = targetPos.down();
+				if (world.getBlockState(underneath).isAir()) {
 					return false;
 				}
 			}
@@ -1143,5 +1176,89 @@ public class ConstructionSession {
 			return worldState.get(FenceGateBlock.FACING) == targetState.get(FenceGateBlock.FACING);
 		}
 		return true;
+	}
+
+	/**
+	 * Determines whether an in-world block state legitimately satisfies the required blueprint block state.
+	 * Accounts for:
+	 * - Exact match
+	 * - Still fluid sources
+	 * - Dynamic connectables (fences, walls, panes, stairs)
+	 * - Organic substrates (DIRT placed for GRASS_BLOCK or MYCELIUM as growing precursor; NETHERRACK for NYLIUM)
+	 * - Dynamic runtime properties (leaves distance, composter level, chest double-linkage, wire power)
+	 * - Compound & two-block structures (double doors, bed heads, piston heads, flower pots)
+	 */
+	public static boolean isSatisfiedBlockState(BlockState worldState, BlockState blueprintState) {
+		if (worldState == null || blueprintState == null) {
+			return false;
+		}
+		if (worldState.equals(blueprintState)) {
+			return true;
+		}
+		if (blueprintState.isOf(Blocks.WATER)) {
+			return worldState.isOf(Blocks.WATER) && worldState.getFluidState().isStill();
+		}
+		if (blueprintState.isOf(Blocks.LAVA)) {
+			return worldState.isOf(Blocks.LAVA) && worldState.getFluidState().isStill();
+		}
+		if (isConnectableBlock(blueprintState)) {
+			return isConnectableMatching(worldState, blueprintState);
+		}
+
+		// Living / Organic Substrates: DIRT satisfies GRASS_BLOCK and MYCELIUM (seeded precursor)
+		if (blueprintState.isOf(Blocks.GRASS_BLOCK)) {
+			return worldState.isOf(Blocks.GRASS_BLOCK) || worldState.isOf(Blocks.DIRT);
+		}
+		if (blueprintState.isOf(Blocks.MYCELIUM)) {
+			return worldState.isOf(Blocks.MYCELIUM) || worldState.isOf(Blocks.DIRT);
+		}
+		if (blueprintState.isOf(Blocks.CRIMSON_NYLIUM)) {
+			return worldState.isOf(Blocks.CRIMSON_NYLIUM) || worldState.isOf(Blocks.NETHERRACK);
+		}
+		if (blueprintState.isOf(Blocks.WARPED_NYLIUM)) {
+			return worldState.isOf(Blocks.WARPED_NYLIUM) || worldState.isOf(Blocks.NETHERRACK);
+		}
+
+		// Leaves: dynamic distance from logs does not invalidate placement
+		if (blueprintState.getBlock() instanceof LeavesBlock && worldState.isOf(blueprintState.getBlock())) {
+			return true;
+		}
+		// Redstone wire: dynamic power level does not invalidate placement
+		if (blueprintState.isOf(Blocks.REDSTONE_WIRE) && worldState.isOf(Blocks.REDSTONE_WIRE)) {
+			return true;
+		}
+		// Composter: compost level does not invalidate placement
+		if (blueprintState.isOf(Blocks.COMPOSTER) && worldState.isOf(Blocks.COMPOSTER)) {
+			return true;
+		}
+		// Chests: dynamic left/right double linkage does not invalidate placement
+		if (blueprintState.getBlock() instanceof ChestBlock && worldState.isOf(blueprintState.getBlock())) {
+			if (blueprintState.contains(ChestBlock.FACING) && worldState.contains(ChestBlock.FACING)) {
+				return worldState.get(ChestBlock.FACING) == blueprintState.get(ChestBlock.FACING);
+			}
+			return true;
+		}
+		// Cauldrons: liquid level does not invalidate placement
+		if (blueprintState.getBlock() instanceof AbstractCauldronBlock && worldState.getBlock() instanceof AbstractCauldronBlock) {
+			return true;
+		}
+		// Double-block structures: upper halves
+		if (blueprintState.contains(Properties.DOUBLE_BLOCK_HALF) && worldState.isOf(blueprintState.getBlock())) {
+			return worldState.get(Properties.DOUBLE_BLOCK_HALF) == blueprintState.get(Properties.DOUBLE_BLOCK_HALF);
+		}
+		// Beds: head half
+		if (blueprintState.contains(BedBlock.PART) && worldState.isOf(blueprintState.getBlock())) {
+			return worldState.get(BedBlock.PART) == blueprintState.get(BedBlock.PART);
+		}
+		// Piston head: satisfied if piston head or extended
+		if (blueprintState.isOf(Blocks.PISTON_HEAD) && (worldState.isOf(Blocks.PISTON_HEAD) || worldState.isOf(Blocks.MOVING_PISTON))) {
+			return true;
+		}
+		// Potted plants: satisfied if flower pot block is in place
+		if (blueprintState.getBlock() instanceof FlowerPotBlock && worldState.getBlock() instanceof FlowerPotBlock) {
+			return true;
+		}
+
+		return false;
 	}
 }

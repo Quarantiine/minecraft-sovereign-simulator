@@ -4,7 +4,7 @@
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Java Version](https://img.shields.io/badge/Java-21%2B-orange.svg)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-Visible%20Source%20%26%20ARR-red.svg)](LICENSE)
-[![Unit Tests](https://img.shields.io/badge/Tests-793%20Passing-success.svg)](src/test/java)
+[![Unit Tests](https://img.shields.io/badge/Tests-798%20Passing-success.svg)](src/test/java)
 
 A tactical real-time strategy (RTS) and multiblock engineering mod for **Minecraft 1.21**, built on the **Fabric Loader**, **Fabric API**, and **Gradle Loom** toolchain.
 
@@ -103,6 +103,10 @@ Minions are tameable, persistent humanoid thralls equipped with backpacks, equip
   - Minions possess underwater breathing protection (`setAir(getMaxAir())`) and swimming suppression while building, preventing drowning or surface bouncing.
 - **Neutral Standby Mode (`DEFAULT`)**:
   - Keep the Command Scepter held in your main hand or off-hand 24/7 without hindering standard Minecraft gameplay. In `DEFAULT` mode, the scepter passes all interactions through to vanilla systems (chests, crafting tables, doors, trading, breeding, eating). Sneak + Right-Click in air or press `V` to switch modes.
+- **Living Substrates, Organic Growth & Survival Precursor Biology**:
+  - Builder minions understand natural Minecraft survival biology: Grass Blocks and Mycelium cannot be crafted and drop Dirt without Silk Touch. Minions draw Silk Touch blocks if available, or seamlessly place `Items.DIRT` as the precursor while natural grass spreads over time. Placed dirt is recognized as a satisfied precursor, completely preventing build deadlocks!
+  - Minions carrying Bone Meal adjacent to grass or mycelium automatically accelerate the spread. When placing Netherrack adjacent to Crimson or Warped Nylium, minions holding Bone Meal consume 1 Bone Meal to trigger instant vanilla Nylium conversion!
+  - Full support for compound structures (Potted Plants = Flower Pot + Flower item, Double Slabs = 2x slabs, zero-cost upper doors/tall flowers/bed heads) and survival unobtainable fallbacks (Budding Amethyst $\to$ Amethyst Block, Suspicious Sand $\to$ Sand).
 - **Anti-Suffocation, Anti-Entombment & Safe Evacuation**:
   - Minions safely phase through blocks while building (`noClip = true`), with automatic server-side anti-suffocation safeguards (`unstuckIfInSolidWall`) ensuring units are never stuck in walls or underground rock.
   - Mining sessions evacuate minions intelligently: surface quarries evacuate workers to the open-sky rim overlooking the pit, while underground room excavations station workers onto the cleared interior floor (`box.getMinY()`), never clipping into solid perimeter rock.

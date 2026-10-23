@@ -2659,5 +2659,87 @@ Vanilla Minecraft contains numerous block states that do not possess a direct it
 - **Dedicated Standby Dashboard**:
   - Selecting `DEFAULT` displays a clean Neutral Standby Mode info card in the right pane with tactical tooltips and completely hides construction blueprint buttons, preventing visual clutter when in standby.
 
+---
+
+## 34. Survival Living Substrates, Compound Block Assembly & Organic Growth Biology
+
+```
+                    [Blueprint Demands Blocks.GRASS_BLOCK / MYCELIUM / NYLIUM]
+                                              │
+                   ┌──────────────────────────┴──────────────────────────┐
+                   ▼                                                     ▼
+     [Silk Touch Item in Chest/Pack?]                       [No Silk Touch Item Found]
+                   │                                                     │
+                   ▼ (YES)                                               ▼ (NO)
+          [Place Silk Block Directly]                         [Consume Precursor Item]
+          (100% exact survival fidelity)                      (Grass/Mycelium -> Items.DIRT)
+                                                              (Nylium -> Items.NETHERRACK)
+                                                                         │
+                                              ┌──────────────────────────┴──────────────────────────┐
+                                              ▼                                                     ▼
+                                [Bone Meal in Pack & Adjacent?]                       [No Bone Meal or Isolated]
+                                              │ (YES)                                               │ (NO)
+                                              ▼                                                     ▼
+                               [Consume 1 Bone Meal -> Instant]                       [Place DIRT / NETHERRACK]
+                               (Vanilla Nylium/Grass Catalysis)                       (Session accepts as satisfied)
+                                                                                      (Spreads naturally over time)
+```
+
+### 34.1 Living & Spreading Substrates (`GRASS_BLOCK`, `MYCELIUM`, `NYLIUM`)
+
+- **The Survival Reality**:
+  - In vanilla Minecraft, mining a grass block or mycelium without Silk Touch always yields `Items.DIRT`. Grass blocks cannot be crafted.
+  - Naive construction systems stall indefinitely when blueprints contain grass blocks because they look for uncraftable `Items.GRASS_BLOCK`.
+- **Precursor Auto-Mapping (`BlueprintBlock.getRequiredItem`)**:
+  - `Blocks.GRASS_BLOCK` $\to$ `Items.DIRT`
+  - `Blocks.MYCELIUM` $\to$ `Items.DIRT`
+  - `Blocks.CRIMSON_NYLIUM` $\to$ `Items.NETHERRACK`
+  - `Blocks.WARPED_NYLIUM` $\to$ `Items.NETHERRACK`
+- **Silk Touch Auto-Preference (`MinionBuildGoal.executeBuildWork`)**:
+  - Workers check their inventory and nearby village containers for true Silk Touch blocks (`Items.GRASS_BLOCK`, `Items.MYCELIUM`, etc.) first. If found, they consume the silk block and place it directly.
+  - If no silk blocks exist, they seamlessly draw the precursor item (`Items.DIRT` or `Items.NETHERRACK`), eliminating missing-resource deadlocks.
+
+### 34.2 Bone Meal Catalysis & Instant Transformation
+
+- **Vanilla Agricultural Mechanics**:
+  - In vanilla Minecraft, applying Bone Meal to Netherrack touching Crimson or Warped Nylium instantly converts the Netherrack into the respective Nylium block!
+  - Similarly, bone mealing grass adjacent to dirt accelerates grass spreading.
+- **Autonomous Minion Catalysis**:
+  - If a builder places Netherrack adjacent to existing Nylium and holds Bone Meal, the worker consumes 1 Bone Meal and triggers instant Nylium conversion accompanied by villager happy green sparkles and bone meal audio.
+  - If placing Dirt adjacent to existing Grass with Bone Meal, the minion accelerates the green lawn spread immediately.
+
+### 34.3 Compound Items, Potted Plants & Double-Block Assembly
+
+- **Potted Plants (`FlowerPotBlock`)**:
+  - Potted blocks have no direct creative item (`block.asItem() == Items.AIR`).
+  - Workers decompose potted plants into `1 Items.FLOWER_POT` + `1 Plant/Flower Item`. Minions consume the pot (and the flower from their backpack if held) and place the decorated potted block directly.
+- **Zero-Cost Multi-Blocks (`DoubleBlockHalf.UPPER`, `BedPart.HEAD`, `PISTON_HEAD`)**:
+  - In Minecraft, placing the lower door half, flower base, or bed foot automatically instantiates the upper/head block.
+  - `BlueprintBlock.getRequiredItem()` sets `Items.AIR` for upper door halves, tall flower tops, bed heads, and extended piston heads so players and minions are never double-charged.
+- **Double Slab Assembly (`SlabType.DOUBLE`)**:
+  - Placing a double slab consumes a second slab item from the worker's backpack.
+
+### 34.4 Dynamic BlockState Equality (`ConstructionSession.isSatisfiedBlockState`)
+
+- **Runtime Property Tolerance**:
+  - Strictly comparing block states with `.equals()` fails on blocks with dynamic properties.
+  - `ConstructionSession.isSatisfiedBlockState()` accepts:
+    1. *Organic Precursors*: `Blocks.DIRT` satisfies `Blocks.GRASS_BLOCK` and `Blocks.MYCELIUM`; `Blocks.NETHERRACK` satisfies `Blocks.CRIMSON_NYLIUM` and `Blocks.WARPED_NYLIUM`.
+    2. *Leaf Distance*: Ignores fluctuating `DISTANCE=1..7` so placed leaves are not falsely tagged as defective.
+    3. *Composter Fill*: Ignores dynamic organic compost fill levels (`LEVEL=0..8`).
+    4. *Chest Linkage*: Matches orientation while tolerating `TYPE=LEFT/RIGHT` double-chest connections.
+    5. *Redstone Wire*: Ignores dynamic power levels (`POWER=0..15`) and connection wire shapes.
+    6. *Cauldrons*: Ignores fluid levels.
+
+### 34.5 Survival Unobtainable Fallbacks
+
+- If blueprints contain blocks that cannot be obtained in survival gameplay even with Silk Touch tools:
+  - `Blocks.BUDDING_AMETHYST` $\to$ `Items.AMETHYST_BLOCK`
+  - `Blocks.SUSPICIOUS_SAND` $\to$ `Items.SAND`
+  - `Blocks.SUSPICIOUS_GRAVEL` $\to$ `Items.GRAVEL`
+  - `Blocks.FROSTED_ICE` $\to$ `Items.ICE`
+  - `Blocks.PETRIFIED_OAK_SLAB` $\to$ `Items.OAK_SLAB`
+  - `Blocks.INFESTED_STONE` variants $\to$ standard stone counterparts.
+
 
 
